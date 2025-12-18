@@ -1,0 +1,28 @@
+#!/bin/bash
+# Git hook: Validate commit messages
+# Prevents AI attribution in commits
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Block commits mentioning "Claude"
+if echo "$COMMIT_MSG" | grep -qi "claude"; then
+    echo "❌ ERROR: Commit message contains 'Claude'"
+    echo "Please rewrite without AI attribution."
+    exit 1
+fi
+
+# Block commits with "Generated with" or "Co-Authored-By: Claude"
+if echo "$COMMIT_MSG" | grep -qiE "(Generated with|Co-Authored-By: Claude)"; then
+    echo "❌ ERROR: Commit message contains AI attribution"
+    echo "Please remove 'Generated with' or 'Co-Authored-By' lines."
+    exit 1
+fi
+
+# Block emoji + "Generated with" pattern
+if echo "$COMMIT_MSG" | grep -qE "🤖.*Generated with"; then
+    echo "❌ ERROR: Commit message contains AI attribution emoji"
+    exit 1
+fi
+
+exit 0

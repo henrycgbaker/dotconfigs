@@ -65,3 +65,22 @@ cp -r project-agents/research-pm ~/Repositories/my-project/.claude/agents/
 ### Project-Specific (copy as needed)
 - **research-pm** - Product roadmap, prioritization
 - **research-scientist** - Experiment design, analysis
+
+## Git Hooks
+
+This repo uses a `commit-msg` hook to prevent AI attribution in commits.
+
+**Location:** `.git/hooks/commit-msg` (active, not tracked by git)
+**Source:** `githooks/commit-msg` (tracked copy)
+
+The `.git/hooks/` directory is not tracked by git (it's inside `.git/`), so after cloning you need to install the hook manually:
+
+```bash
+cp githooks/commit-msg .git/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+```
+
+Or configure git to use the `githooks/` directory:
+```bash
+git config core.hooksPath githooks
+```
