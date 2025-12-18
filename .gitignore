@@ -1,0 +1,10 @@
+# OS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Backups created by setup.sh
+*.backup
