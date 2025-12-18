@@ -19,3 +19,10 @@
   - [ ] Database connections (use env vars for credentials)
 
 - [ ] **Output Styles** - Custom system prompts in `output-styles/` (optional)
+
+## Research
+
+- [ ] **Scope Precedence** - Investigate how system-wide `~/.claude/` interacts with project-level `.claude/`
+  - Which takes precedence when both exist?
+  - Do they merge or override?
+  - How do rules, agents, commands, skills layer?
