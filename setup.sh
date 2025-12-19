@@ -45,9 +45,6 @@ backup_and_link "$SCRIPT_DIR/commands" "$CLAUDE_DIR/commands" "commands/"
 # Symlink skills/
 backup_and_link "$SCRIPT_DIR/skills" "$CLAUDE_DIR/skills" "skills/"
 
-# Symlink project-agents/ (for iterative development)
-backup_and_link "$SCRIPT_DIR/project-agents" "$CLAUDE_DIR/project-agents" "project-agents/"
-
 # Copy settings.json (not symlinked - allows local overrides)
 if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
     cp "$SCRIPT_DIR/settings.json" "$CLAUDE_DIR/settings.json"
@@ -98,10 +95,7 @@ ls -la "$CLAUDE_DIR/CLAUDE.md" \
        "$CLAUDE_DIR/agents" \
        "$CLAUDE_DIR/hooks" \
        "$CLAUDE_DIR/commands" \
-       "$CLAUDE_DIR/skills" \
-       "$CLAUDE_DIR/project-agents" 2>/dev/null || true
+       "$CLAUDE_DIR/skills" 2>/dev/null || true
 
 echo ""
 echo "Note: settings.json is copied (not symlinked) to allow local overrides."
-echo "      project-agents/ is symlinked for iterative development."
-echo "      Consider copying project-agents/ to .claude/agents/ in specific projects once stable."
