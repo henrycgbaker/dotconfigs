@@ -19,7 +19,8 @@ Type prefixes are optional - plain descriptive messages are also fine for simple
 - `docs`: Documentation only
 - `refactor`: Code change without feature/fix
 - `test`: Adding/updating tests
-- `chore`: Maintenance tasks
+
+For miscellaneous commits, omit the type prefix entirely.
 
 ### Rules
 - Subject line under 72 characters
