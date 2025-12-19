@@ -1,8 +1,28 @@
 #!/bin/bash
-# Git hook: Enforce git identity
-# Ensures commits use correct user/email
-# store this file as .git/hooks/pre-commit and make it executable (not tracked by git; unlike ./githooks/pre-commit)
+# Git hook: Pre-commit checks for dotclaude
+# 1. Sync project agents from all projects
+# 2. Enforce git identity
+#
+# Install: cp githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# --- Agent Sync ---
+# Pull latest agents from projects before committing
+if [ -x "$REPO_ROOT/sync-project-agents.sh" ]; then
+    echo "🔄 Syncing project agents..."
+
+    # Only sync if we can reach the sources (skip remote if offline)
+    "$REPO_ROOT/sync-project-agents.sh" pull 2>/dev/null
+
+    # Stage any changes to project-agents/
+    git add "$REPO_ROOT/project-agents/" 2>/dev/null || true
+
+    echo "✅ Agent sync complete"
+fi
+
+# --- Identity Check ---
 EXPECTED_NAME="henrycgbaker"
 EXPECTED_EMAIL="henry.c.g.baker@gmail.com"
 

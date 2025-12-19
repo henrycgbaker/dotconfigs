@@ -28,10 +28,10 @@
   - [x] `pr-review.md` - PR review workflow
   - [x] `commit.md` - Commit helper
 
-- [x] **Project Agents** - Reusable agents in `project-agents/`
-  - [x] `infra-architect/` - Infrastructure design
-  - [x] `research-pm/` - Research product management
-  - [x] `research-scientist/` - Research scientist
+- [x] **Project Agents** - Version-controlled record in `project-agents/{project}/`
+  - [x] `llm-efficiency-measurement-tool/` - research-pm, research-scientist
+  - [x] `ds01-infra/` - 8 agents (systems-architect, etc.)
+  - [x] `sync-project-agents.sh` - Pull/push/status sync script
 
 - [x] **Git Hooks** - Git identity enforcement
   - [x] `pre-commit` - Enforce git user identity
@@ -44,14 +44,26 @@
   - [ ] Database connections (use env vars for credentials)
   - [ ] GPU monitoring server (custom)
 
-- [ ] **Convert project-agents to templates** - Once agents stabilize, convert from symlinks to template copies for project customization
+- [x] **Automate agent sync** - Added to `githooks/pre-commit`
+  - Runs `sync-project-agents.sh pull` before each commit
+  - Auto-stages any changes to `project-agents/`
 
 ## Research
 
-- [ ] **Scope Precedence** - Investigate how system-wide `~/.claude/` interacts with project-level `.claude/`
-  - Which takes precedence when both exist?
-  - Do they merge or override?
-  - How do rules, agents, commands, skills layer?
+- [x] **Scope Precedence** - Project-level takes precedence over user-level
+
+  | Config Type | Precedence | Behavior |
+  |-------------|------------|----------|
+  | `settings.json` | Project > User | Merged (deny wins) |
+  | MCP Servers | Local > Project > User | Override |
+  | Agents | Project > User | Override |
+  | Hooks | All sources | Merged (all execute) |
+  | Rules | Project > User | Override |
+  | Commands | Project > User | Override |
+  | Skills | Project > User | Override |
+  | CLAUDE.md | Project > User | Override |
+
+  **Key insight**: Most configs override by name (project wins). Only hooks merge (all run). Settings merge with deny-wins logic.
 
 - [x] **Git Identity Enforcement** - Ensure commits use correct user/email
   - Implemented as `pre-commit` hook in `githooks/`

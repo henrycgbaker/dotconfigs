@@ -1,91 +1,157 @@
 # dotclaude
 
-Personal Claude Code configuration - agents, rules, and settings.
+Personal Claude Code configuration - agents, rules, hooks, commands, skills, and settings.
 
-## What's Included
+## Architecture Decisions
 
-| Directory | Purpose | Syncs To |
-|-----------|---------|----------|
-| `CLAUDE.md` | Personal policies & preferences | `~/.claude/CLAUDE.md` |
-| `settings.json` | Claude settings | `~/.claude/settings.json` |
-| `rules/` | Behavioral constraints | `~/.claude/rules/` |
-| `agents/` | System-wide AI agents | `~/.claude/agents/` |
-| `project-agents/` | Project-specific agents | Copy to `<project>/.claude/agents/` |
+### System-Wide vs Project-Specific Agents
 
-## Setup
+| Location | Purpose | When to Use |
+|----------|---------|-------------|
+| `agents/` → `~/.claude/agents/` | Generic, reusable across all projects | Git, testing, refactoring, CI/CD |
+| `project-agents/{project}/` | Version-controlled record of project agents | Domain-specific agents |
+| Project's `.claude/agents/` | **Source of truth** for that project | Where agents actually run |
 
-### Fresh Install
+**Key decisions:**
+- **Projects are source of truth** - agents live in each project's `.claude/agents/`
+- **dotclaude is the version-controlled record** - organized by project name in `project-agents/`
+- **Copy-based sync** (not symlinks) - works across machines with different paths
+- **Sync script** pulls latest from projects before commits
+
+### Scope Precedence
+
+| Config Type | Precedence | Behavior |
+|-------------|------------|----------|
+| `settings.json` | Project > User | Merged (deny wins) |
+| Agents | Project > User | Override (project wins) |
+| Hooks | All sources | Merged (all execute) |
+| Rules | Project > User | Override |
+| Commands/Skills | Project > User | Override |
+| CLAUDE.md | Project > User | Override |
+
+**Rule of thumb:** Project-level configs override user-level by name. Only hooks merge.
+
+## Quick Start
+
 ```bash
 git clone git@github.com:henrybaker/dotclaude.git ~/Repositories/dotclaude
 cd ~/Repositories/dotclaude
 ./setup.sh
 ```
 
-### On Remote Machines (hbaker, dsl)
-```bash
-cd ~/workspace  # or wherever you keep repos
-git clone git@github.com:henrybaker/dotclaude.git
-cd dotclaude
-./setup.sh
+## Directory Structure
+
+| Directory | Purpose | Syncs To |
+|-----------|---------|----------|
+| `CLAUDE.md` | Personal policies & preferences | `~/.claude/CLAUDE.md` |
+| `settings.json` | Claude settings | `~/.claude/settings.json` |
+| `rules/` | Always-loaded behavioral standards | `~/.claude/rules/` |
+| `agents/` | System-wide reusable agents | `~/.claude/agents/` |
+| `hooks/` | Pre/post tool-use automation | `~/.claude/hooks/` |
+| `commands/` | User-invoked `/commands` | `~/.claude/commands/` |
+| `skills/` | Model-invoked capabilities | `~/.claude/skills/` |
+| `project-agents/` | Version-controlled record (not synced) | - |
+
+## System-Wide Agents
+
+| Agent | Purpose | Mode |
+|-------|---------|------|
+| `git-manager` | Git workflows, semantic versioning, releases | acceptEdits |
+| `python-refactorer` | Code quality, Ruff, strict typing | acceptEdits |
+| `senior-architect` | System design, technical debt (advisory) | plan |
+| `test-engineer` | Pytest, coverage, CI, bash testing | acceptEdits |
+| `docs-writer` | READMEs, changelogs, API docs | acceptEdits |
+| `devops-engineer` | CI/CD, GitHub Actions, Docker | acceptEdits |
+
+## Project Agents
+
+Organized by project in `project-agents/`:
+
+```
+project-agents/
+├── llm-efficiency-measurement-tool/
+│   ├── research-pm.md          # Product roadmap, prioritization
+│   └── research-scientist.md   # Experiment design, analysis
+└── ds01-infra/
+    ├── admin-docs-writer.md    # Sysadmin documentation
+    ├── cli-ux-designer.md      # CLI UX patterns
+    ├── systems-architect.md    # DS01-specific architecture
+    ├── technical-product-manager.md
+    └── user-docs-writer.md     # User-facing docs
 ```
 
-## Workflow
-
-### Update Config
+**Sync agents from projects:**
 ```bash
-cd ~/Repositories/dotclaude
-# Edit files...
-git add . && git commit -m "Update X"
-git push
+./sync-project-agents.sh pull    # Pull from projects → dotclaude
+./sync-project-agents.sh push    # Push from dotclaude → projects
+./sync-project-agents.sh status  # Check sync status
 ```
 
-### Sync to Other Machines
-```bash
-cd ~/Repositories/dotclaude  # or ~/workspace/dotclaude
-git pull
-# Symlinks auto-update
-```
+## Rules
 
-### Add Project-Specific Agents
-Copy from `project-agents/` to your project:
-```bash
-cp -r project-agents/research-pm ~/Repositories/my-project/.claude/agents/
-```
+Always-loaded behavioral standards:
 
-## Agents
+| Rule | Purpose |
+|------|---------|
+| `git-commits.md` | Conventional commits, semantic versioning |
+| `python-standards.md` | Ruff, type hints, docstrings |
+| `docker-practices.md` | Container best practices |
+| `security.md` | Secrets, input validation |
+| `research-code.md` | Reproducibility standards |
+| `modular-claude-docs.md` | CLAUDE.md organization |
+| `no-unnecessary-files.md` | Avoid .md bloat |
 
-### System-Wide (always available)
-- **git-manager** - Git workflows, semantic versioning, releases
-- **python-refactorer** - Code quality, Ruff, typing
-- **senior-architect** - System design (advisory)
-- **test-engineer** - Test coverage, CI
-- **docs-writer** - Documentation
-- **devops-engineer** - CI/CD, GitHub Actions
+## Hooks
 
-### Project-Specific (copy as needed)
-- **research-pm** - Product roadmap, prioritization
-- **research-scientist** - Experiment design, analysis
+| Hook | Type | Purpose |
+|------|------|---------|
+| `post-tool-format.py` | PostToolUse | Auto-format Python with Ruff |
+| `block-sensitive.py` | PreToolUse | Block access to .env, keys, credentials |
 
-## Git Hooks
+## Commands
 
-This repo uses git hooks for commit quality:
+User-invoked with `/command`:
+
+| Command | Description |
+|---------|-------------|
+| `/gpu-status` | GPU utilization, memory, processes |
+| `/docker-status` | Container status, resource usage |
+| `/commit` | Create well-formatted commit |
+| `/pr-review` | Review branch changes |
+
+## Skills
+
+Model-invoked when relevant:
+
+| Skill | Purpose |
+|-------|---------|
+| `python-fixer` | Fix linting/formatting with Ruff |
+| `type-checker` | MyPy type checking |
+| `test-runner` | Run pytest, analyze failures |
+| `container-inspector` | Debug Docker containers |
+| `dependency-auditor` | Security scan dependencies |
+
+## Git Hooks (for this repo)
 
 | Hook | Purpose |
 |------|---------|
-| `pre-commit` | Enforces git identity (henrycgbaker / henry.c.g.baker@gmail.com) |
-| `commit-msg` | Blocks AI attribution in commit messages |
+| `pre-commit` | Syncs project-agents, enforces git identity |
+| `commit-msg` | Blocks AI attribution |
 
-**Location:** `.git/hooks/` (active, not tracked by git)
-**Source:** `githooks/` (tracked copies)
+Install: `git config core.hooksPath githooks`
 
-The `.git/hooks/` directory is not tracked by git (it's inside `.git/`), so after cloning you need to install hooks manually:
+## Remote Deployment
 
 ```bash
-cp githooks/* .git/hooks/
-chmod +x .git/hooks/*
+# Clone and setup on remote
+./deploy-remote.sh hbaker --clone
+
+# Rsync local copy
+./deploy-remote.sh dsl --rsync
 ```
 
-Or configure git to use the `githooks/` directory:
-```bash
-git config core.hooksPath githooks
-```
+## Documentation
+
+For detailed guidance on when to use agents, commands, skills, rules, and hooks, see:
+
+**[docs/usage-guide.md](docs/usage-guide.md)** - Comprehensive guide to Claude Code configuration

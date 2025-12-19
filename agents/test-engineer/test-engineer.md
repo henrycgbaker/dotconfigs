@@ -326,6 +326,57 @@ pytest tests/unit/test_models.py::TestUser::test_validation
 pytest -k "test_create"
 ```
 
+## Testing Bash Scripts
+
+### Pytest with Subprocess
+For bash/shell scripts, create pytest tests that invoke scripts via subprocess:
+
+```python
+import subprocess
+import pytest
+from pathlib import Path
+
+class TestBashScript:
+    """Tests for script-name.sh"""
+
+    SCRIPT_PATH = Path("scripts/script-name.sh")
+
+    def run_script(self, *args, env=None, input_text=None) -> subprocess.CompletedProcess:
+        """Helper to run the script with arguments."""
+        return subprocess.run(
+            [str(self.SCRIPT_PATH), *args],
+            capture_output=True,
+            text=True,
+            env=env,
+            input=input_text,
+            timeout=30
+        )
+
+    def test_displays_help_with_help_flag(self):
+        """Script should display usage information with --help."""
+        result = self.run_script("--help")
+        assert result.returncode == 0
+        assert "Usage:" in result.stdout
+
+    def test_fails_gracefully_with_invalid_args(self):
+        """Script should exit with error for invalid arguments."""
+        result = self.run_script("--invalid-flag")
+        assert result.returncode != 0
+        assert "error" in result.stderr.lower() or "usage" in result.stderr.lower()
+```
+
+### Alternative: bats-core
+For native bash testing, use [bats-core](https://github.com/bats-core/bats-core):
+
+```bash
+# test_script.bats
+@test "displays help with --help" {
+    run ./script.sh --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage:"* ]]
+}
+```
+
 ## CI Integration
 
 ### GitHub Actions Workflow
