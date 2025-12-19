@@ -1,0 +1,38 @@
+# Global gitignore - installed via setup.sh
+# Git config: git config --global core.excludesfile ~/.gitignore_global
+
+# Claude Code
+.claude/
+.claude-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/

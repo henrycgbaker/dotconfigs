@@ -1,26 +1,15 @@
 #!/bin/bash
-# Git hook: Pre-commit checks for dotclaude
-# 1. Sync project agents from all projects
-# 2. Enforce git identity
+# ============================================================================
+# PRE-COMMIT HOOK
+# ============================================================================
+# Location: .git/hooks/pre-commit (NOT tracked by git)
+# Source:   githooks/pre-commit (tracked template)
 #
 # Install: cp githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Or run:  ./setup.sh (does this automatically)
+# ============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-
-# --- Agent Sync ---
-# Pull latest agents from projects before committing
-if [ -x "$REPO_ROOT/sync-project-agents.sh" ]; then
-    echo "🔄 Syncing project agents..."
-
-    # Only sync if we can reach the sources (skip remote if offline)
-    "$REPO_ROOT/sync-project-agents.sh" pull 2>/dev/null
-
-    # Stage any changes to project-agents/
-    git add "$REPO_ROOT/project-agents/" 2>/dev/null || true
-
-    echo "✅ Agent sync complete"
-fi
 
 # --- Identity Check ---
 EXPECTED_NAME="henrycgbaker"
@@ -39,6 +28,14 @@ if [ "$ACTUAL_EMAIL" != "$EXPECTED_EMAIL" ]; then
     echo "❌ ERROR: Git user.email is '$ACTUAL_EMAIL', expected '$EXPECTED_EMAIL'"
     echo "Fix with: git config user.email '$EXPECTED_EMAIL'"
     exit 1
+fi
+
+# --- Agent Sync (dotclaude only) ---
+if [ -x "$REPO_ROOT/sync-project-agents.sh" ]; then
+    echo "🔄 Syncing project agents..."
+    "$REPO_ROOT/sync-project-agents.sh" pull 2>/dev/null
+    git add "$REPO_ROOT/project-agents/" 2>/dev/null || true
+    echo "✅ Agent sync complete"
 fi
 
 exit 0

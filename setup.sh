@@ -57,25 +57,36 @@ else
     echo "  To update, manually merge or run: cp $SCRIPT_DIR/settings.json $CLAUDE_DIR/settings.json"
 fi
 
-# === Global Git Hooks ===
-# These hooks apply to ALL git repos (identity enforcement, AI attribution blocking)
+# === Global Gitignore ===
 echo ""
-echo "Installing global git hooks..."
+echo "Setting up global gitignore..."
 
-# Create githooks directory and copy global hooks
-mkdir -p "$CLAUDE_DIR/githooks"
-cp "$SCRIPT_DIR/githooks/global/"* "$CLAUDE_DIR/githooks/" 2>/dev/null || true
-chmod +x "$CLAUDE_DIR/githooks/"* 2>/dev/null || true
+if [ ! -f "$HOME/.gitignore_global" ]; then
+    cp "$SCRIPT_DIR/gitignore_global" "$HOME/.gitignore_global"
+    git config --global core.excludesfile "$HOME/.gitignore_global"
+    echo "✓ Installed global gitignore"
+else
+    echo "⊘ ~/.gitignore_global exists (kept existing)"
+    echo "  To update: cp $SCRIPT_DIR/gitignore_global ~/.gitignore_global"
+fi
 
-# Set global hooks path
-git config --global core.hooksPath "$CLAUDE_DIR/githooks"
-echo "✓ Global git hooks installed to $CLAUDE_DIR/githooks/"
-echo "✓ Set git config --global core.hooksPath"
+# === Git Hooks ===
+# Copy hook templates to .git/hooks/ (not tracked by git)
+echo ""
+echo "Installing git hooks..."
 
-# === Dotclaude-specific hooks ===
-# These are sourced by global hooks when working in this repo
-if [ -d "$SCRIPT_DIR/.githooks" ]; then
-    echo "✓ Repo-specific hooks available in .githooks/"
+if [ -d "$SCRIPT_DIR/.git" ]; then
+    mkdir -p "$SCRIPT_DIR/.git/hooks"
+    for hook in "$SCRIPT_DIR/githooks/"*; do
+        if [ -f "$hook" ]; then
+            hookname=$(basename "$hook")
+            cp "$hook" "$SCRIPT_DIR/.git/hooks/$hookname"
+            chmod +x "$SCRIPT_DIR/.git/hooks/$hookname"
+            echo "✓ Installed hook: $hookname"
+        fi
+    done
+else
+    echo "⊘ Not a git repo, skipping hooks"
 fi
 
 echo ""

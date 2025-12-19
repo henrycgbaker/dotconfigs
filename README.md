@@ -2,35 +2,6 @@
 
 Personal Claude Code configuration - agents, rules, hooks, commands, skills, and settings.
 
-## Architecture Decisions
-
-### System-Wide vs Project-Specific Agents
-
-| Location | Purpose | When to Use |
-|----------|---------|-------------|
-| `agents/` → `~/.claude/agents/` | Generic, reusable across all projects | Git, testing, refactoring, CI/CD |
-| `project-agents/{project}/` | Version-controlled record of project agents | Domain-specific agents |
-| Project's `.claude/agents/` | **Source of truth** for that project | Where agents actually run |
-
-**Key decisions:**
-- **Projects are source of truth** - agents live in each project's `.claude/agents/`
-- **dotclaude is the version-controlled record** - organized by project name in `project-agents/`
-- **Copy-based sync** (not symlinks) - works across machines with different paths
-- **Sync script** pulls latest from projects before commits
-
-### Scope Precedence
-
-| Config Type | Precedence | Behavior |
-|-------------|------------|----------|
-| `settings.json` | Project > User | Merged (deny wins) |
-| Agents | Project > User | Override (project wins) |
-| Hooks | All sources | Merged (all execute) |
-| Rules | Project > User | Override |
-| Commands/Skills | Project > User | Override |
-| CLAUDE.md | Project > User | Override |
-
-**Rule of thumb:** Project-level configs override user-level by name. Only hooks merge.
-
 ## Quick Start
 
 ```bash
@@ -39,20 +10,39 @@ cd ~/Repositories/dotclaude
 ./setup.sh
 ```
 
+## What Gets Installed
+
+| Source | Target | Method |
+|--------|--------|--------|
+| `CLAUDE.md` | `~/.claude/CLAUDE.md` | symlink |
+| `rules/` | `~/.claude/rules/` | symlink |
+| `agents/` | `~/.claude/agents/` | symlink |
+| `hooks/` | `~/.claude/hooks/` | symlink |
+| `commands/` | `~/.claude/commands/` | symlink |
+| `skills/` | `~/.claude/skills/` | symlink |
+| `settings.json` | `~/.claude/settings.json` | copy (allows local overrides) |
+| `gitignore_global` | `~/.gitignore_global` | copy |
+| `githooks/*` | `.git/hooks/` | copy |
+
 ## Directory Structure
 
-| Directory | Purpose | Syncs To |
-|-----------|---------|----------|
-| `CLAUDE.md` | Personal policies & preferences | `~/.claude/CLAUDE.md` |
-| `settings.json` | Claude settings | `~/.claude/settings.json` |
-| `rules/` | Always-loaded behavioral standards | `~/.claude/rules/` |
-| `agents/` | System-wide reusable agents | `~/.claude/agents/` |
-| `hooks/` | Pre/post tool-use automation | `~/.claude/hooks/` |
-| `commands/` | User-invoked `/commands` | `~/.claude/commands/` |
-| `skills/` | Model-invoked capabilities | `~/.claude/skills/` |
-| `project-agents/` | Version-controlled record (not synced) | - |
+```
+dotclaude/
+├── CLAUDE.md              # Personal policies & preferences
+├── settings.json          # Claude settings (copied, not symlinked)
+├── agents/                # System-wide reusable agents
+├── rules/                 # Always-loaded behavioral standards
+├── hooks/                 # Claude pre/post tool-use automation
+├── commands/              # User-invoked /commands
+├── skills/                # Model-invoked capabilities
+├── project-agents/        # Version-controlled record of project agents
+├── githooks/              # Git hook templates (→ .git/hooks/)
+└── gitignore_global       # Global gitignore template
+```
 
-## System-Wide Agents
+## Agents
+
+### System-Wide
 
 | Agent | Purpose | Mode |
 |-------|---------|------|
@@ -63,28 +53,28 @@ cd ~/Repositories/dotclaude
 | `docs-writer` | READMEs, changelogs, API docs | acceptEdits |
 | `devops-engineer` | CI/CD, GitHub Actions, Docker | acceptEdits |
 
-## Project Agents
+### Project-Specific
 
 Organized by project in `project-agents/`:
 
 ```
 project-agents/
 ├── llm-efficiency-measurement-tool/
-│   ├── research-pm.md          # Product roadmap, prioritization
-│   └── research-scientist.md   # Experiment design, analysis
+│   ├── research-pm.md
+│   └── research-scientist.md
 └── ds01-infra/
-    ├── admin-docs-writer.md    # Sysadmin documentation
-    ├── cli-ux-designer.md      # CLI UX patterns
-    ├── systems-architect.md    # DS01-specific architecture
+    ├── admin-docs-writer.md
+    ├── cli-ux-designer.md
+    ├── systems-architect.md
     ├── technical-product-manager.md
-    └── user-docs-writer.md     # User-facing docs
+    └── user-docs-writer.md
 ```
 
-**Sync agents from projects:**
+**Sync agents:**
 ```bash
-./sync-project-agents.sh pull    # Pull from projects → dotclaude
-./sync-project-agents.sh push    # Push from dotclaude → projects
-./sync-project-agents.sh status  # Check sync status
+./sync-project-agents.sh pull    # projects → dotclaude
+./sync-project-agents.sh push    # dotclaude → projects
+./sync-project-agents.sh status  # check sync
 ```
 
 ## Rules
@@ -101,7 +91,9 @@ Always-loaded behavioral standards:
 | `modular-claude-docs.md` | CLAUDE.md organization |
 | `no-unnecessary-files.md` | Avoid .md bloat |
 
-## Hooks
+## Claude Hooks
+
+Pre/post tool-use automation:
 
 | Hook | Type | Purpose |
 |------|------|---------|
@@ -131,46 +123,78 @@ Model-invoked when relevant:
 | `container-inspector` | Debug Docker containers |
 | `dependency-auditor` | Security scan dependencies |
 
-## Git Hooks
+## Git Configuration
 
-### Global Hooks (all repos)
+### Git Hooks
 
-Deployed to `~/.claude/githooks/` and applied to ALL git repos via `core.hooksPath`:
+Templates in `githooks/` are copied to `.git/hooks/` by `setup.sh`:
 
 | Hook | Purpose |
 |------|---------|
-| `pre-commit` | Enforces git identity (henrycgbaker) |
+| `pre-commit` | Enforces git identity, syncs project agents |
 | `commit-msg` | Blocks AI attribution patterns |
 
-Global hooks also source repo-specific hooks from `.githooks/` if present.
-
-### Repo-Specific Hooks (dotclaude only)
-
-Located in `.githooks/` and sourced by global hooks:
-
-| Hook | Purpose |
-|------|---------|
-| `pre-commit` | Syncs project-agents before commits |
-
-### Setup
-
-Global hooks are installed automatically by `setup.sh`:
+**After fresh clone:**
 ```bash
-./setup.sh  # Installs hooks and sets git config --global core.hooksPath
+./setup.sh  # Installs hooks to .git/hooks/
 ```
+
+**For other repos:**
+```bash
+cp ~/Repositories/dotclaude/githooks/* /path/to/repo/.git/hooks/
+chmod +x /path/to/repo/.git/hooks/*
+```
+
+### Global Gitignore
+
+Excludes common files across all repos:
+
+| Pattern | Purpose |
+|---------|---------|
+| `.claude/`, `.claude-project` | Claude Code files |
+| `.DS_Store`, `.idea/`, `.vscode/` | OS/editor files |
+| `__pycache__/`, `.venv/`, etc. | Python artifacts |
+
+**Manual setup:**
+```bash
+cp ~/Repositories/dotclaude/gitignore_global ~/.gitignore_global
+git config --global core.excludesfile ~/.gitignore_global
+```
+
+## Architecture Decisions
+
+### Agent Strategy
+
+| Location | Purpose | When to Use |
+|----------|---------|-------------|
+| `agents/` → `~/.claude/agents/` | Generic, reusable | Git, testing, refactoring |
+| `project-agents/{project}/` | Version-controlled record | Domain-specific |
+| Project's `.claude/agents/` | **Source of truth** | Where agents run |
+
+- **Projects are source of truth** - agents live in each project's `.claude/agents/`
+- **dotclaude is the record** - organized by project in `project-agents/`
+- **Copy-based sync** - works across machines
+
+### Scope Precedence
+
+| Config Type | Precedence | Behavior |
+|-------------|------------|----------|
+| `settings.json` | Project > User | Merged (deny wins) |
+| Agents | Project > User | Override |
+| Hooks | All sources | Merged (all execute) |
+| Rules | Project > User | Override |
+| Commands/Skills | Project > User | Override |
+| CLAUDE.md | Project > User | Override |
+
+**Rule of thumb:** Project-level configs override user-level by name. Only hooks merge.
 
 ## Remote Deployment
 
 ```bash
-# Clone and setup on remote
-./deploy-remote.sh hbaker --clone
-
-# Rsync local copy
-./deploy-remote.sh dsl --rsync
+./deploy-remote.sh hbaker --clone  # Clone and setup on remote
+./deploy-remote.sh dsl --rsync     # Rsync local copy
 ```
 
 ## Documentation
-
-For detailed guidance on when to use agents, commands, skills, rules, and hooks, see:
 
 **[docs/usage-guide.md](docs/usage-guide.md)** - Comprehensive guide to Claude Code configuration
