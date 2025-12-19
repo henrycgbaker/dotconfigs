@@ -1,8 +1,6 @@
----
-paths: "**/*.py"
----
-
 # Python Standards
+
+> Applied when working with Python files.
 
 ## Formatting
 - Ruff as formatter (100 char line length)

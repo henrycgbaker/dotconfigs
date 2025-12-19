@@ -1,8 +1,6 @@
----
-paths: "**/Dockerfile*,**/docker-compose*.yml,**/docker-compose*.yaml"
----
-
 # Docker Best Practices
+
+> Applied when working with Dockerfiles and docker-compose.
 
 ## Base Images
 - Pin specific versions (e.g., `python:3.11-slim` not `python:latest`)
