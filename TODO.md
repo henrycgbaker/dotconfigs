@@ -1,24 +1,50 @@
 # TODO
 
-## Extensibility Features to Add
+## Extensibility Features
 
-- [ ] **Skills** - Model-invoked capabilities in `skills/`
-  - [ ] code-review skill
-  - [ ] pdf-processing skill
+### Completed
 
-- [ ] **Commands** - Custom slash commands in `commands/`
-  - [ ] pr-review.md
-  - [ ] commit-helper.md
+- [x] **Hooks** - Event automation in `hooks/`
+  - [x] `block-sensitive.py` - Block access to sensitive files
+  - [x] `post-tool-format.py` - Auto-format Python with Ruff
 
-- [ ] **Hooks** - Event automation in `hooks.json`
-  - [ ] Auto-format after edits
-  - [ ] Block sensitive file edits
+- [x] **Rules** - Coding standards in `rules/`
+  - [x] `python-standards.md` - Python conventions
+  - [x] `git-commits.md` - Commit conventions
+  - [x] `docker-practices.md` - Container best practices
+  - [x] `security.md` - Security practices
+  - [x] `research-code.md` - Reproducibility standards
 
-- [ ] **MCP Servers** - External integrations in `mcp-servers.json`
+- [x] **Skills** - Model-invoked capabilities in `skills/`
+  - [x] `python-fixer/` - Auto-fix Python linting
+  - [x] `type-checker/` - MyPy integration
+  - [x] `test-runner/` - Pytest helper
+  - [x] `container-inspector/` - Docker debugging
+  - [x] `dependency-auditor/` - Security scanning
+
+- [x] **Commands** - Custom slash commands in `commands/`
+  - [x] `gpu-status.md` - GPU monitoring
+  - [x] `docker-status.md` - Container status
+  - [x] `pr-review.md` - PR review workflow
+  - [x] `commit.md` - Commit helper
+
+- [x] **Project Agents** - Reusable agents in `project-agents/`
+  - [x] `infra-architect/` - Infrastructure design
+  - [x] `research-pm/` - Research product management
+  - [x] `research-scientist/` - Research scientist
+
+- [x] **Git Hooks** - Git identity enforcement
+  - [x] `pre-commit` - Enforce git user identity
+  - [x] `commit-msg` - Block AI attribution
+
+### Pending
+
+- [ ] **MCP Servers** - External integrations
   - [ ] GitHub integration
   - [ ] Database connections (use env vars for credentials)
+  - [ ] GPU monitoring server (custom)
 
-- [ ] **Output Styles** - Custom system prompts in `output-styles/` (optional)
+- [ ] **Convert project-agents to templates** - Once agents stabilize, convert from symlinks to template copies for project customization
 
 ## Research
 

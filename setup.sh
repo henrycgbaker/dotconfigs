@@ -13,29 +13,40 @@ echo ""
 # Create ~/.claude if it doesn't exist
 mkdir -p "$CLAUDE_DIR"
 
-# Backup and symlink CLAUDE.md
-if [ -f "$CLAUDE_DIR/CLAUDE.md" ] && [ ! -L "$CLAUDE_DIR/CLAUDE.md" ]; then
-    echo "Backing up existing CLAUDE.md to CLAUDE.md.backup"
-    mv "$CLAUDE_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md.backup"
-fi
-ln -sfn "$SCRIPT_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
-echo "✓ Linked CLAUDE.md"
+# Helper function to backup and symlink
+backup_and_link() {
+    local src="$1"
+    local dest="$2"
+    local name="$3"
 
-# Backup and symlink rules/
-if [ -d "$CLAUDE_DIR/rules" ] && [ ! -L "$CLAUDE_DIR/rules" ]; then
-    echo "Backing up existing rules/ to rules.backup/"
-    mv "$CLAUDE_DIR/rules" "$CLAUDE_DIR/rules.backup"
-fi
-ln -sfn "$SCRIPT_DIR/rules" "$CLAUDE_DIR/rules"
-echo "✓ Linked rules/"
+    if [ -e "$dest" ] && [ ! -L "$dest" ]; then
+        echo "Backing up existing $name to $name.backup"
+        mv "$dest" "$dest.backup"
+    fi
+    ln -sfn "$src" "$dest"
+    echo "✓ Linked $name"
+}
 
-# Backup and symlink agents/
-if [ -d "$CLAUDE_DIR/agents" ] && [ ! -L "$CLAUDE_DIR/agents" ]; then
-    echo "Backing up existing agents/ to agents.backup/"
-    mv "$CLAUDE_DIR/agents" "$CLAUDE_DIR/agents.backup"
-fi
-ln -sfn "$SCRIPT_DIR/agents" "$CLAUDE_DIR/agents"
-echo "✓ Linked agents/"
+# Symlink CLAUDE.md
+backup_and_link "$SCRIPT_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md" "CLAUDE.md"
+
+# Symlink rules/
+backup_and_link "$SCRIPT_DIR/rules" "$CLAUDE_DIR/rules" "rules/"
+
+# Symlink agents/
+backup_and_link "$SCRIPT_DIR/agents" "$CLAUDE_DIR/agents" "agents/"
+
+# Symlink hooks/
+backup_and_link "$SCRIPT_DIR/hooks" "$CLAUDE_DIR/hooks" "hooks/"
+
+# Symlink commands/
+backup_and_link "$SCRIPT_DIR/commands" "$CLAUDE_DIR/commands" "commands/"
+
+# Symlink skills/
+backup_and_link "$SCRIPT_DIR/skills" "$CLAUDE_DIR/skills" "skills/"
+
+# Symlink project-agents/ (for iterative development)
+backup_and_link "$SCRIPT_DIR/project-agents" "$CLAUDE_DIR/project-agents" "project-agents/"
 
 # Copy settings.json (not symlinked - allows local overrides)
 if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
@@ -43,10 +54,22 @@ if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
     echo "✓ Copied settings.json"
 else
     echo "⊘ settings.json exists (kept local version)"
+    echo "  To update, manually merge or run: cp $SCRIPT_DIR/settings.json $CLAUDE_DIR/settings.json"
 fi
 
 echo ""
 echo "Done! Configuration installed."
 echo ""
 echo "Symlinks created:"
-ls -la "$CLAUDE_DIR/CLAUDE.md" "$CLAUDE_DIR/rules" "$CLAUDE_DIR/agents" 2>/dev/null || true
+ls -la "$CLAUDE_DIR/CLAUDE.md" \
+       "$CLAUDE_DIR/rules" \
+       "$CLAUDE_DIR/agents" \
+       "$CLAUDE_DIR/hooks" \
+       "$CLAUDE_DIR/commands" \
+       "$CLAUDE_DIR/skills" \
+       "$CLAUDE_DIR/project-agents" 2>/dev/null || true
+
+echo ""
+echo "Note: settings.json is copied (not symlinked) to allow local overrides."
+echo "      project-agents/ is symlinked for iterative development."
+echo "      Consider copying project-agents/ to .claude/agents/ in specific projects once stable."

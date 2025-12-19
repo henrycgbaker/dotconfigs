@@ -1,6 +1,6 @@
 # No Unnecessary Markdown Files
 
-Do not proactively create standalone .md files for explanations, summaries, or implementation notes.
+Do not proactively create standalone .md files for plans, summaries, or implementation notes.
 
 ## Always OK
 - README.md, CLAUDE.md, CHANGELOG.md

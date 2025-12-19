@@ -1,5 +1,72 @@
 {
   "alwaysThinkingEnabled": true,
   "includeCoAuthoredBy": false,
-  "gitAttribution": false
+  "gitAttribution": false,
+
+  "permissions": {
+    "allow": [
+      "Bash(nvidia-smi:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(git:*)",
+      "Bash(ruff:*)",
+      "Bash(pytest:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Read(/proc/meminfo)",
+      "Read(/proc/cpuinfo)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/*_key)",
+      "Read(**/*_secret)",
+      "Read(**/.ssh/**)",
+      "Bash(rm -rf /)",
+      "Bash(mkfs:*)",
+      "Bash(dd if=:*)"
+    ],
+    "ask": [
+      "Bash(systemctl:*)",
+      "Bash(kill:*)",
+      "Bash(pkill:*)",
+      "Bash(reboot:*)",
+      "Bash(shutdown:*)"
+    ]
+  },
+
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1"
+  },
+
+  "sandbox": {
+    "enabled": true,
+    "excludedCommands": ["docker", "docker-compose", "nvidia-smi", "git"]
+  },
+
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/hooks/post-tool-format.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/hooks/block-sensitive.py"
+          }
+        ]
+      }
+    ]
+  }
 }
