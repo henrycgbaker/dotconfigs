@@ -1,6 +1,7 @@
 #!/bin/bash
 # Git hook: Validate commit messages
 # Prevents AI attribution in commits
+# store this file as .git/hooks/commit-msg and make it executable (not tracked by git; unlike ./githooks/commit-msg)
 
 COMMIT_MSG_FILE=$1
 COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")

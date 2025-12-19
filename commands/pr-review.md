@@ -43,6 +43,7 @@ git diff main...HEAD --stat
 - [ ] Code comments where needed
 - [ ] Docstrings for public APIs
 - [ ] README updated if needed
+- [ ] local / modular CLAUDE updated if needed 
 
 **Git Hygiene**:
 - [ ] Commits follow conventional format

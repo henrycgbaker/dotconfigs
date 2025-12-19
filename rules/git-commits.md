@@ -9,8 +9,6 @@ Types:
 - `docs`: Documentation only
 - `refactor`: Code change without feature/fix
 - `test`: Adding/updating tests
-- `chore`: Maintenance tasks
-- `perf`: Performance improvement
 
 ## Rules
 - Keep subject line under 72 characters

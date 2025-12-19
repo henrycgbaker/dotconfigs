@@ -37,7 +37,8 @@ Types:
 - `docs`: Documentation
 - `refactor`: Code refactor
 - `test`: Tests
-- `chore`: Maintenance
+
+*NB: also fine to have no `type` if it's a miscellaneous / 'chore'-style task.*
 
 Example:
 ```bash
