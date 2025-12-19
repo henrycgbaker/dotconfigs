@@ -1,0 +1,22 @@
+#!/bin/bash
+# Repo-specific pre-commit hook for dotclaude
+# Sourced by global pre-commit hook (~/.claude/githooks/pre-commit)
+#
+# This hook syncs project-agents from all projects before commits
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Sync project agents before committing
+if [ -x "$REPO_ROOT/sync-project-agents.sh" ]; then
+    echo "🔄 Syncing project agents..."
+
+    # Pull latest agents from projects (skip remote if offline)
+    "$REPO_ROOT/sync-project-agents.sh" pull 2>/dev/null
+
+    # Stage any changes to project-agents/
+    git add "$REPO_ROOT/project-agents/" 2>/dev/null || true
+
+    echo "✅ Agent sync complete"
+fi
+
+exit 0

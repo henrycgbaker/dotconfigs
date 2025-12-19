@@ -57,6 +57,27 @@ else
     echo "  To update, manually merge or run: cp $SCRIPT_DIR/settings.json $CLAUDE_DIR/settings.json"
 fi
 
+# === Global Git Hooks ===
+# These hooks apply to ALL git repos (identity enforcement, AI attribution blocking)
+echo ""
+echo "Installing global git hooks..."
+
+# Create githooks directory and copy global hooks
+mkdir -p "$CLAUDE_DIR/githooks"
+cp "$SCRIPT_DIR/githooks/global/"* "$CLAUDE_DIR/githooks/" 2>/dev/null || true
+chmod +x "$CLAUDE_DIR/githooks/"* 2>/dev/null || true
+
+# Set global hooks path
+git config --global core.hooksPath "$CLAUDE_DIR/githooks"
+echo "✓ Global git hooks installed to $CLAUDE_DIR/githooks/"
+echo "✓ Set git config --global core.hooksPath"
+
+# === Dotclaude-specific hooks ===
+# These are sourced by global hooks when working in this repo
+if [ -d "$SCRIPT_DIR/.githooks" ]; then
+    echo "✓ Repo-specific hooks available in .githooks/"
+fi
+
 echo ""
 echo "Done! Configuration installed."
 echo ""

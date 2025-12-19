@@ -131,14 +131,33 @@ Model-invoked when relevant:
 | `container-inspector` | Debug Docker containers |
 | `dependency-auditor` | Security scan dependencies |
 
-## Git Hooks (for this repo)
+## Git Hooks
+
+### Global Hooks (all repos)
+
+Deployed to `~/.claude/githooks/` and applied to ALL git repos via `core.hooksPath`:
 
 | Hook | Purpose |
 |------|---------|
-| `pre-commit` | Syncs project-agents, enforces git identity |
-| `commit-msg` | Blocks AI attribution |
+| `pre-commit` | Enforces git identity (henrycgbaker) |
+| `commit-msg` | Blocks AI attribution patterns |
 
-Install: `git config core.hooksPath githooks`
+Global hooks also source repo-specific hooks from `.githooks/` if present.
+
+### Repo-Specific Hooks (dotclaude only)
+
+Located in `.githooks/` and sourced by global hooks:
+
+| Hook | Purpose |
+|------|---------|
+| `pre-commit` | Syncs project-agents before commits |
+
+### Setup
+
+Global hooks are installed automatically by `setup.sh`:
+```bash
+./setup.sh  # Installs hooks and sets git config --global core.hooksPath
+```
 
 ## Remote Deployment
 
