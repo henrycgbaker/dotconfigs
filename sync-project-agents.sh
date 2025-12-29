@@ -18,6 +18,7 @@ PROJECT_AGENTS_DIR="$DOTCLAUDE_DIR/project-agents"
 PROJECTS="
 llm-efficiency-measurement-tool|$HOME/Repositories/llm-efficiency-measurement-tool/.claude/agents
 ds01-infra|dsl:/opt/ds01-infra/.claude/agents
+deep_learning_lab_teaching_2025|$HOME/Repositories/deep_learning_lab_teaching_2025/.claude/agents
 "
 
 # Colors
@@ -47,7 +48,7 @@ sync_pull() {
 
             # Get list of agent files
             local files
-            files=$(ssh "$host" "ls -1 $path/*.md 2>/dev/null" || true)
+            files=$(ssh -n "$host" "ls -1 $path/*.md 2>/dev/null" || true)
 
             if [[ -z "$files" ]]; then
                 log_warn "  $project: No agents found on $host"
@@ -57,7 +58,7 @@ sync_pull() {
             for file in $files; do
                 local basename
                 basename=$(basename "$file")
-                ssh "$host" "cat $file" > "$dest/$basename"
+                ssh -n "$host" "cat $file" > "$dest/$basename"
                 log_info "    Pulled: $basename"
             done
         else
@@ -172,13 +173,13 @@ sync_push() {
             log_info "  $project: Pushing to $host:$path"
 
             # Ensure remote directory exists
-            ssh "$host" "mkdir -p $path"
+            ssh -n "$host" "mkdir -p $path"
 
             for file in "$source"/*.md; do
                 if [[ -f "$file" ]]; then
                     local basename
                     basename=$(basename "$file")
-                    cat "$file" | ssh "$host" "cat > $path/$basename"
+                    ssh "$host" "cat > $path/$basename" < "$file"
                     log_info "    Pushed: $basename"
                 fi
             done
@@ -232,7 +233,7 @@ sync_status() {
                     local basename
                     basename=$(basename "$file")
                     local remote_content
-                    remote_content=$(ssh "$host" "cat $path/$basename 2>/dev/null" || echo "")
+                    remote_content=$(ssh -n "$host" "cat $path/$basename 2>/dev/null" || echo "")
 
                     if [[ -z "$remote_content" ]]; then
                         log_warn "  $basename: Only in dotclaude (not on remote)"
