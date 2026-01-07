@@ -46,9 +46,33 @@ git branch --show-current     # Current branch
 4. Keep branches short-lived when possible
 
 ### Merge Strategy
-- **Merge commits**: For feature branches (preserves history)
+- **Squash merge**: Default for feature branches (1 clean commit per feature)
 - **Rebase**: For keeping feature branches up-to-date with main
-- **Squash**: Only when consolidating WIP commits
+- **Merge commits**: Only when history preservation is explicitly needed
+
+## Squash Merge Workflow
+
+### Creating a Feature Branch
+```bash
+git checkout main && git pull
+git checkout -b feature/my-feature
+```
+
+### During Development
+- Commit freely (WIP, notes, experiments)
+- No need to follow strict conventions on branches
+- Focus on working code, not commit messages
+
+### Completing Work (Squash to Main)
+```bash
+git checkout main && git pull
+git merge --squash feature/my-feature
+git commit -m "feat: description of feature"  # Clean conventional commit
+git branch -d feature/my-feature
+git push
+```
+
+> **Tip**: Use `/squash-merge` command to guide through this process interactively.
 
 ## Release Management
 

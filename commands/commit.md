@@ -52,8 +52,18 @@ git commit -m "feat: add GPU monitoring command"
 git log -1 --oneline
 ```
 
+## Branch Awareness
+
+Check current branch first:
+```bash
+git branch --show-current
+```
+
+- **On main**: This is likely a squash commit. Use full conventional format.
+- **On feature branch**: Relaxed messages are fine (WIP, notes, etc.). Use `/squash-merge` when ready to merge to main.
+
 ## Notes
-- Keep subject under 72 characters
+- Keep subject under 72 characters (on main)
 - Use imperative mood ("Add" not "Added")
 - No AI attribution (enforced by hooks)
 - Breaking changes: use `!` suffix (e.g., `feat!: change API`)
