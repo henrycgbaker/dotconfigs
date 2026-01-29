@@ -11,6 +11,24 @@
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# --- Branch Protection ---
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Allow commits on main if this is a squash merge (SQUASH_MSG exists)
+if [ "$CURRENT_BRANCH" = "main" ] && [ ! -f "$REPO_ROOT/.git/SQUASH_MSG" ]; then
+    echo "❌ ERROR: Direct commits to 'main' are not allowed"
+    echo ""
+    echo "Workflow: Create a branch, commit freely, then squash merge when complete"
+    echo ""
+    echo "To fix:"
+    echo "  1. Create a branch:          git checkout -b <branch-name>"
+    echo "     (e.g., feature/*, fix/*, docs/*, refactor/*, or plain descriptive name)"
+    echo "  2. Commit your changes:      git commit"
+    echo "  3. When done, squash merge:  Use /squash-merge command"
+    echo ""
+    exit 1
+fi
+
 # --- Identity Check ---
 EXPECTED_NAME="henrycgbaker"
 EXPECTED_EMAIL="henry.c.g.baker@gmail.com"
