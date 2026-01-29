@@ -29,7 +29,7 @@ git diff main...HEAD --stat
 ### 3. Checklist
 
 **Code Quality**:
-- [ ] Code follows project style (Ruff passing)
+- [ ] Code follows project style (Ruff passing) - use deterministic tools for this
 - [ ] Type hints present where needed
 - [ ] No obvious bugs or logic errors
 - [ ] No hardcoded secrets or credentials
