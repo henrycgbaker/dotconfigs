@@ -87,8 +87,8 @@ fi
 # --- Commit Message Validation ---
 COMMIT_MSG_FILE="$REPO_ROOT/.git/COMMIT_EDITMSG"
 
-# Only validate if commit message exists (skip for amend without edit, etc.)
-if [ -f "$COMMIT_MSG_FILE" ]; then
+# Only validate if commit message exists (skip for amend, squash merge, etc.)
+if [ -f "$COMMIT_MSG_FILE" ] && [ ! -f "$REPO_ROOT/.git/SQUASH_MSG" ]; then
     COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
     SUBJECT_LINE=$(echo "$COMMIT_MSG" | head -1)
 
