@@ -5,6 +5,9 @@
 .claude/
 .claude-project
 
+# Note: CLAUDE.md and claude_*.md should be added to .git/info/exclude per-project
+# (see ~/.claude/rules/git-exclude.md)
+
 # OS files
 .DS_Store
 Thumbs.db

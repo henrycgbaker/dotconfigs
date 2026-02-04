@@ -26,8 +26,9 @@
 
 ## Documentation
 
-- **Avoid .md bloat** - do not create endless update/report .md files in the project repo. 
+- **Avoid .md bloat** - do not create endless update/report .md files in the project repo.
 - See ~/.claude/rules/no-unnecessary-files.md.
+- **CLAUDE.md exclusion** - use `.git/info/exclude` for project CLAUDE.md files, not `.gitignore`. See ~/.claude/rules/git-exclude.md.
 
 ## Git Workflow
 

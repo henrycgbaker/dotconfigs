@@ -77,12 +77,13 @@ if [ -n "$STAGED_PYTHON_FILES" ]; then
 fi
 
 # --- Agent Sync (dotclaude only) ---
-if [ -x "$REPO_ROOT/sync-project-agents.sh" ]; then
-    echo "🔄 Syncing project agents..."
-    "$REPO_ROOT/sync-project-agents.sh" pull 2>/dev/null
-    git add "$REPO_ROOT/project-agents/" 2>/dev/null || true
-    echo "✅ Agent sync complete"
-fi
+# Disabled: Over-engineering - agents managed manually per project
+# if [ -x "$REPO_ROOT/sync-project-agents.sh" ]; then
+#     echo "🔄 Syncing project agents..."
+#     "$REPO_ROOT/sync-project-agents.sh" pull 2>/dev/null
+#     git add "$REPO_ROOT/project-agents/" 2>/dev/null || true
+#     echo "✅ Agent sync complete"
+# fi
 
 # --- Commit Message Validation ---
 COMMIT_MSG_FILE="$REPO_ROOT/.git/COMMIT_EDITMSG"
