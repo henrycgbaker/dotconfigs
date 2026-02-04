@@ -19,14 +19,12 @@ import sys
 
 SENSITIVE_PATTERNS = [
     # Environment files
-    r"\.env$",
-    r"\.env\.",
-    r"\.env\..*",
-
+    # r"\.env$",
+    # r"\.env\.",
+    # r"\.env\..*",
     # Secrets directories
     r"/secrets/",
     r"\.ssh/",
-
     # Credential files
     r"_key$",
     r"_key\.",
@@ -35,12 +33,10 @@ SENSITIVE_PATTERNS = [
     r"credentials",
     r"\.pem$",
     r"\.key$",
-
     # System files
     r"^/etc/shadow$",
     r"^/etc/passwd$",
     r"^/etc/sudoers",
-
     # ML credentials
     r"wandb_key",
     r"\.wandb/",
@@ -95,7 +91,7 @@ def main() -> int:
         print(
             f"BLOCKED: Access to sensitive file '{file_path}' is not allowed. "
             f"This file matches a protected pattern for security.",
-            file=sys.stderr
+            file=sys.stderr,
         )
         return 2  # Block
 
