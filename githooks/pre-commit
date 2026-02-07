@@ -2,20 +2,37 @@
 # ============================================================================
 # PRE-COMMIT HOOK
 # ============================================================================
-# Location: .git/hooks/pre-commit (NOT tracked by git)
-# Source:   githooks/pre-commit (tracked template)
+# Branch protection and auto-formatting
+# Deployed globally via core.hooksPath. Config-driven via .claude/hooks.conf.
 #
-# Install: cp githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
-# Or run:  ./setup.sh (does this automatically)
+# Source of truth: dotclaude/githooks/pre-commit
+# Deployed to: ~/.claude/git-hooks/pre-commit
 # ============================================================================
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 
-# --- Branch Protection ---
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+# --- Load project config ---
+HOOK_CONFIG="$REPO_ROOT/.claude/hooks.conf"
 
-# Allow commits on main if this is a squash merge (SQUASH_MSG exists)
-if [ "$CURRENT_BRANCH" = "main" ] && [ ! -f "$REPO_ROOT/.git/SQUASH_MSG" ]; then
+# Defaults
+BRANCH_PROTECTION=warn  # warn | block | off
+RUFF_ENABLED=true
+
+if [ -f "$HOOK_CONFIG" ]; then
+    source "$HOOK_CONFIG"
+fi
+
+# ============================================================================
+# SECTION 1: Branch Protection (config-driven)
+# ============================================================================
+
+# Skip branch protection during squash merge
+if [ -f "$REPO_ROOT/.git/SQUASH_MSG" ]; then
+    # User is doing a squash merge, allow it
+    :
+elif [ "$BRANCH_PROTECTION" = "block" ] && [ "$CURRENT_BRANCH" = "main" ]; then
+    # Hard block direct commits to main
     echo "❌ ERROR: Direct commits to 'main' are not allowed"
     echo ""
     echo "Workflow: Create a branch, commit freely, then squash merge when complete"
@@ -27,106 +44,47 @@ if [ "$CURRENT_BRANCH" = "main" ] && [ ! -f "$REPO_ROOT/.git/SQUASH_MSG" ]; then
     echo "  3. When done, squash merge:  Use /squash-merge command"
     echo ""
     exit 1
+elif [ "$BRANCH_PROTECTION" = "warn" ] && [ "$CURRENT_BRANCH" = "main" ]; then
+    # Warn but allow commit
+    echo "⚠️  WARNING: Committing directly to 'main' branch"
+    echo ""
+    echo "Recommended workflow: Create a branch, commit freely, then squash merge"
+    echo "To enable hard block: Set BRANCH_PROTECTION=block in .claude/hooks.conf"
+    echo ""
 fi
+# BRANCH_PROTECTION=off: No protection
 
-# --- Identity Check ---
-EXPECTED_NAME="henrycgbaker"
-EXPECTED_EMAIL="henry.c.g.baker@gmail.com"
+# ============================================================================
+# SECTION 2: Ruff Formatting (config-driven)
+# ============================================================================
 
-ACTUAL_NAME=$(git config user.name)
-ACTUAL_EMAIL=$(git config user.email)
+if [ "$RUFF_ENABLED" = true ]; then
+    STAGED_PYTHON_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
 
-if [ "$ACTUAL_NAME" != "$EXPECTED_NAME" ]; then
-    echo "❌ ERROR: Git user.name is '$ACTUAL_NAME', expected '$EXPECTED_NAME'"
-    echo "Fix with: git config user.name '$EXPECTED_NAME'"
-    exit 1
-fi
+    if [ -n "$STAGED_PYTHON_FILES" ]; then
+        echo "🔍 Checking Python files with Ruff..."
 
-if [ "$ACTUAL_EMAIL" != "$EXPECTED_EMAIL" ]; then
-    echo "❌ ERROR: Git user.email is '$ACTUAL_EMAIL', expected '$EXPECTED_EMAIL'"
-    echo "Fix with: git config user.email '$EXPECTED_EMAIL'"
-    exit 1
-fi
+        if command -v ruff &> /dev/null; then
+            # Format staged Python files
+            ruff format $STAGED_PYTHON_FILES
+            RUFF_FMT_EXIT=$?
 
-# --- Python Linting & Formatting ---
-STAGED_PYTHON_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+            # Check/fix staged Python files
+            ruff check --fix $STAGED_PYTHON_FILES
+            RUFF_CHK_EXIT=$?
 
-if [ -n "$STAGED_PYTHON_FILES" ]; then
-    echo "🔍 Checking Python files with Ruff..."
+            # Re-stage any fixes
+            git add $STAGED_PYTHON_FILES 2>/dev/null || true
 
-    if command -v ruff &> /dev/null; then
-        # Format staged Python files
-        ruff format $STAGED_PYTHON_FILES
-        RUFF_FMT_EXIT=$?
-
-        # Check/fix staged Python files
-        ruff check --fix $STAGED_PYTHON_FILES
-        RUFF_CHK_EXIT=$?
-
-        # Re-stage any fixes
-        git add $STAGED_PYTHON_FILES 2>/dev/null || true
-
-        if [ $RUFF_FMT_EXIT -ne 0 ] || [ $RUFF_CHK_EXIT -ne 0 ]; then
-            echo "⚠️  Ruff made fixes. Review changes and commit again."
-            exit 1
-        fi
-        echo "✅ Python files passed Ruff checks"
-    else
-        echo "⚠️  Ruff not installed. Skipping Python linting."
-    fi
-fi
-
-# --- Agent Sync (dotclaude only) ---
-# Disabled: Over-engineering - agents managed manually per project
-# if [ -x "$REPO_ROOT/sync-project-agents.sh" ]; then
-#     echo "🔄 Syncing project agents..."
-#     "$REPO_ROOT/sync-project-agents.sh" pull 2>/dev/null
-#     git add "$REPO_ROOT/project-agents/" 2>/dev/null || true
-#     echo "✅ Agent sync complete"
-# fi
-
-# --- Commit Message Validation ---
-COMMIT_MSG_FILE="$REPO_ROOT/.git/COMMIT_EDITMSG"
-
-# Only validate if commit message exists (skip for amend, squash merge, etc.)
-if [ -f "$COMMIT_MSG_FILE" ] && [ ! -f "$REPO_ROOT/.git/SQUASH_MSG" ]; then
-    COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
-    SUBJECT_LINE=$(echo "$COMMIT_MSG" | head -1)
-
-    # Block AI attribution (always)
-    if echo "$COMMIT_MSG" | grep -qiE '(Co-Authored-By|Generated by|AI-assisted|Claude Code)'; then
-        echo "❌ ERROR: AI attribution detected in commit message"
-        echo ""
-        echo "Remove lines like:"
-        echo "  - Co-Authored-By: ..."
-        echo "  - Generated by: ..."
-        echo "  - AI-assisted"
-        echo ""
-        echo "Take ownership of all committed code."
-        exit 1
-    fi
-
-    # Validate format based on branch
-    if [ "$CURRENT_BRANCH" = "main" ]; then
-        # On main: require conventional commit or plain descriptive (no wip)
-        if echo "$SUBJECT_LINE" | grep -qiE '^wip'; then
-            echo "❌ ERROR: 'wip' commits not allowed on main branch"
-            echo ""
-            echo "Main branch requires:"
-            echo "  - Conventional commits: feat:, fix:, docs:, refactor:, test:"
-            echo "  - OR plain descriptive messages"
-            echo ""
-            echo "Use feature branches for WIP commits."
-            exit 1
-        fi
-
-        # Check subject line length (72 chars)
-        if [ ${#SUBJECT_LINE} -gt 72 ]; then
-            echo "⚠️  WARNING: Subject line exceeds 72 characters (${#SUBJECT_LINE})"
-            echo "Consider shortening: $SUBJECT_LINE"
+            if [ $RUFF_FMT_EXIT -ne 0 ] || [ $RUFF_CHK_EXIT -ne 0 ]; then
+                echo "⚠️  Ruff made fixes. Review changes and commit again."
+                exit 1
+            fi
+            echo "✅ Python files passed Ruff checks"
+        else
+            echo "⚠️  Ruff not installed. Skipping Python linting."
         fi
     fi
-    # On branches: allow anything (including wip:)
 fi
 
 exit 0

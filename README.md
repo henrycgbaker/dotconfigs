@@ -1,200 +1,93 @@
 # dotclaude
 
-Personal Claude Code configuration - agents, rules, hooks, commands, skills, and settings.
+Portable Claude Code configuration — settings, hooks, skills, and deployment for any machine.
 
 ## Quick Start
 
 ```bash
-git clone git@github.com:henrybaker/dotclaude.git ~/Repositories/dotclaude
-cd ~/Repositories/dotclaude
-./setup.sh
+git clone git@github.com:henrycgbaker/dotclaude.git ~/dotclaude
+cd ~/dotclaude
+./deploy.sh global
 ```
 
-## What Gets Installed
+## What It Does
 
-| Source | Target | Method |
-|--------|--------|--------|
-| `CLAUDE.md` | `~/.claude/CLAUDE.md` | symlink |
-| `rules/` | `~/.claude/rules/` | symlink |
-| `agents/` | `~/.claude/agents/` | symlink |
-| `hooks/` | `~/.claude/hooks/` | symlink |
-| `commands/` | `~/.claude/commands/` | symlink |
-| `skills/` | `~/.claude/skills/` | symlink |
-| `settings.json` | `~/.claude/settings.json` | copy (allows local overrides) |
-| `gitignore_global` | `~/.gitignore_global` | copy |
-| `githooks/*` | `.git/hooks/` | copy |
+dotclaude is the single source of truth for Claude Code configuration. It deploys via symlinks to `~/.claude/`, keeping everything in sync with this repo. CLAUDE.md is the one exception — it's built from toggleable section templates.
 
-## Directory Structure
+## Usage
+
+| Command | Purpose |
+|---------|---------|
+| `deploy.sh global` | Set up ~/.claude/ (wizard on first run) |
+| `deploy.sh global --interactive` | Re-run wizard |
+| `deploy.sh global --target DIR` | Non-interactive deploy |
+| `deploy.sh global --remote HOST` | Deploy to remote server |
+| `deploy.sh project [path]` | Scaffold a project |
+| `scripts/registry-scan.sh` | Scan projects for configs |
+
+## Structure
 
 ```
 dotclaude/
-├── CLAUDE.md              # Personal policies & preferences
-├── settings.json          # Claude settings (copied, not symlinked)
-├── agents/                # System-wide reusable agents
-├── rules/                 # Always-loaded behavioral standards
-├── hooks/                 # Claude pre/post tool-use automation
-├── commands/              # User-invoked /commands
-├── skills/                # Model-invoked capabilities
-├── project-agents/        # Version-controlled record of project agents
-├── githooks/              # Git hook templates (→ .git/hooks/)
-└── gitignore_global       # Global gitignore template
+├── deploy.sh              # Deployment script
+├── .env.example           # Configuration template
+├── settings.json          # Global settings source of truth
+├── CLAUDE.md              # Current global CLAUDE.md
+├── templates/
+│   ├── claude-md/         # CLAUDE.md section templates
+│   ├── settings/          # Project settings templates
+│   └── hooks-conf/        # Git hook config presets
+├── commands/              # Skills (/commit, /squash-merge, etc.)
+├── hooks/                 # Claude Code hooks (PostToolUse, etc.)
+├── githooks/              # Git hooks (commit-msg, pre-commit)
+├── scripts/
+│   ├── registry-scan.sh   # Project config scanner
+│   └── lib/               # Shared bash functions
+└── docs/
+    └── usage-guide.md     # Comprehensive reference
 ```
 
-## Agents
+## Configuration
 
-### System-Wide
+All settings live in `.env` (gitignored, per-machine). See `.env.example` for all options.
 
-| Agent | Purpose | Mode |
-|-------|---------|------|
-| `git-manager` | Git workflows, semantic versioning, releases | acceptEdits |
-| `python-refactorer` | Code quality, Ruff, strict typing | acceptEdits |
-| `senior-architect` | System design, technical debt (advisory) | plan |
-| `test-engineer` | Pytest, coverage, CI, bash testing | acceptEdits |
-| `docs-writer` | READMEs, changelogs, API docs | acceptEdits |
-| `devops-engineer` | CI/CD, GitHub Actions, Docker | acceptEdits |
+## Deployment
 
-### Project-Specific
+`deploy.sh global` handles all deployment scenarios:
 
-Organized by project in `project-agents/`:
+- **First run:** Interactive wizard for configuration
+- **Updates:** Detects dotclaude-owned files, auto-updates
+- **Conflicts:** Prompts for non-managed files
+- **Remote:** `--remote HOST` deploys to remote server via SSH
 
-```
-project-agents/
-├── llm-efficiency-measurement-tool/
-│   ├── research-pm.md
-│   └── research-scientist.md
-└── ds01-infra/
-    ├── admin-docs-writer.md
-    ├── cli-ux-designer.md
-    ├── systems-architect.md
-    ├── technical-product-manager.md
-    └── user-docs-writer.md
-```
+CLAUDE.md is built from section templates in `templates/claude-md/`. Wizard lets you toggle sections on/off.
 
-**Sync agents:**
-```bash
-./sync-project-agents.sh pull    # projects → dotclaude
-./sync-project-agents.sh push    # dotclaude → projects
-./sync-project-agents.sh status  # check sync
-```
+## Git Hooks
 
-## Rules
-
-Always-loaded behavioral standards:
-
-| Rule | Purpose |
-|------|---------|
-| `git-commits.md` | Conventional commits, semantic versioning |
-| `python-standards.md` | Ruff, type hints, docstrings |
-| `docker-practices.md` | Container best practices |
-| `security.md` | Secrets, input validation |
-| `research-code.md` | Reproducibility standards |
-| `modular-claude-docs.md` | CLAUDE.md organization |
-| `no-unnecessary-files.md` | Avoid .md bloat |
-
-## Claude Hooks
-
-Pre/post tool-use automation:
-
-| Hook | Type | Purpose |
-|------|------|---------|
-| `post-tool-format.py` | PostToolUse | Auto-format Python with Ruff |
-| `block-sensitive.py` | PreToolUse | Block access to .env, keys, credentials |
-
-## Commands
-
-User-invoked with `/command`:
-
-| Command | Description |
-|---------|-------------|
-| `/gpu-status` | GPU utilization, memory, processes |
-| `/docker-status` | Container status, resource usage |
-| `/commit` | Create well-formatted commit |
-| `/pr-review` | Review branch changes |
-
-## Skills
-
-Model-invoked when relevant:
-
-| Skill | Purpose |
-|-------|---------|
-| `python-fixer` | Fix linting/formatting with Ruff |
-| `type-checker` | MyPy type checking |
-| `test-runner` | Run pytest, analyze failures |
-| `container-inspector` | Debug Docker containers |
-| `dependency-auditor` | Security scan dependencies |
-
-## Git Configuration
-
-### Git Hooks
-
-Templates in `githooks/` are copied to `.git/hooks/` by `setup.sh`:
+Git hooks in `githooks/` are copied to target repo's `.git/hooks/`:
 
 | Hook | Purpose |
 |------|---------|
-| `pre-commit` | Enforces git identity, syncs project agents |
-| `commit-msg` | Blocks AI attribution patterns |
+| `commit-msg` | Validates commit format, blocks AI attribution |
+| `pre-commit` | Enforces git identity, runs custom checks |
 
-**After fresh clone:**
-```bash
-./setup.sh  # Installs hooks to .git/hooks/
-```
+Configurable via `.claude/hooks.conf` (profile: default, strict, or off).
 
-**For other repos:**
-```bash
-cp ~/Repositories/dotclaude/githooks/* /path/to/repo/.git/hooks/
-chmod +x /path/to/repo/.git/hooks/*
-```
+## GSD Coexistence
 
-### Global Gitignore
+dotclaude and [GSD framework](https://github.com/get-shit-done-cc) coexist in `~/.claude/`. dotclaude uses file-level symlinks; GSD manages its own namespace. Neither touches the other's files.
 
-Excludes common files across all repos:
+## Registry Scanner
 
-| Pattern | Purpose |
-|---------|---------|
-| `.claude/`, `.claude-project` | Claude Code files |
-| `.DS_Store`, `.idea/`, `.vscode/` | OS/editor files |
-| `__pycache__/`, `.venv/`, etc. | Python artifacts |
-
-**Manual setup:**
-```bash
-cp ~/Repositories/dotclaude/gitignore_global ~/.gitignore_global
-git config --global core.excludesfile ~/.gitignore_global
-```
-
-## Architecture Decisions
-
-### Agent Strategy
-
-| Location | Purpose | When to Use |
-|----------|---------|-------------|
-| `agents/` → `~/.claude/agents/` | Generic, reusable | Git, testing, refactoring |
-| `project-agents/{project}/` | Version-controlled record | Domain-specific |
-| Project's `.claude/agents/` | **Source of truth** | Where agents run |
-
-- **Projects are source of truth** - agents live in each project's `.claude/agents/`
-- **dotclaude is the record** - organized by project in `project-agents/`
-- **Copy-based sync** - works across machines
-
-### Scope Precedence
-
-| Config Type | Precedence | Behavior |
-|-------------|------------|----------|
-| `settings.json` | Project > User | Merged (deny wins) |
-| Agents | Project > User | Override |
-| Hooks | All sources | Merged (all execute) |
-| Rules | Project > User | Override |
-| Commands/Skills | Project > User | Override |
-| CLAUDE.md | Project > User | Override |
-
-**Rule of thumb:** Project-level configs override user-level by name. Only hooks merge.
-
-## Remote Deployment
+`scripts/registry-scan.sh` catalogues Claude Code configurations across projects:
 
 ```bash
-./deploy-remote.sh hbaker --clone  # Clone and setup on remote
-./deploy-remote.sh dsl --rsync     # Rsync local copy
+./scripts/registry-scan.sh              # Human-readable table
+./scripts/registry-scan.sh --json       # Machine-readable JSON
 ```
+
+Reads `SCAN_PATHS` from `.env` to find projects. Reports settings, CLAUDE.md, hooks, skills, agents, and sync status for each project.
 
 ## Documentation
 
-**[docs/usage-guide.md](docs/usage-guide.md)** - Comprehensive guide to Claude Code configuration
+See **[docs/usage-guide.md](docs/usage-guide.md)** for comprehensive reference.

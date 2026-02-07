@@ -64,5 +64,5 @@ git push
 
 ## Notes
 - If $ARGUMENTS provided, use as commit message hint
-- See `/rules/git-commits.md` for commit conventions
+- See CLAUDE.md Git section for commit conventions
 - Use `git branch -D` if branch wasn't fully merged (force delete)

@@ -13,12 +13,16 @@
       "Bash(pytest:*)",
       "Bash(pip:*)",
       "Bash(python:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
       "Read(/proc/meminfo)",
       "Read(/proc/cpuinfo)"
     ],
     "deny": [
-      "Read(.env)",
-      "Read(.env.*)",
+      "Read(*.pem)",
+      "Read(*credentials*)",
+      "Read(*secret*)",
       "Read(**/*_key)",
       "Read(**/*_secret)",
       "Read(**/.ssh/**)",
@@ -27,6 +31,8 @@
       "Bash(dd if=:*)"
     ],
     "ask": [
+      "Read(.env)",
+      "Read(.env.*)",
       "Bash(systemctl:*)",
       "Bash(kill:*)",
       "Bash(pkill:*)",
@@ -57,16 +63,6 @@
         ]
       }
     ],
-    "PreToolUse": [
-      {
-        "matcher": "Read|Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ~/.claude/hooks/block-sensitive.py"
-          }
-        ]
-      }
-    ]
+    "PreToolUse": []
   }
 }

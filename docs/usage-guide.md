@@ -7,16 +7,15 @@ Comprehensive guide to configuring Claude Code with agents, rules, commands, ski
 1. [Configuration Types Overview](#configuration-types-overview)
 2. [Loading & Token Impact](#loading--token-impact)
 3. [CLAUDE.md Memory System](#claudemd-memory-system)
-4. [Rules](#rules)
-5. [Agents](#agents)
-6. [Skills](#skills)
-7. [Commands](#commands)
-8. [Hooks](#hooks)
-9. [Settings](#settings)
-10. [Decision Workflows](#decision-workflows)
-11. [Best Practices](#best-practices)
-12. [Token Efficiency](#token-efficiency)
-13. [User Flows](#user-flows)
+4. [Agents](#agents)
+5. [Skills](#skills)
+6. [Commands](#commands)
+7. [Hooks](#hooks)
+8. [Settings](#settings)
+9. [Decision Workflows](#decision-workflows)
+10. [Best Practices](#best-practices)
+11. [Token Efficiency](#token-efficiency)
+12. [User Flows](#user-flows)
 
 ---
 
@@ -25,7 +24,6 @@ Comprehensive guide to configuring Claude Code with agents, rules, commands, ski
 | Type | Loaded | Token Cost | Invocation | Priority |
 |------|--------|------------|------------|----------|
 | **CLAUDE.md** | Startup | YES (all content) | Always active | Instructions |
-| **Rules** | Startup | YES (all content) | Always active | Standards |
 | **Settings** | Startup | NO | Always active | Config |
 | **Agents** | On-demand | NO (until invoked) | Claude decides or user requests | Delegation |
 | **Skills** | On-demand | NO (until invoked) | Claude auto-discovers | Capability |
@@ -37,7 +35,6 @@ Comprehensive guide to configuring Claude Code with agents, rules, commands, ski
 | Type | Enforcement | Can Override? |
 |------|-------------|---------------|
 | **CLAUDE.md** | Soft | Claude can deviate with reason |
-| **Rules** | Soft | Claude should follow, not forced |
 | **Settings permissions.deny** | Hard | Blocked entirely |
 | **Settings permissions.allow** | Soft | Permitted without asking |
 | **Hooks exit code 2** | Hard | Blocks operation |
@@ -58,11 +55,10 @@ Comprehensive guide to configuring Claude Code with agents, rules, commands, ski
 5. Load ~/.claude/settings.json
 6. Apply permission rules
 7. Discover & load CLAUDE.md files (all levels)
-8. Discover & load rules (all .md in rules/)
-9. Index agent metadata (not full content)
-10. Index skill metadata (not full content)
-11. Index MCP tools
-12. Snapshot hook configuration
+8. Index agent metadata (not full content)
+9. Index skill metadata (not full content)
+10. Index MCP tools
+11. Snapshot hook configuration
 → Ready for session
 ```
 
@@ -71,7 +67,6 @@ Comprehensive guide to configuring Claude Code with agents, rules, commands, ski
 | Source | Startup Cost | Runtime Cost |
 |--------|--------------|--------------|
 | CLAUDE.md | **500-2000 tokens** | - |
-| Rules | **500-5000 tokens** | - |
 | Settings | 0 | - |
 | Agent metadata | ~10 tokens each | **500-3000 on invoke** |
 | Skill metadata | ~10 tokens each | **300-2000 on activate** |
@@ -98,10 +93,8 @@ Long-term memory and instructions Claude follows throughout the session.
 ```
 1. Enterprise:     /Library/Application Support/ClaudeCode/CLAUDE.md
 2. Project:        ./.claude/CLAUDE.md or ./CLAUDE.md
-3. Project rules:  ./.claude/rules/*.md
-4. User:           ~/.claude/CLAUDE.md
-5. User rules:     ~/.claude/rules/*.md
-6. Project local:  ./.claude/CLAUDE.local.md (gitignored)
+3. User:           ~/.claude/CLAUDE.md
+4. Project local:  ./.claude/CLAUDE.local.md (gitignored)
 ```
 
 ### When to Use
@@ -129,9 +122,6 @@ Brief description (1-2 sentences).
 
 ## Common Tasks
 [Frequently used commands]
-
-## See Also
-- `rules/testing.md` for test conventions
 ```
 
 ### Import Syntax
@@ -142,57 +132,6 @@ Read additional context from:
 ```
 
 Max import depth: 5 levels.
-
----
-
-## Rules
-
-### Purpose
-Always-loaded standards organized by topic. Better than monolithic CLAUDE.md for maintainability.
-
-### Location
-
-```
-.claude/rules/     # Project rules (shared)
-~/.claude/rules/   # User rules (personal)
-```
-
-### When to Use Rules vs CLAUDE.md
-
-| Use Rules For | Use CLAUDE.md For |
-|---------------|-------------------|
-| Code style standards | Project overview |
-| Language-specific conventions | Architecture context |
-| Security requirements | Team workflow |
-| Testing patterns | Quick reference |
-| Modular, maintainable guidelines | Single source of truth |
-
-### Structure
-
-```markdown
-# Python Standards
-
-> Applied when working with Python files.
-
-## Formatting
-- Ruff as formatter (100 char line length)
-- Run `ruff format` before committing
-
-## Type Hints
-- Required for public functions
-- Use `list[str]` not `List[str]`
-```
-
-### Organization Pattern
-
-```
-.claude/rules/
-├── code-style.md      # Language formatting
-├── testing.md         # Test conventions
-├── security.md        # Security requirements
-├── api.md             # API design standards
-└── git.md             # Git conventions
-```
 
 ---
 
@@ -617,19 +556,10 @@ Default behavior → ASK or APPROVE
 
 | Do | Don't |
 |----|-------|
-| Keep under 200 lines | Write tutorials |
-| Focus on architecture | Duplicate code comments |
-| Link to rules for details | Include implementation details |
-| Update when architecture changes | Add one-time instructions |
-
-### Rules
-
-| Do | Don't |
-|----|-------|
-| One topic per file | One giant rules file |
-| 20-100 lines each | Duplicate CLAUDE.md content |
-| Clear, actionable standards | Vague suggestions |
-| Update when standards change | Let rules go stale |
+| Keep under 100 lines | Write tutorials |
+| Focus on essential policies | Duplicate code comments |
+| Inline rules content | Include implementation details |
+| Update when practices change | Add one-time instructions |
 
 ### Agents
 
@@ -671,24 +601,23 @@ Default behavior → ASK or APPROVE
 
 ### Checklist
 
-- [ ] CLAUDE.md under 200 lines
-- [ ] Rules organized by topic (not monolithic)
+- [ ] CLAUDE.md under 100 lines
 - [ ] Imports limited to 2-3 deep
 - [ ] Unused agents removed
 - [ ] Skill descriptions specific (reduce false activations)
-- [ ] No duplicate content between CLAUDE.md and rules
+- [ ] All rules content inlined in CLAUDE.md
 
 ### Typical Impact
 
 | Configuration | Token Overhead |
 |---------------|----------------|
 | Minimal (CLAUDE.md only) | ~200 tokens |
-| Standard (CLAUDE.md + 5 rules) | ~1500 tokens |
-| Comprehensive (full setup) | ~3000-5000 tokens |
+| Standard (CLAUDE.md + agents) | ~500 tokens |
+| Comprehensive (full setup) | ~1000-2000 tokens |
 
 ### Reduction Strategies
 
-1. **Move details to rules** - split by topic
+1. **Keep CLAUDE.md under 100 lines** - inline only essential rules
 2. **Use imports sparingly** - only essential context
 3. **Keep agent prompts focused** - don't copy CLAUDE.md
 4. **Make skill descriptions specific** - reduce false activations
@@ -696,15 +625,6 @@ Default behavior → ASK or APPROVE
 ---
 
 ## User Flows
-
-### Adding a New Rule
-
-```
-1. Create .claude/rules/topic.md
-2. Add standards in markdown format
-3. Rule auto-loads on next session
-4. No restart needed for new files
-```
 
 ### Creating a Project Agent
 

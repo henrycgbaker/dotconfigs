@@ -6,7 +6,7 @@
 .claude-project
 
 # Note: CLAUDE.md and claude_*.md should be added to .git/info/exclude per-project
-# (see ~/.claude/rules/git-exclude.md)
+# deploy.sh handles this automatically for project deployments
 
 # OS files
 .DS_Store

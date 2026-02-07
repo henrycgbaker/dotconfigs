@@ -8,3 +8,6 @@
 
 # Backups created by setup.sh
 *.backup
+
+# Environment configuration (machine-specific)
+.env

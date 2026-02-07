@@ -40,8 +40,6 @@ Types:
 
 *NB: also fine to have no `type` if it's a miscellaneous / 'chore'-style task.*
 
-See rule: git-commits
-
 Example:
 ```bash
 git commit -m "feat: add GPU monitoring command"

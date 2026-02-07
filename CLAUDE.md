@@ -1,51 +1,41 @@
-# Personal Claude Policies
-
 ## Communication Style
 
-- Be **concise during execution**, detailed when I ask questions, or you are giving explanations. If anything is unclear, or you think there is a better alternative ask questions freely. 
-- Work iteratively: ask many questions in the design / plan phase until you are clear, then are automous in the execution phase. 
-- Provide only short one-line updates as you implement; skip unnecessary preamble—just do the work and report results briefly.
-- When errors occur, give a **brief update & explanation** on what failed, then move to alternatives.
-- At the end of a work piece, concisely explain what you did and how it fits in the wider context of the project architecture, I want to have a granular understanding of the work as we go. 
-- Include diagrams where relevant - these are useful
+- Concise during execution, detailed when asked. Ask questions freely if unclear or better alternatives exist.
+- Brief one-line updates; skip preamble, report results only.
+- Brief error updates, then try alternatives.
+- After completion, explain work and how it fits the wider architecture.
+- Include diagrams where relevant.
 
 ## Language
 
-- Use British English spelling (e.g., "colour", "analyse", "organisation", "behaviour") **only in prose and explanations**. Use American spelling in code, variable names, function names, API calls, library references, and any context where British spelling could cause errors or inconsistency with established conventions.
+- British English (e.g., "colour", "analyse") in prose only. American English in code, variables, functions, APIs.
 
 ## Autonomy & Decision Making
 
-- **Medium autonomy**: Proceed with routine work, but ask before significant changes (refactors, architectural decisions, updates and changes or direction, deletions of substantial code).
-- **Always ask** when requirements are ambiguous or underspecified—don't guess on important decisions. For low-stakes routine work, make reasonable assumptions and mention them to me.
+- Always ask when requirements are ambiguous — don't guess on important decisions. For low-stakes work, make reasonable assumptions and mention them.
 
-## Simplicity First (Occam's Razor)
+## Simplicity First
 
-- **Minimum viable solution**: Choose the cleanest approach that solves the stated problem.
-- **No over-engineering**: Avoid premature abstractions, hypothetical features, or unnecessary complexity.
-- See `~/.claude/rules/simplicity-first.md` for detailed principles.
+- Solve only what was asked -- no premature abstractions (only generalise at 3+ similar implementations)
+- Don't add backwards-compatibility shims when code can just change
+- Don't build for hypothetical future requirements or "just in case" configurability
+- Validate at system edges only -- trust internal code
 
 ## Documentation
 
-- **Avoid .md bloat** - do not create endless update/report .md files in the project repo.
-- See ~/.claude/rules/no-unnecessary-files.md.
-- **CLAUDE.md exclusion** - use `.git/info/exclude` for project CLAUDE.md files, not `.gitignore`. See ~/.claude/rules/git-exclude.md.
+- Don't create ad-hoc .md files (NOTES.md, WORK_PLAN.md, etc.) unless explicitly asked
+- Use hierarchical CLAUDE.md files for large project directories
+- Use `.git/info/exclude` for project CLAUDE.md files, not `.gitignore`
 
-## Git Workflow
+## Git
 
--  Use **feature branches + squash merge** workflow:
-    1. Create feature branch from main (`feature/*`, `fix/*`, etc.)
-    2. Commit freely during development (WIP, notes - relaxed conventions)
-    3. When done, use `/squash-merge` to squash merge to main with a clean conventional commit
-    4. Delete the feature branch
-- See ~/.claude/rules/git-workflow.md.
+Workflow: Feature branches (`feature/*`, `fix/*`, `refactor/*`, `docs/*`) + squash merge to main. Commit freely on branches (WIP, notes, experiments fine), squash merge with clean conventional commit, delete branch. Use `/commit` and `/squash-merge`.
 
-**Commands:**
-- `/commit` - Create commits (relaxed on branches, strict on main)
-- `/squash-merge` - Complete a feature branch via squash merge to main
+Commits (main/squash): `type(scope): description` -- types: feat, fix, docs, refactor, test. Subject <72 chars, imperative mood. No AI attribution.
 
-See `~/.claude/rules/git-commits.md` for commit conventions.
+Exclusions: Add CLAUDE.md and .claude/ to `.git/info/exclude` in projects (not .gitignore).
 
 ## Code Style
 
-Use **deterministic tools** for code quality enforcement, not manual LLM review:
-- **Python**: See `rules/python-standards.md`
+- Python preferences: `pathlib.Path` over `os.path`, `X | None` over `Optional[X]`, f-strings, 3.10+ type hint syntax
+- Ruff auto-formats via PostToolUse hook -- don't manually review formatting
