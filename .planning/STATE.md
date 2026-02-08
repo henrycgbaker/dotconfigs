@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 8 of 8 (Hooks & Workflows Review)
-Plan: 5 of 6 in phase
-Status: In progress
-Last activity: 2026-02-08 — Completed 08-05-PLAN.md execution
+Plan: 6 of 6 in phase
+Status: Phase complete
+Last activity: 2026-02-08 — Completed 08-06-PLAN.md execution
 
-Progress: █████████████░ 97% (32/33 total plans across phases 4-8)
+Progress: ██████████████ 100% (33/33 total plans across phases 4-8)
 
 ## Performance Metrics
 
@@ -24,8 +24,8 @@ Progress: █████████████░ 97% (32/33 total plans acro
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 21
-- Total execution time: ~52.2min
+- Total plans completed: 22
+- Total execution time: ~55.5min
 - Average duration: 2.5min
 
 ## Accumulated Context
@@ -126,13 +126,15 @@ New v2.0 decisions:
 - [08-05]: GIT_HOOK_BRANCH_PROTECTION replaces GIT_HOOK_PREPUSH_PROTECTION
 - [08-05]: Hook configuration files deployed by project commands (git-hooks.conf, claude-hooks.conf)
 - [08-05]: Complete .env.example with 26 GIT_HOOK_* and 3 CLAUDE_HOOK_* variables
+- [08-06]: Metadata-driven roster generation from hook METADATA blocks and command frontmatter
+- [08-06]: Auto-generated ROSTER.md with hooks, commands, and config reference tables
+- [08-06]: Configuration hierarchy documented in README (three-tier model with precedence)
+- [08-06]: Plugin config ownership documented (git-hooks.conf vs claude-hooks.conf)
 
 ### Pending Todos
 
 - [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo)
-- [ ] **Git workflow**: Review squash-merge vs native git merge → Phase 8
-- [ ] **Explore hook**: Add hook for sonnet on explore agents → Phase 8
-- [ ] **README**: Add brief mention of GSD framework → Phase 8
+- [x] **README**: Add brief mention of GSD framework — DONE in 08-06
 
 ### Blockers/Concerns
 
@@ -152,9 +154,9 @@ New v2.0 decisions:
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 08-05-PLAN.md execution
+Stopped at: Completed 08-06-PLAN.md execution (Phase 8 COMPLETE)
 Resume file: None
 
 ---
 
-**Phase 8 Status:** 5 of 6 plans complete. Hooks architecture and CLI integration complete: unified config (08-01), audit (08-02), new git hooks (08-03), PreToolUse hook (08-04), CLI integration (08-05). One plan remaining (08-06: final audit and documentation).
+**Phase 8 Status:** COMPLETE (6/6 plans). Hooks architecture and CLI integration complete: unified config (08-01), audit (08-02), new git hooks (08-03), PreToolUse hook (08-04), CLI integration (08-05), roster generation and README updates (08-06). All v2.0 work complete.
