@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: 7 of 7 (Integration and Polish) — COMPLETE
-Plan: 5 of 5 in phase
-Status: Milestone audited — 2 critical bugs fixed
-Last activity: 2026-02-07 — Fixed audit critical bugs (colour_cyan, PLUGIN_DIR)
+Phase: 8 of 8 (Hooks & Workflows Review)
+Plan: 2 of 3 in phase
+Status: In progress
+Last activity: 2026-02-08 — Completed 08-02-PLAN.md
 
-Progress: ████████████ 100% (15/15 total plans across phases 4-7)
+Progress: ████████████░░ 89% (17/19 total plans across phases 4-8)
 
 ## Performance Metrics
 
@@ -24,9 +24,9 @@ Progress: ████████████ 100% (15/15 total plans across ph
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 15
-- Total execution time: ~35min
-- Average duration: 2.3min
+- Total plans completed: 17
+- Total execution time: ~36.5min
+- Average duration: 2.1min
 
 ## Accumulated Context
 
@@ -104,12 +104,17 @@ New v2.0 decisions:
 - [07-04]: README with no example terminal output (concise documentation approach)
 - [07-04]: ASCII architecture diagram in README (makes three-command model clear)
 - [07-04]: Deprecation notice for CLAUDE_GIT_* keys (moved to GIT_* namespace)
+- [08-01]: Config loading functions in lib/config.sh (load_git_hook_config, get_config_value)
+- [08-01]: Config precedence: project > global env > defaults
+- [08-02]: /squash-merge is sole merge command (no /merge-branch alternative) per SQMRG-01
+- [08-02]: Explore agent model selection deferred to GSD external PR per EXPLORE-01 (not feasible with current Claude Code API)
 
 ### Pending Todos
 
-- [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo)
-- [ ] **Git workflow**: Review squash-merge vs native git merge
-- [ ] **Explore hook**: Add hook for sonnet on explore agents (deferred to v3)
+- [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo) — DEFERRED: Not feasible with current Claude Code API (no model control in SubagentStart hook or Task tool)
+- [x] ~~**Git workflow**: Review squash-merge vs native git merge~~ → Completed 08-02
+- [x] ~~**Explore hook**: Add hook for sonnet on explore agents~~ → Researched 08-02, deferred (API limitation)
+- [ ] **README**: Add brief mention of GSD framework → Remaining in Phase 8
 
 ### Blockers/Concerns
 
@@ -128,10 +133,10 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-07
-Stopped at: Completed phase 7 execution and verification — all phases done
+Last session: 2026-02-08
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
 
 ---
 
-**v2.0 Milestone:** All 4 phases (4-7) executed and verified. Audit complete — 2 critical bugs fixed. Ready for milestone completion.
+**Phase 8 Status:** 2 of 3 plans complete. Config architecture established (08-01), squash-merge audited + explore agent research complete (08-02). Remaining: 08-03 (TBD).
