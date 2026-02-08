@@ -13,6 +13,7 @@ source "$SCRIPT_DIR/lib/symlinks.sh"
 source "$SCRIPT_DIR/lib/discovery.sh"
 source "$SCRIPT_DIR/lib/validation.sh"
 source "$SCRIPT_DIR/lib/colours.sh"
+source "$SCRIPT_DIR/lib/config.sh"
 
 show_usage() {
     cat <<EOF
