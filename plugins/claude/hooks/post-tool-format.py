@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# === METADATA ===
+# NAME: post-tool-format
+# TYPE: claude-hook
+# PLUGIN: claude
+# DESCRIPTION: Auto-formats Python files with Ruff after Write/Edit
+# CONFIGURABLE: CLAUDE_HOOK_RUFF_FORMAT
+# ================
 """PostToolUse hook to auto-format Python files after Write/Edit.
 
 Runs Ruff format and check --fix on Python files after they're modified.
