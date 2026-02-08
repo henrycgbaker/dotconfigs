@@ -1,4 +1,12 @@
 #!/bin/bash
+# === METADATA ===
+# NAME: pre-push
+# TYPE: git-hook
+# PLUGIN: git
+# DESCRIPTION: Protects main/master branches from force-push operations
+# CONFIGURABLE: GIT_HOOK_BRANCH_PROTECTION, GIT_HOOK_PRE_PUSH_ENABLED
+# ================
+
 # ============================================================================
 # PRE-PUSH HOOK
 # ============================================================================
@@ -6,32 +14,48 @@
 # Configurable protection level: block, warn, off
 #
 # Source of truth: plugins/git/hooks/pre-push
-# Deployed to: ~/.claude/git-hooks/pre-push
+# Deployed to: ~/.dotconfigs/git-hooks/pre-push
 # ============================================================================
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
-HOOK_CONFIG="$REPO_ROOT/.claude/hooks.conf"
 
-# Get protection level from environment or config file
-PROTECTION_LEVEL="${GIT_HOOK_PREPUSH_PROTECTION:-warn}"
-
-# Load per-project config if available (overrides env var)
-if [ -f "$HOOK_CONFIG" ]; then
-    source "$HOOK_CONFIG"
-    # Re-read GIT_HOOK_PREPUSH_PROTECTION from config if set
-    if [ -n "${GIT_HOOK_PREPUSH_PROTECTION:-}" ]; then
-        PROTECTION_LEVEL="$GIT_HOOK_PREPUSH_PROTECTION"
+# --- Load configuration with hierarchy ---
+# Priority: config file > env var > hardcoded default
+# Try multiple config file locations (first found wins)
+HOOK_CONFIG=""
+for config_path in \
+    "$REPO_ROOT/.githooks/config" \
+    "$REPO_ROOT/.claude/git-hooks.conf" \
+    "$REPO_ROOT/.git/hooks/hooks.conf" \
+    "$REPO_ROOT/.claude/hooks.conf"; do
+    if [[ -f "$config_path" ]]; then
+        HOOK_CONFIG="$config_path"
+        break
     fi
+done
+
+# Set defaults
+GIT_HOOK_PRE_PUSH_ENABLED="${GIT_HOOK_PRE_PUSH_ENABLED:-true}"
+GIT_HOOK_BRANCH_PROTECTION="${GIT_HOOK_BRANCH_PROTECTION:-warn}"
+
+# Load config file if found (overrides env vars and defaults)
+if [[ -n "$HOOK_CONFIG" ]]; then
+    source "$HOOK_CONFIG"
+fi
+
+# Check if hook is enabled
+if [[ "$GIT_HOOK_PRE_PUSH_ENABLED" != "true" ]]; then
+    exit 0
 fi
 
 # Exit early if protection is off
-if [ "$PROTECTION_LEVEL" = "off" ]; then
+if [[ "$GIT_HOOK_BRANCH_PROTECTION" == "off" ]]; then
     exit 0
 fi
 
 # Get current branch
 CURRENT_BRANCH=$(git symbolic-ref HEAD 2>/dev/null | sed 's/refs\/heads\///')
-if [ -z "$CURRENT_BRANCH" ]; then
+if [[ -z "$CURRENT_BRANCH" ]]; then
     # Detached HEAD or error - allow push
     exit 0
 fi
@@ -55,27 +79,27 @@ fi
 
 # Also check stdin for ref deletion (local sha is all zeros)
 while read local_ref local_sha remote_ref remote_sha; do
-    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    if [[ "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
         IS_FORCE_PUSH=true
         break
     fi
 done
 
 # If not a force push, allow
-if [ "$IS_FORCE_PUSH" = false ]; then
+if [[ "$IS_FORCE_PUSH" == "false" ]]; then
     exit 0
 fi
 
 # Force push detected on protected branch
-if [ "$PROTECTION_LEVEL" = "block" ]; then
+if [[ "$GIT_HOOK_BRANCH_PROTECTION" == "block" ]]; then
     echo "❌ ERROR: Force push to $CURRENT_BRANCH is blocked"
     echo ""
     echo "Protected branches: main, master"
     echo "Force push protection: block"
     echo ""
-    echo "To change: Set GIT_HOOK_PREPUSH_PROTECTION=warn or =off in .env or .claude/hooks.conf"
+    echo "To change: Set GIT_HOOK_BRANCH_PROTECTION=warn or =off in .claude/git-hooks.conf"
     exit 1
-elif [ "$PROTECTION_LEVEL" = "warn" ]; then
+elif [[ "$GIT_HOOK_BRANCH_PROTECTION" == "warn" ]]; then
     echo "⚠️  WARNING: Force pushing to $CURRENT_BRANCH"
     echo ""
     echo "Protected branches should not be force-pushed."
