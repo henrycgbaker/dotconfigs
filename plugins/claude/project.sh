@@ -80,7 +80,7 @@ _claude_write_project_config() {
     local project_path="$1"
     local project_type="$2"
     local settings_profile="$3"
-    local hooks_profile="$4"
+    local pretooluse_enabled="$4"
     local config_file="$project_path/.dotconfigs.json"
 
     if command -v jq &> /dev/null; then
@@ -91,24 +91,24 @@ _claude_write_project_config() {
             # Update existing config
             jq --arg ptype "$project_type" \
                --arg sprof "$settings_profile" \
-               --arg hprof "$hooks_profile" \
+               --argjson ptool "$pretooluse_enabled" \
                '.plugins.claude = {
                    "project_type": $ptype,
                    "settings_profile": $sprof,
-                   "hooks_profile": $hprof
+                   "pretooluse_enabled": $ptool
                }' "$config_file" > "$temp_config"
         else
             # Create new config
             jq -n --arg ptype "$project_type" \
                   --arg sprof "$settings_profile" \
-                  --arg hprof "$hooks_profile" \
+                  --argjson ptool "$pretooluse_enabled" \
                   '{
                       "version": "2.0",
                       "plugins": {
                           "claude": {
                               "project_type": $ptype,
                               "settings_profile": $sprof,
-                              "hooks_profile": $hprof
+                              "pretooluse_enabled": $ptool
                           }
                       }
                   }' > "$temp_config"
@@ -130,7 +130,7 @@ _claude_write_project_config() {
     "claude": {
       "project_type": "$project_type",
       "settings_profile": "$settings_profile",
-      "hooks_profile": "$hooks_profile"
+      "pretooluse_enabled": $pretooluse_enabled
     }
   }
 }
@@ -216,51 +216,74 @@ plugin_claude_project() {
 
     echo ""
 
-    # Step 2: Deploy hooks.conf
-    echo "Step 2: Hooks configuration"
+    # Step 2: Deploy Claude hooks
+    echo "Step 2: Deploy Claude hooks"
     echo "──────────────────────────────"
 
-    local hooks_conf_target="$claude_dir/hooks.conf"
-    local hooks_template="default"
+    # Ask about PreToolUse hook
+    local enable_pretooluse="true"
+    if wizard_yesno "Enable PreToolUse hook (blocks destructive commands)?" "y"; then
+        enable_pretooluse="true"
 
-    echo "  Select hooks profile:"
-    select profile in "default" "strict" "permissive"; do
-        case $profile in
-            default|strict|permissive)
-                hooks_template="$profile"
-                break
-                ;;
-        esac
-    done
+        # Deploy block-destructive.sh to .claude/hooks/
+        local hooks_dir="$claude_dir/hooks"
+        mkdir -p "$hooks_dir"
 
-    local hooks_conf_source="$PLUGIN_DIR/templates/hooks-conf/${hooks_template}.conf"
+        local hook_source="$PLUGIN_DIR/hooks/block-destructive.sh"
+        local hook_target="$hooks_dir/block-destructive.sh"
 
-    if [[ -f "$hooks_conf_target" ]]; then
-        echo "  Existing hooks.conf found"
-        if wizard_yesno "  Overwrite hooks.conf?" "n"; then
-            cp "$hooks_conf_source" "$hooks_conf_target"
-            echo "  ✓ Copied $hooks_template hooks.conf"
-        else
-            echo "  Skipped hooks.conf"
+        cp "$hook_source" "$hook_target"
+        chmod +x "$hook_target"
+        echo "  ✓ Deployed block-destructive.sh to .claude/hooks/"
+
+        # Merge hooks.json template into settings.json
+        local hooks_json_template="$PLUGIN_DIR/templates/settings/hooks.json"
+        if [[ -f "$settings_target" && -f "$hooks_json_template" ]]; then
+            if command -v jq &> /dev/null; then
+                # Deep merge hooks section
+                local temp_settings=$(mktemp)
+                jq -s '.[0] * .[1]' "$settings_target" "$hooks_json_template" > "$temp_settings"
+                mv "$temp_settings" "$settings_target"
+                echo "  ✓ Merged hooks configuration into settings.json"
+            else
+                echo "  ⚠ jq not available - manual hooks.json merge needed"
+            fi
         fi
     else
-        cp "$hooks_conf_source" "$hooks_conf_target"
+        enable_pretooluse="false"
+        echo "  Skipped PreToolUse hook"
+    fi
 
-        # Adjust defaults based on project type
-        if [[ "$project_type" == "python" ]]; then
-            # RUFF_ENABLED already true in default template
-            echo "  ✓ Copied $hooks_template hooks.conf (Python defaults)"
-        elif [[ "$project_type" == "node" ]]; then
-            # Disable Ruff for Node projects - platform-aware sed
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' 's/^RUFF_ENABLED=true/RUFF_ENABLED=false/' "$hooks_conf_target"
+    # Deploy claude-hooks.conf configuration
+    local hooks_conf_target="$claude_dir/claude-hooks.conf"
+    local hooks_conf_template="$PLUGIN_DIR/templates/claude-hooks.conf"
+
+    if wizard_yesno "Deploy Claude hook configuration file?" "y"; then
+        if [[ -f "$hooks_conf_target" ]]; then
+            echo "  Existing claude-hooks.conf found"
+            if wizard_yesno "  Overwrite?" "n"; then
+                cp "$hooks_conf_template" "$hooks_conf_target"
+                echo "  ✓ Updated claude-hooks.conf"
             else
-                sed -i 's/^RUFF_ENABLED=true/RUFF_ENABLED=false/' "$hooks_conf_target"
+                echo "  Skipped (existing config preserved)"
             fi
-            echo "  ✓ Copied $hooks_template hooks.conf (Node defaults)"
         else
-            echo "  ✓ Copied $hooks_template hooks.conf"
+            cp "$hooks_conf_template" "$hooks_conf_target"
+            echo "  ✓ Deployed claude-hooks.conf"
+
+            # Adjust Ruff default based on project type
+            if [[ "$project_type" != "python" ]]; then
+                # Disable Ruff for non-Python projects
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    sed -i '' 's/^CLAUDE_HOOK_RUFF_FORMAT=true/CLAUDE_HOOK_RUFF_FORMAT=false/' "$hooks_conf_target"
+                else
+                    sed -i 's/^CLAUDE_HOOK_RUFF_FORMAT=true/CLAUDE_HOOK_RUFF_FORMAT=false/' "$hooks_conf_target"
+                fi
+                echo "  ✓ Disabled Ruff for non-Python project"
+            fi
         fi
+    else
+        echo "  Skipped hook configuration"
     fi
 
     echo ""
@@ -353,7 +376,7 @@ EOF
     echo "Step 5: Save project configuration"
     echo "──────────────────────────────"
 
-    _claude_write_project_config "$project_path" "$project_type" "$settings_profile" "$hooks_template"
+    _claude_write_project_config "$project_path" "$project_type" "$settings_profile" "$enable_pretooluse"
 
     if [[ $? -eq 0 ]]; then
         echo "  ✓ Saved configuration to .dotconfigs.json"
@@ -387,7 +410,8 @@ EOF
     echo ""
     echo "Created/updated:"
     echo "  - .claude/settings.json (merged from templates)"
-    echo "  - .claude/hooks.conf (copy of $hooks_template template)"
+    [[ "$enable_pretooluse" == "true" ]] && echo "  - .claude/hooks/block-destructive.sh (PreToolUse hook)"
+    echo "  - .claude/claude-hooks.conf (hook configuration)"
     echo "  - CLAUDE.md (project-specific)"
     echo "  - .git/info/exclude (AI artefacts)"
     echo "  - .dotconfigs.json (project configuration)"
