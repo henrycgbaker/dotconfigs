@@ -1,0 +1,161 @@
+#!/bin/bash
+# === METADATA ===
+# NAME: post-rewrite
+# TYPE: git-hook
+# PLUGIN: git
+# DESCRIPTION: Post-rewrite checks — dependency detection for rebase workflows
+# CONFIGURABLE: GIT_HOOK_DEPENDENCY_CHECK, GIT_HOOK_MIGRATION_REMINDER, GIT_HOOK_POST_REWRITE_ENABLED
+# ================
+
+# ============================================================================
+# POST-REWRITE HOOK
+# ============================================================================
+# Runs after commands that rewrite commits (rebase, amend).
+# Detects dependency changes and migration files.
+# Informational only — never blocks.
+#
+# Uses same checks as post-merge hook but for rebase scenarios.
+#
+# Source of truth: plugins/git/hooks/post-rewrite
+# Deployed to: ~/.dotconfigs/git-hooks/post-rewrite
+# ============================================================================
+
+REWRITE_TYPE=$1  # amend or rebase
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+
+# --- Load configuration with hierarchy ---
+# Priority: config file > env var > hardcoded default
+# Try multiple config file locations (first found wins)
+HOOK_CONFIG=""
+for config_path in \
+    "$REPO_ROOT/.githooks/config" \
+    "$REPO_ROOT/.claude/git-hooks.conf" \
+    "$REPO_ROOT/.git/hooks/hooks.conf" \
+    "$REPO_ROOT/.claude/hooks.conf"; do
+    if [[ -f "$config_path" ]]; then
+        HOOK_CONFIG="$config_path"
+        break
+    fi
+done
+
+# Set defaults
+GIT_HOOK_POST_REWRITE_ENABLED="${GIT_HOOK_POST_REWRITE_ENABLED:-true}"
+GIT_HOOK_DEPENDENCY_CHECK="${GIT_HOOK_DEPENDENCY_CHECK:-true}"
+GIT_HOOK_MIGRATION_REMINDER="${GIT_HOOK_MIGRATION_REMINDER:-true}"
+
+# Load config file if found (overrides env vars and defaults)
+if [[ -n "$HOOK_CONFIG" ]]; then
+    source "$HOOK_CONFIG"
+fi
+
+# Check if hook is enabled
+if [[ "$GIT_HOOK_POST_REWRITE_ENABLED" != "true" ]]; then
+    exit 0
+fi
+
+# Only check on rebase (not amend — amend is single commit change)
+if [[ "$REWRITE_TYPE" != "rebase" ]]; then
+    exit 0
+fi
+
+# ============================================================================
+# DEPENDENCY CHANGE DETECTION
+# ============================================================================
+
+if [[ "$GIT_HOOK_DEPENDENCY_CHECK" == "true" ]]; then
+    # Get changed files in the rebase (ORIG_HEAD vs HEAD)
+    CHANGED_FILES=$(git diff --name-only ORIG_HEAD HEAD 2>/dev/null || echo "")
+
+    DEPENDENCIES_CHANGED=false
+    DEP_FILES_FOUND=""
+
+    # Check for dependency file changes
+    for dep_file in package.json package-lock.json yarn.lock pnpm-lock.yaml \
+                    requirements.txt Pipfile Pipfile.lock poetry.lock \
+                    Gemfile Gemfile.lock \
+                    go.mod go.sum \
+                    Cargo.toml Cargo.lock \
+                    composer.json composer.lock; do
+        if echo "$CHANGED_FILES" | grep -qE "(^|/)${dep_file}$"; then
+            DEPENDENCIES_CHANGED=true
+            DEP_FILES_FOUND="$DEP_FILES_FOUND  - $dep_file\n"
+        fi
+    done
+
+    if [[ "$DEPENDENCIES_CHANGED" == "true" ]]; then
+        echo ""
+        echo "📦 DEPENDENCY CHANGES DETECTED (rebase)"
+        echo ""
+        echo "Changed files:"
+        echo -e "$DEP_FILES_FOUND"
+        echo "Consider running:"
+
+        # Project-specific install commands
+        if echo "$DEP_FILES_FOUND" | grep -q "package"; then
+            echo "  npm install    (or yarn install / pnpm install)"
+        fi
+        if echo "$DEP_FILES_FOUND" | grep -q "requirements.txt"; then
+            echo "  pip install -r requirements.txt"
+        fi
+        if echo "$DEP_FILES_FOUND" | grep -q "Pipfile"; then
+            echo "  pipenv install"
+        fi
+        if echo "$DEP_FILES_FOUND" | grep -q "poetry.lock"; then
+            echo "  poetry install"
+        fi
+        if echo "$DEP_FILES_FOUND" | grep -q "Gemfile"; then
+            echo "  bundle install"
+        fi
+        if echo "$DEP_FILES_FOUND" | grep -q "go.mod"; then
+            echo "  go mod download"
+        fi
+        if echo "$DEP_FILES_FOUND" | grep -q "Cargo"; then
+            echo "  cargo build"
+        fi
+        if echo "$DEP_FILES_FOUND" | grep -q "composer"; then
+            echo "  composer install"
+        fi
+
+        echo ""
+    fi
+fi
+
+# ============================================================================
+# MIGRATION REMINDER
+# ============================================================================
+
+if [[ "$GIT_HOOK_MIGRATION_REMINDER" == "true" ]]; then
+    # Get changed files in the rebase
+    CHANGED_FILES=$(git diff --name-only ORIG_HEAD HEAD 2>/dev/null || echo "")
+
+    MIGRATIONS_CHANGED=false
+    MIGRATION_PATHS=""
+
+    # Check for migration directory changes
+    for migration_pattern in 'db/migrate/' 'migrations/' 'alembic/versions/' \
+                             'database/migrations/' 'prisma/migrations/'; do
+        if echo "$CHANGED_FILES" | grep -qE "$migration_pattern"; then
+            MIGRATIONS_CHANGED=true
+            MATCHING_FILES=$(echo "$CHANGED_FILES" | grep -E "$migration_pattern")
+            MIGRATION_PATHS="$MIGRATION_PATHS$MATCHING_FILES\n"
+        fi
+    done
+
+    if [[ "$MIGRATIONS_CHANGED" == "true" ]]; then
+        echo ""
+        echo "🗄️  DATABASE MIGRATIONS DETECTED (rebase)"
+        echo ""
+        echo "Migration files changed during rebase."
+        echo ""
+        echo "Consider running migrations:"
+        echo "  - Rails: rails db:migrate"
+        echo "  - Django: python manage.py migrate"
+        echo "  - Alembic: alembic upgrade head"
+        echo "  - Prisma: prisma migrate deploy"
+        echo "  - Or your project-specific migration command"
+        echo ""
+    fi
+fi
+
+exit 0

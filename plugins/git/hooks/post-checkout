@@ -1,0 +1,127 @@
+#!/bin/bash
+# === METADATA ===
+# NAME: post-checkout
+# TYPE: git-hook
+# PLUGIN: git
+# DESCRIPTION: Post-checkout info — displays branch information on checkout
+# CONFIGURABLE: GIT_HOOK_BRANCH_INFO, GIT_HOOK_POST_CHECKOUT_ENABLED
+# ================
+
+# ============================================================================
+# POST-CHECKOUT HOOK
+# ============================================================================
+# Runs after successful checkout. Displays helpful branch information.
+# Informational only — never blocks.
+#
+# Shows:
+# - Branch name
+# - Last commit message
+# - Commit author and date
+# - Divergence from main/master (if applicable)
+#
+# Source of truth: plugins/git/hooks/post-checkout
+# Deployed to: ~/.dotconfigs/git-hooks/post-checkout
+# ============================================================================
+
+PREV_HEAD=$1
+NEW_HEAD=$2
+BRANCH_CHECKOUT=$3  # 1 if branch checkout, 0 if file checkout
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
+
+# --- Load configuration with hierarchy ---
+# Priority: config file > env var > hardcoded default
+# Try multiple config file locations (first found wins)
+HOOK_CONFIG=""
+for config_path in \
+    "$REPO_ROOT/.githooks/config" \
+    "$REPO_ROOT/.claude/git-hooks.conf" \
+    "$REPO_ROOT/.git/hooks/hooks.conf" \
+    "$REPO_ROOT/.claude/hooks.conf"; do
+    if [[ -f "$config_path" ]]; then
+        HOOK_CONFIG="$config_path"
+        break
+    fi
+done
+
+# Set defaults
+GIT_HOOK_POST_CHECKOUT_ENABLED="${GIT_HOOK_POST_CHECKOUT_ENABLED:-true}"
+GIT_HOOK_BRANCH_INFO="${GIT_HOOK_BRANCH_INFO:-true}"
+
+# Load config file if found (overrides env vars and defaults)
+if [[ -n "$HOOK_CONFIG" ]]; then
+    source "$HOOK_CONFIG"
+fi
+
+# Check if hook is enabled
+if [[ "$GIT_HOOK_POST_CHECKOUT_ENABLED" != "true" ]]; then
+    exit 0
+fi
+
+# Check if branch info display is enabled
+if [[ "$GIT_HOOK_BRANCH_INFO" != "true" ]]; then
+    exit 0
+fi
+
+# Only run on branch checkout (not file checkout)
+if [[ "$BRANCH_CHECKOUT" != "1" ]]; then
+    exit 0
+fi
+
+# Skip if checking out same branch (no actual branch switch)
+if [[ "$PREV_HEAD" == "$NEW_HEAD" ]]; then
+    exit 0
+fi
+
+# ============================================================================
+# BRANCH INFORMATION DISPLAY
+# ============================================================================
+
+echo ""
+echo "🌿 Switched to branch: $CURRENT_BRANCH"
+echo ""
+
+# Show last commit
+if [[ "$CURRENT_BRANCH" != "HEAD" ]]; then
+    LAST_COMMIT_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "No commits")
+    LAST_COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an" 2>/dev/null || echo "Unknown")
+    LAST_COMMIT_DATE=$(git log -1 --pretty=format:"%cr" 2>/dev/null || echo "Unknown")
+
+    echo "Last commit: $LAST_COMMIT_MSG"
+    echo "Author: $LAST_COMMIT_AUTHOR ($LAST_COMMIT_DATE)"
+    echo ""
+
+    # Show divergence from main/master if not on main/master
+    if [[ "$CURRENT_BRANCH" != "main" && "$CURRENT_BRANCH" != "master" ]]; then
+        # Determine base branch (main or master)
+        BASE_BRANCH=""
+        if git show-ref --verify --quiet refs/heads/main; then
+            BASE_BRANCH="main"
+        elif git show-ref --verify --quiet refs/heads/master; then
+            BASE_BRANCH="master"
+        fi
+
+        if [[ -n "$BASE_BRANCH" ]]; then
+            AHEAD=$(git rev-list --count ${BASE_BRANCH}..HEAD 2>/dev/null || echo "0")
+            BEHIND=$(git rev-list --count HEAD..${BASE_BRANCH} 2>/dev/null || echo "0")
+
+            if [[ "$AHEAD" != "0" || "$BEHIND" != "0" ]]; then
+                echo "Divergence from $BASE_BRANCH:"
+                if [[ "$AHEAD" != "0" ]]; then
+                    echo "  ↑ $AHEAD commit(s) ahead"
+                fi
+                if [[ "$BEHIND" != "0" ]]; then
+                    echo "  ↓ $BEHIND commit(s) behind"
+                fi
+                echo ""
+            fi
+        fi
+    fi
+else
+    echo "Detached HEAD state"
+    echo "Commit: $(git log -1 --pretty=format:"%h - %s" 2>/dev/null)"
+    echo ""
+fi
+
+exit 0
