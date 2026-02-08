@@ -16,7 +16,7 @@ Phase numbering continues from v1.0 (phases 1–3 complete).
 - [x] **Phase 5: Claude Plugin Extraction** - Migrate deploy.sh wizard and deployment into plugins/claude/ with .env namespacing
 - [x] **Phase 6: Git Plugin** - New git plugin for hooks, identity, workflow settings, and aliases
 - [x] **Phase 7: Integration & Polish** - Status/list commands, conflict detection, testing, documentation
-- [ ] **Phase 8: Hooks & Workflows Review** - Audit and rationalise hook/workflow placement across claude and git plugins
+- [x] **Phase 8: Hooks & Workflows Review** - Audit and rationalise hook/workflow placement across claude and git plugins
 
 ## Phase Details
 
@@ -135,12 +135,12 @@ Plans:
 **Plans:** 6 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Config architecture + unified variable naming + existing hook refactor
-- [ ] 08-02-PLAN.md — Squash-merge audit + explore agent research
-- [ ] 08-03-PLAN.md — New git hooks (pre-commit, prepare-commit-msg, post-merge, post-checkout, post-rewrite)
-- [ ] 08-04-PLAN.md — Claude PreToolUse hook + settings template
-- [ ] 08-05-PLAN.md — Setup wizard + deploy + project expansion for full hook roster
-- [ ] 08-06-PLAN.md — Auto-generated roster documentation + README updates
+- [x] 08-01-PLAN.md — Config architecture + unified variable naming + existing hook refactor
+- [x] 08-02-PLAN.md — Squash-merge audit + explore agent research
+- [x] 08-03-PLAN.md — New git hooks (pre-commit, prepare-commit-msg, post-merge, post-checkout, post-rewrite)
+- [x] 08-04-PLAN.md — Claude PreToolUse hook + settings template
+- [x] 08-05-PLAN.md — Setup wizard + deploy + project expansion for full hook roster
+- [x] 08-06-PLAN.md — Auto-generated roster documentation + README updates
 
 **Scope includes these pending todos:**
 - Review squash-merge vs native git merge workflow
@@ -171,7 +171,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 5. Claude Plugin Extraction | 5/5 | ✓ Complete | 2026-02-07 |
 | 6. Git Plugin | 3/3 | ✓ Complete | 2026-02-07 |
 | 7. Integration & Polish | 5/5 | ✓ Complete | 2026-02-07 |
-| 8. Hooks & Workflows Review | 0/6 | Planned | — |
+| 8. Hooks & Workflows Review | 6/6 | ✓ Complete | 2026-02-08 |
 
 ## Accumulated Context
 
