@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 8 of 8 (Hooks & Workflows Review)
-Plan: 4 of 6 in phase
+Plan: 5 of 6 in phase
 Status: In progress
-Last activity: 2026-02-08 — Completed 08-03-PLAN.md execution
+Last activity: 2026-02-08 — Completed 08-05-PLAN.md execution
 
-Progress: █████████████░ 94% (31/33 total plans across phases 4-8)
+Progress: █████████████░ 97% (32/33 total plans across phases 4-8)
 
 ## Performance Metrics
 
@@ -24,9 +24,9 @@ Progress: █████████████░ 94% (31/33 total plans acro
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 20
-- Total execution time: ~47.6min
-- Average duration: 2.4min
+- Total plans completed: 21
+- Total execution time: ~52.2min
+- Average duration: 2.5min
 
 ## Accumulated Context
 
@@ -121,6 +121,11 @@ New v2.0 decisions:
 - [08-04]: PreToolUse hook blocks destructive commands and sensitive file writes (defence-in-depth for buggy settings.json)
 - [08-04]: Independent guards for destructive commands (CLAUDE_HOOK_DESTRUCTIVE_GUARD) and file protection (CLAUDE_HOOK_FILE_PROTECTION)
 - [08-04]: Graceful jq degradation — hook exits silently if jq missing (non-blocking)
+- [08-05]: Git setup wizard shows full hook roster (23 settings) with config file location selection
+- [08-05]: Claude project wizard uses individual CLAUDE_HOOK_* toggles (no profile selection)
+- [08-05]: GIT_HOOK_BRANCH_PROTECTION replaces GIT_HOOK_PREPUSH_PROTECTION
+- [08-05]: Hook configuration files deployed by project commands (git-hooks.conf, claude-hooks.conf)
+- [08-05]: Complete .env.example with 26 GIT_HOOK_* and 3 CLAUDE_HOOK_* variables
 
 ### Pending Todos
 
@@ -147,9 +152,9 @@ New v2.0 decisions:
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 08-03-PLAN.md execution
+Stopped at: Completed 08-05-PLAN.md execution
 Resume file: None
 
 ---
 
-**Phase 8 Status:** 4 of 6 plans complete. Hooks architecture complete: unified config (08-01), audit (08-02), new git hooks (08-03), PreToolUse hook (08-04). Two plans remaining (08-05, 08-06).
+**Phase 8 Status:** 5 of 6 plans complete. Hooks architecture and CLI integration complete: unified config (08-01), audit (08-02), new git hooks (08-03), PreToolUse hook (08-04), CLI integration (08-05). One plan remaining (08-06: final audit and documentation).
