@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matchers": [
+          { "tool_name": "Bash" }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "timeout": 10000
+      },
+      {
+        "matchers": [
+          { "tool_name": "Write" },
+          { "tool_name": "Edit" }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "timeout": 10000
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matchers": [
+          { "tool_name": "Write" },
+          { "tool_name": "Edit" }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/post-tool-format.py",
+        "timeout": 30000
+      }
+    ]
+  }
+}
