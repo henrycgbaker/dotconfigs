@@ -1,0 +1,144 @@
+#!/bin/bash
+# === METADATA ===
+# NAME: prepare-commit-msg
+# TYPE: git-hook
+# PLUGIN: git
+# DESCRIPTION: Prepares commit message — extracts conventional commit prefix from branch name
+# CONFIGURABLE: GIT_HOOK_BRANCH_PREFIX, GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED
+# ================
+
+# ============================================================================
+# PREPARE-COMMIT-MSG HOOK
+# ============================================================================
+# Runs after default commit message is created but before editor opens.
+# Automatically prepends conventional commit type based on branch name.
+#
+# Branch patterns:
+#   feature/* → feat:
+#   fix/*     → fix:
+#   docs/*    → docs:
+#   refactor/* → refactor:
+#   test/*    → test:
+#   chore/*   → chore:
+#   perf/*    → perf:
+#   style/*   → style:
+#
+# Source of truth: plugins/git/hooks/prepare-commit-msg
+# Deployed to: ~/.dotconfigs/git-hooks/prepare-commit-msg
+# ============================================================================
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+COMMIT_SHA=$3
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
+
+# --- Load configuration with hierarchy ---
+# Priority: config file > env var > hardcoded default
+# Try multiple config file locations (first found wins)
+HOOK_CONFIG=""
+for config_path in \
+    "$REPO_ROOT/.githooks/config" \
+    "$REPO_ROOT/.claude/git-hooks.conf" \
+    "$REPO_ROOT/.git/hooks/hooks.conf" \
+    "$REPO_ROOT/.claude/hooks.conf"; do
+    if [[ -f "$config_path" ]]; then
+        HOOK_CONFIG="$config_path"
+        break
+    fi
+done
+
+# Set defaults
+GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED="${GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED:-true}"
+GIT_HOOK_BRANCH_PREFIX="${GIT_HOOK_BRANCH_PREFIX:-true}"
+
+# Load config file if found (overrides env vars and defaults)
+if [[ -n "$HOOK_CONFIG" ]]; then
+    source "$HOOK_CONFIG"
+fi
+
+# Check if hook is enabled
+if [[ "$GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED" != "true" ]]; then
+    exit 0
+fi
+
+# Check if branch prefix feature is enabled
+if [[ "$GIT_HOOK_BRANCH_PREFIX" != "true" ]]; then
+    exit 0
+fi
+
+# ============================================================================
+# SKIP CONDITIONS
+# ============================================================================
+
+# Skip if commit source is non-empty (merge, squash, amend, etc.)
+# These commits already have messages or user is crafting manually
+if [[ -n "$COMMIT_SOURCE" ]]; then
+    exit 0
+fi
+
+# Skip if detached HEAD
+if [[ "$CURRENT_BRANCH" == "HEAD" ]]; then
+    exit 0
+fi
+
+# Skip if message already has conventional commit prefix
+CURRENT_MSG=$(cat "$COMMIT_MSG_FILE")
+if echo "$CURRENT_MSG" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|build|ci|perf|revert)(\([a-zA-Z0-9_.-]+\))?(!)?:\s'; then
+    exit 0
+fi
+
+# ============================================================================
+# BRANCH PREFIX EXTRACTION
+# ============================================================================
+
+PREFIX=""
+
+case "$CURRENT_BRANCH" in
+    feature/*)
+        PREFIX="feat: "
+        ;;
+    fix/*)
+        PREFIX="fix: "
+        ;;
+    docs/*)
+        PREFIX="docs: "
+        ;;
+    refactor/*)
+        PREFIX="refactor: "
+        ;;
+    test/*)
+        PREFIX="test: "
+        ;;
+    chore/*)
+        PREFIX="chore: "
+        ;;
+    perf/*)
+        PREFIX="perf: "
+        ;;
+    style/*)
+        PREFIX="style: "
+        ;;
+    build/*)
+        PREFIX="build: "
+        ;;
+    ci/*)
+        PREFIX="ci: "
+        ;;
+    *)
+        # No recognized pattern, leave message as-is
+        exit 0
+        ;;
+esac
+
+# Prepend prefix to commit message
+if [[ -n "$PREFIX" ]]; then
+    # Create temp file with prefixed message
+    TEMP_MSG_FILE="${COMMIT_MSG_FILE}.tmp"
+    echo -n "$PREFIX" > "$TEMP_MSG_FILE"
+    cat "$COMMIT_MSG_FILE" >> "$TEMP_MSG_FILE"
+    mv "$TEMP_MSG_FILE" "$COMMIT_MSG_FILE"
+fi
+
+exit 0
