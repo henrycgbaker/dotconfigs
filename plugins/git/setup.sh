@@ -193,36 +193,177 @@ _git_wizard_hooks() {
         echo ""
     fi
 
-    # Pre-push protection level
-    echo "Pre-push protection level:"
+    # Config file location (only for project scope)
+    if [[ "$GIT_HOOKS_SCOPE" == "project" ]]; then
+        echo ""
+        echo "Config file location:"
+        echo "  1) .githooks/config (standard)"
+        echo "  2) .claude/git-hooks.conf (integrated with Claude setup)"
+        echo "  3) .git/hooks/hooks.conf (legacy)"
+        echo "  4) Custom path"
+        echo ""
+        local config_default="${GIT_HOOK_CONFIG_PATH:-.githooks/config}"
+        PS3="Select config location [$config_default]: "
+        select config_path in ".githooks/config" ".claude/git-hooks.conf" ".git/hooks/hooks.conf" "custom"; do
+            case "$config_path" in
+                custom)
+                    read -p "Enter custom path: " config_path
+                    GIT_HOOK_CONFIG_PATH="$config_path"
+                    break
+                    ;;
+                *)
+                    if [[ -n "$config_path" ]]; then
+                        GIT_HOOK_CONFIG_PATH="$config_path"
+                        break
+                    fi
+                    ;;
+            esac
+        done
+    fi
+
+    # Hook roster - Pre-commit checks
+    echo ""
+    echo "Pre-commit checks (run before commit creation):"
+    echo ""
+
+    local secrets_default="y"
+    [[ "${GIT_HOOK_SECRETS_CHECK:-true}" == "false" ]] && secrets_default="n"
+    if wizard_yesno "  Secrets detection (blocks on API keys, private keys)" "$secrets_default"; then
+        GIT_HOOK_SECRETS_CHECK="true"
+    else
+        GIT_HOOK_SECRETS_CHECK="false"
+    fi
+
+    local large_file_default="y"
+    [[ "${GIT_HOOK_LARGE_FILE_CHECK:-true}" == "false" ]] && large_file_default="n"
+    if wizard_yesno "  Large file warning (warns on files >1MB)" "$large_file_default"; then
+        GIT_HOOK_LARGE_FILE_CHECK="true"
+    else
+        GIT_HOOK_LARGE_FILE_CHECK="false"
+    fi
+
+    local debug_default="y"
+    [[ "${GIT_HOOK_DEBUG_CHECK:-true}" == "false" ]] && debug_default="n"
+    if wizard_yesno "  Debug statement detection (console.log, pdb, etc.)" "$debug_default"; then
+        GIT_HOOK_DEBUG_CHECK="true"
+    else
+        GIT_HOOK_DEBUG_CHECK="false"
+    fi
+
+    # Hook roster - Commit message
+    echo ""
+    echo "Commit message validation:"
+    echo ""
+
+    local ai_attribution_default="y"
+    [[ "${GIT_HOOK_BLOCK_AI_ATTRIBUTION:-true}" == "false" ]] && ai_attribution_default="n"
+    if wizard_yesno "  Block AI attribution (e.g. 'Co-authored-by: Claude')" "$ai_attribution_default"; then
+        GIT_HOOK_BLOCK_AI_ATTRIBUTION="true"
+    else
+        GIT_HOOK_BLOCK_AI_ATTRIBUTION="false"
+    fi
+
+    local wip_default="y"
+    [[ "${GIT_HOOK_WIP_BLOCK_ON_MAIN:-true}" == "false" ]] && wip_default="n"
+    if wizard_yesno "  Block WIP commits on main branch" "$wip_default"; then
+        GIT_HOOK_WIP_BLOCK_ON_MAIN="true"
+    else
+        GIT_HOOK_WIP_BLOCK_ON_MAIN="false"
+    fi
+
+    local conventional_default="y"
+    [[ "${GIT_HOOK_CONVENTIONAL_COMMITS:-true}" == "false" ]] && conventional_default="n"
+    if wizard_yesno "  Conventional commit format (feat:, fix:, etc.)" "$conventional_default"; then
+        GIT_HOOK_CONVENTIONAL_COMMITS="true"
+    else
+        GIT_HOOK_CONVENTIONAL_COMMITS="false"
+    fi
+
+    # Hook roster - Pre-push
+    echo ""
+    echo "Pre-push protection:"
     echo "  1) warn  - show warning but allow push"
     echo "  2) block - prevent accidental force-push to main/master"
     echo "  3) off   - no pre-push checks"
     echo ""
-    local protection_default="${GIT_HOOK_PREPUSH_PROTECTION:-warn}"
-    local protection_index=1
-    case "$protection_default" in
-        warn) protection_index=1 ;;
-        block) protection_index=2 ;;
-        off) protection_index=3 ;;
-    esac
-
+    local protection_default="${GIT_HOOK_BRANCH_PROTECTION:-warn}"
     PS3="Select protection level [$protection_default]: "
     select protection_level in "warn" "block" "off"; do
         if [[ -n "$protection_level" ]]; then
-            GIT_HOOK_PREPUSH_PROTECTION="$protection_level"
+            GIT_HOOK_BRANCH_PROTECTION="$protection_level"
             break
         fi
     done
 
-    # Conventional commits
+    # Hook roster - Prepare commit message
     echo ""
-    local conventional_default="y"
-    [[ "${GIT_HOOK_CONVENTIONAL_COMMITS:-true}" == "false" ]] && conventional_default="n"
-    if wizard_yesno "Enforce conventional commit messages?" "$conventional_default"; then
-        GIT_HOOK_CONVENTIONAL_COMMITS="true"
+    local branch_prefix_default="y"
+    [[ "${GIT_HOOK_BRANCH_PREFIX:-true}" == "false" ]] && branch_prefix_default="n"
+    if wizard_yesno "Auto-prefix commit with branch name (feature/* -> feat:)?" "$branch_prefix_default"; then
+        GIT_HOOK_BRANCH_PREFIX="true"
     else
-        GIT_HOOK_CONVENTIONAL_COMMITS="false"
+        GIT_HOOK_BRANCH_PREFIX="false"
+    fi
+
+    # Hook roster - Post-merge/rewrite
+    echo ""
+    echo "Post-merge/rebase helpers (informational only):"
+    echo ""
+
+    local dependency_default="y"
+    [[ "${GIT_HOOK_DEPENDENCY_CHECK:-true}" == "false" ]] && dependency_default="n"
+    if wizard_yesno "  Dependency change detection (package.json, requirements.txt)" "$dependency_default"; then
+        GIT_HOOK_DEPENDENCY_CHECK="true"
+    else
+        GIT_HOOK_DEPENDENCY_CHECK="false"
+    fi
+
+    local migration_default="y"
+    [[ "${GIT_HOOK_MIGRATION_REMINDER:-true}" == "false" ]] && migration_default="n"
+    if wizard_yesno "  Migration reminder (db/migrate/, migrations/)" "$migration_default"; then
+        GIT_HOOK_MIGRATION_REMINDER="true"
+    else
+        GIT_HOOK_MIGRATION_REMINDER="false"
+    fi
+
+    # Hook roster - Post-checkout
+    echo ""
+    local branch_info_default="y"
+    [[ "${GIT_HOOK_BRANCH_INFO:-true}" == "false" ]] && branch_info_default="n"
+    if wizard_yesno "Branch info on checkout?" "$branch_info_default"; then
+        GIT_HOOK_BRANCH_INFO="true"
+    else
+        GIT_HOOK_BRANCH_INFO="false"
+    fi
+
+    # Advanced settings submenu
+    echo ""
+    if wizard_yesno "Configure advanced settings?" "n"; then
+        echo ""
+        echo "Advanced settings:"
+        echo ""
+
+        local strict_conventional_default="n"
+        [[ "${GIT_HOOK_CONVENTIONAL_COMMITS_STRICT:-false}" == "true" ]] && strict_conventional_default="y"
+        if wizard_yesno "  Strict conventional commits (block instead of warn)?" "$strict_conventional_default"; then
+            GIT_HOOK_CONVENTIONAL_COMMITS_STRICT="true"
+        else
+            GIT_HOOK_CONVENTIONAL_COMMITS_STRICT="false"
+        fi
+
+        local strict_debug_default="n"
+        [[ "${GIT_HOOK_DEBUG_CHECK_STRICT:-false}" == "true" ]] && strict_debug_default="y"
+        if wizard_yesno "  Strict debug check (block instead of warn)?" "$strict_debug_default"; then
+            GIT_HOOK_DEBUG_CHECK_STRICT="true"
+        else
+            GIT_HOOK_DEBUG_CHECK_STRICT="false"
+        fi
+
+        local threshold_default="${GIT_HOOK_LARGE_FILE_THRESHOLD:-1048576}"
+        wizard_prompt "  Large file threshold (bytes)" "$threshold_default" GIT_HOOK_LARGE_FILE_THRESHOLD
+
+        local max_subject_default="${GIT_HOOK_MAX_SUBJECT_LENGTH:-72}"
+        wizard_prompt "  Max subject line length" "$max_subject_default" GIT_HOOK_MAX_SUBJECT_LENGTH
     fi
 }
 
@@ -265,8 +406,26 @@ EOF
 
     # Save hooks settings
     wizard_save_env "$env_file" "GIT_HOOKS_SCOPE" "$GIT_HOOKS_SCOPE"
-    wizard_save_env "$env_file" "GIT_HOOK_PREPUSH_PROTECTION" "$GIT_HOOK_PREPUSH_PROTECTION"
+    [[ -n "${GIT_HOOK_CONFIG_PATH:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONFIG_PATH" "$GIT_HOOK_CONFIG_PATH"
+
+    # Save hook toggles
+    wizard_save_env "$env_file" "GIT_HOOK_SECRETS_CHECK" "$GIT_HOOK_SECRETS_CHECK"
+    wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_CHECK" "$GIT_HOOK_LARGE_FILE_CHECK"
+    wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK" "$GIT_HOOK_DEBUG_CHECK"
+    wizard_save_env "$env_file" "GIT_HOOK_BLOCK_AI_ATTRIBUTION" "$GIT_HOOK_BLOCK_AI_ATTRIBUTION"
+    wizard_save_env "$env_file" "GIT_HOOK_WIP_BLOCK_ON_MAIN" "$GIT_HOOK_WIP_BLOCK_ON_MAIN"
     wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS" "$GIT_HOOK_CONVENTIONAL_COMMITS"
+    wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PROTECTION" "$GIT_HOOK_BRANCH_PROTECTION"
+    wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PREFIX" "$GIT_HOOK_BRANCH_PREFIX"
+    wizard_save_env "$env_file" "GIT_HOOK_DEPENDENCY_CHECK" "$GIT_HOOK_DEPENDENCY_CHECK"
+    wizard_save_env "$env_file" "GIT_HOOK_MIGRATION_REMINDER" "$GIT_HOOK_MIGRATION_REMINDER"
+    wizard_save_env "$env_file" "GIT_HOOK_BRANCH_INFO" "$GIT_HOOK_BRANCH_INFO"
+
+    # Save advanced settings if configured
+    [[ -n "${GIT_HOOK_CONVENTIONAL_COMMITS_STRICT:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS_STRICT" "$GIT_HOOK_CONVENTIONAL_COMMITS_STRICT"
+    [[ -n "${GIT_HOOK_DEBUG_CHECK_STRICT:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK_STRICT" "$GIT_HOOK_DEBUG_CHECK_STRICT"
+    [[ -n "${GIT_HOOK_LARGE_FILE_THRESHOLD:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_THRESHOLD" "$GIT_HOOK_LARGE_FILE_THRESHOLD"
+    [[ -n "${GIT_HOOK_MAX_SUBJECT_LENGTH:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_MAX_SUBJECT_LENGTH" "$GIT_HOOK_MAX_SUBJECT_LENGTH"
 }
 
 # Main entry point — called by dotconfigs CLI
@@ -366,9 +525,19 @@ plugin_git_setup() {
                 echo "  Enabled: ${GIT_ALIASES_ENABLED:-<none>}"
                 echo ""
                 echo "Hooks:"
-                echo "  Scope:               ${GIT_HOOKS_SCOPE:-<not set>}"
-                echo "  Pre-push protection: ${GIT_HOOK_PREPUSH_PROTECTION:-<not set>}"
-                echo "  Conventional commits: ${GIT_HOOK_CONVENTIONAL_COMMITS:-<not set>}"
+                echo "  Scope:                    ${GIT_HOOKS_SCOPE:-<not set>}"
+                [[ -n "${GIT_HOOK_CONFIG_PATH:-}" ]] && echo "  Config path:              $GIT_HOOK_CONFIG_PATH"
+                echo "  Secrets check:            ${GIT_HOOK_SECRETS_CHECK:-<not set>}"
+                echo "  Large file check:         ${GIT_HOOK_LARGE_FILE_CHECK:-<not set>}"
+                echo "  Debug check:              ${GIT_HOOK_DEBUG_CHECK:-<not set>}"
+                echo "  Block AI attribution:     ${GIT_HOOK_BLOCK_AI_ATTRIBUTION:-<not set>}"
+                echo "  Block WIP on main:        ${GIT_HOOK_WIP_BLOCK_ON_MAIN:-<not set>}"
+                echo "  Conventional commits:     ${GIT_HOOK_CONVENTIONAL_COMMITS:-<not set>}"
+                echo "  Branch protection:        ${GIT_HOOK_BRANCH_PROTECTION:-<not set>}"
+                echo "  Branch prefix:            ${GIT_HOOK_BRANCH_PREFIX:-<not set>}"
+                echo "  Dependency check:         ${GIT_HOOK_DEPENDENCY_CHECK:-<not set>}"
+                echo "  Migration reminder:       ${GIT_HOOK_MIGRATION_REMINDER:-<not set>}"
+                echo "  Branch info:              ${GIT_HOOK_BRANCH_INFO:-<not set>}"
                 echo ""
 
                 if ! wizard_yesno "Save this configuration?" "y"; then
