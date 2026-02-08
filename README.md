@@ -151,6 +151,10 @@ dotconfigs help         # Overview of all commands
 dotconfigs help deploy  # Detailed help for deploy command
 ```
 
+## GSD Framework
+
+dotconfigs supports the [Get Shit Done (GSD)](https://github.com/henrycgbaker/get-shit-done) planning and execution framework for Claude Code. GSD provides structured phase planning, task breakdown, and execution workflows.
+
 ## Plugins
 
 ### claude
@@ -174,7 +178,14 @@ Manages Git configuration: identity, workflow settings, aliases, and hooks.
 - Identity — `user.name` and `user.email` in global git config
 - Workflow settings — `pull.rebase`, `push.default`, `fetch.prune`, `init.defaultBranch`, etc.
 - Aliases — Common shortcuts (`unstage`, `last`, `lg`, `amend`, `undo`, `wip`) plus custom aliases
-- Hooks — `commit-msg` (conventional commits), `pre-push` (branch protection)
+- Hooks — 7 hooks for commit validation, branch protection, and workflow automation:
+  - `commit-msg` — AI attribution blocking, conventional commit enforcement
+  - `pre-commit` — secrets detection, large file check, debug statement detection
+  - `pre-push` — branch protection (main/master)
+  - `prepare-commit-msg` — auto-prefix commits with branch-based type
+  - `post-merge` — dependency change detection, migration reminders
+  - `post-checkout` — branch info display
+  - `post-rewrite` — dependency detection for rebase workflows
 
 **Configuration:** Menu-based wizard with four sections (identity, workflow, aliases, hooks). Each section can be configured independently.
 
@@ -188,6 +199,35 @@ See `.env.example` for a complete reference of available configuration keys.
 - `CLAUDE_*` — Claude plugin configuration (deploy target, settings, hooks, skills, GSD)
 - `GIT_*` — Git plugin configuration (identity, workflow settings, aliases, hooks)
 
+### Configuration Hierarchy
+
+dotconfigs uses a three-tier configuration hierarchy for maximum flexibility:
+
+| Tier | Scope | Use Case | Example |
+|------|-------|----------|---------|
+| **Hardcoded defaults** | All projects | Sensible defaults for most users | `GIT_HOOK_BLOCK_AI_ATTRIBUTION=true` |
+| **Global .env** | All projects on this machine | Personal preferences, machine-specific settings | Set via `dotconfigs setup` wizard |
+| **Project config files** | Single repository | Project-specific overrides | `.claude/git-hooks.conf` in repo |
+
+**Precedence:** Project config > Global .env > Hardcoded defaults (higher tiers override lower).
+
+**When to use each tier:**
+- **Hardcoded defaults:** Built into hook code — no action needed, just works
+- **Global .env:** Personal preferences that apply across all your projects (set once via setup wizard)
+- **Project config files:** Per-repository overrides for team workflows or project-specific requirements (deployed by `dotconfigs project`)
+
+**Plugin configuration ownership:**
+- Git plugin owns `git-hooks.conf` — deployed by `dotconfigs project git`
+- Claude plugin owns `claude-hooks.conf` — deployed by `dotconfigs project claude`
+
+**Git hook config discovery paths** (first found wins):
+1. `.githooks/config`
+2. `.claude/git-hooks.conf`
+3. `.git/hooks/hooks.conf`
+4. `.claude/hooks.conf`
+
+For a complete list of all hooks, commands, and configuration options, see [docs/ROSTER.md](docs/ROSTER.md).
+
 ## Directory Structure
 
 ```
@@ -199,6 +239,7 @@ dotconfigs/
 ├── CLAUDE.md               # Repository CLAUDE.md
 ├── lib/                    # Shared bash libraries
 │   ├── cli.sh              # CLI framework (subcommands, error handling)
+│   ├── config.sh           # Configuration hierarchy and variable reference
 │   ├── wizard.sh           # Wizard helpers (prompts, y/n, save)
 │   ├── discovery.sh        # Asset discovery (sections, hooks, skills)
 │   ├── deployment.sh       # Deployment helpers (symlinks, backups)
@@ -208,17 +249,19 @@ dotconfigs/
 │   │   ├── setup.sh        # Claude setup wizard
 │   │   ├── deploy.sh       # Claude deployment logic
 │   │   ├── project.sh      # Per-repo scaffolding
-│   │   ├── hooks/          # Claude Code hooks (Python)
-│   │   ├── commands/       # Skills (/commit, /squash-merge, etc.)
+│   │   ├── hooks/          # Claude Code hooks (block-destructive.sh, post-tool-format.py)
+│   │   ├── commands/       # Skills (/commit, /squash-merge, /pr-review, /simplicity-check)
 │   │   └── templates/
 │   │       ├── claude-md/  # CLAUDE.md section templates
 │   │       ├── settings/   # Project settings.json templates
-│   │       └── hooks-conf/ # Git hook config presets
+│   │       └── hooks-conf/ # Hook config templates
 │   └── git/
 │       ├── setup.sh        # Git setup wizard
 │       ├── deploy.sh       # Git deployment logic
 │       ├── project.sh      # Per-repo git setup
-│       └── hooks/          # Git hooks (commit-msg, pre-push)
+│       └── hooks/          # Git hooks (7 hooks for commit validation & workflow)
 ├── scripts/                # Utility scripts
+│   └── generate-roster.sh  # Auto-generates docs/ROSTER.md from metadata
 └── docs/                   # Additional documentation
+    └── ROSTER.md           # Complete hook/command/config reference
 ```
