@@ -1,0 +1,228 @@
+#!/bin/bash
+# === METADATA ===
+# NAME: pre-commit
+# TYPE: git-hook
+# PLUGIN: git
+# DESCRIPTION: Pre-commit validation — secrets detection, large file check, debug statement detection
+# CONFIGURABLE: GIT_HOOK_SECRETS_CHECK, GIT_HOOK_LARGE_FILE_CHECK, GIT_HOOK_LARGE_FILE_THRESHOLD, GIT_HOOK_DEBUG_CHECK, GIT_HOOK_DEBUG_CHECK_STRICT, GIT_HOOK_PRE_COMMIT_ENABLED
+# ================
+
+# ============================================================================
+# PRE-COMMIT HOOK
+# ============================================================================
+# Runs before commit is created. Validates staged changes for:
+# - Secrets (API keys, private keys, AWS credentials)
+# - Large files (warns if > threshold)
+# - Debug statements (console.log, debugger, pdb, etc.)
+#
+# Source of truth: plugins/git/hooks/pre-commit
+# Deployed to: ~/.dotconfigs/git-hooks/pre-commit
+# ============================================================================
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+
+# --- Load configuration with hierarchy ---
+# Priority: config file > env var > hardcoded default
+# Try multiple config file locations (first found wins)
+HOOK_CONFIG=""
+for config_path in \
+    "$REPO_ROOT/.githooks/config" \
+    "$REPO_ROOT/.claude/git-hooks.conf" \
+    "$REPO_ROOT/.git/hooks/hooks.conf" \
+    "$REPO_ROOT/.claude/hooks.conf"; do
+    if [[ -f "$config_path" ]]; then
+        HOOK_CONFIG="$config_path"
+        break
+    fi
+done
+
+# Set defaults
+GIT_HOOK_PRE_COMMIT_ENABLED="${GIT_HOOK_PRE_COMMIT_ENABLED:-true}"
+GIT_HOOK_SECRETS_CHECK="${GIT_HOOK_SECRETS_CHECK:-true}"
+GIT_HOOK_LARGE_FILE_CHECK="${GIT_HOOK_LARGE_FILE_CHECK:-true}"
+GIT_HOOK_LARGE_FILE_THRESHOLD="${GIT_HOOK_LARGE_FILE_THRESHOLD:-1048576}"
+GIT_HOOK_DEBUG_CHECK="${GIT_HOOK_DEBUG_CHECK:-true}"
+GIT_HOOK_DEBUG_CHECK_STRICT="${GIT_HOOK_DEBUG_CHECK_STRICT:-false}"
+
+# Load config file if found (overrides env vars and defaults)
+if [[ -n "$HOOK_CONFIG" ]]; then
+    source "$HOOK_CONFIG"
+fi
+
+# Check if hook is enabled
+if [[ "$GIT_HOOK_PRE_COMMIT_ENABLED" != "true" ]]; then
+    exit 0
+fi
+
+# ============================================================================
+# SECTION 1: Secrets Detection (hard block)
+# ============================================================================
+
+if [[ "$GIT_HOOK_SECRETS_CHECK" == "true" ]]; then
+    # Get staged diff
+    STAGED_DIFF=$(git diff --cached --diff-filter=ACM)
+
+    if [[ -n "$STAGED_DIFF" ]]; then
+        # AWS access keys
+        if echo "$STAGED_DIFF" | grep -qE 'AKIA[0-9A-Z]{16}'; then
+            echo "❌ ERROR: AWS access key detected in staged changes"
+            echo ""
+            echo "Found pattern: AKIA[0-9A-Z]{16}"
+            echo ""
+            echo "Remove sensitive data before committing."
+            echo "Use environment variables or config files (gitignored) for credentials."
+            echo ""
+            echo "To bypass: git commit --no-verify"
+            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+
+        # API key assignments
+        if echo "$STAGED_DIFF" | grep -qE '["\'"'"']?[Aa]pi[_-]?[Kk]ey["\'"'"']?\s*[:=]\s*["\'"'"'][^"'"'"']{8,}["\'"'"']'; then
+            echo "❌ ERROR: API key assignment detected in staged changes"
+            echo ""
+            echo "Found pattern: api_key = \"...\""
+            echo ""
+            echo "Remove sensitive data before committing."
+            echo "Use environment variables or config files (gitignored) for credentials."
+            echo ""
+            echo "To bypass: git commit --no-verify"
+            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+
+        # Stripe keys
+        if echo "$STAGED_DIFF" | grep -qE '(sk|pk)_(test|live)_[a-zA-Z0-9]{24,}'; then
+            echo "❌ ERROR: Stripe API key detected in staged changes"
+            echo ""
+            echo "Found pattern: sk_test_... or pk_live_..."
+            echo ""
+            echo "Remove sensitive data before committing."
+            echo "Use environment variables or config files (gitignored) for credentials."
+            echo ""
+            echo "To bypass: git commit --no-verify"
+            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+
+        # Google API keys
+        if echo "$STAGED_DIFF" | grep -qE 'AIza[0-9A-Za-z\-_]{35}'; then
+            echo "❌ ERROR: Google API key detected in staged changes"
+            echo ""
+            echo "Found pattern: AIza..."
+            echo ""
+            echo "Remove sensitive data before committing."
+            echo "Use environment variables or config files (gitignored) for credentials."
+            echo ""
+            echo "To bypass: git commit --no-verify"
+            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+
+        # Private keys
+        if echo "$STAGED_DIFF" | grep -qE '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'; then
+            echo "❌ ERROR: Private key detected in staged changes"
+            echo ""
+            echo "Found pattern: -----BEGIN PRIVATE KEY-----"
+            echo ""
+            echo "Remove sensitive data before committing."
+            echo "Use secure key storage (SSH agent, keychain, etc.)."
+            echo ""
+            echo "To bypass: git commit --no-verify"
+            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+    fi
+fi
+
+# ============================================================================
+# SECTION 2: Large File Detection (warn only)
+# ============================================================================
+
+if [[ "$GIT_HOOK_LARGE_FILE_CHECK" == "true" ]]; then
+    # Get list of staged files (not deleted)
+    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+    for file in $STAGED_FILES; do
+        if [[ -f "$file" ]]; then
+            # Get file size in bytes (portable way)
+            FILE_SIZE=$(wc -c < "$file" | tr -d ' ')
+
+            if [[ "$FILE_SIZE" -ge "$GIT_HOOK_LARGE_FILE_THRESHOLD" ]]; then
+                # Convert to human-readable
+                FILE_SIZE_MB=$((FILE_SIZE / 1048576))
+                THRESHOLD_MB=$((GIT_HOOK_LARGE_FILE_THRESHOLD / 1048576))
+
+                echo "⚠️  WARNING: Large file detected"
+                echo "File: $file"
+                echo "Size: ${FILE_SIZE_MB}MB (threshold: ${THRESHOLD_MB}MB)"
+                echo ""
+                echo "Consider:"
+                echo "  - Use Git LFS for large binary files"
+                echo "  - Add to .gitignore if not needed in repo"
+                echo "  - Compress if possible"
+                echo ""
+                echo "To adjust threshold: Set GIT_HOOK_LARGE_FILE_THRESHOLD=<bytes> in .claude/git-hooks.conf"
+            fi
+        fi
+    done
+fi
+
+# ============================================================================
+# SECTION 3: Debug Statement Detection (configurable block/warn)
+# ============================================================================
+
+if [[ "$GIT_HOOK_DEBUG_CHECK" == "true" ]]; then
+    # Get staged diff
+    STAGED_DIFF=$(git diff --cached --diff-filter=ACM)
+
+    if [[ -n "$STAGED_DIFF" ]]; then
+        DEBUG_FOUND=false
+
+        # JavaScript/TypeScript: console.log, console.debug, debugger
+        if echo "$STAGED_DIFF" | grep -qE 'console\.(log|debug)'; then
+            echo "⚠️  DEBUG: console.log or console.debug found in staged changes"
+            DEBUG_FOUND=true
+        fi
+
+        if echo "$STAGED_DIFF" | grep -qE 'debugger;'; then
+            echo "⚠️  DEBUG: debugger statement found in staged changes"
+            DEBUG_FOUND=true
+        fi
+
+        # Python: pdb.set_trace, breakpoint()
+        if echo "$STAGED_DIFF" | grep -qE 'pdb\.set_trace'; then
+            echo "⚠️  DEBUG: pdb.set_trace() found in staged changes"
+            DEBUG_FOUND=true
+        fi
+
+        if echo "$STAGED_DIFF" | grep -qE 'breakpoint\(\)'; then
+            echo "⚠️  DEBUG: breakpoint() found in staged changes"
+            DEBUG_FOUND=true
+        fi
+
+        # Ruby: binding.pry
+        if echo "$STAGED_DIFF" | grep -qE 'binding\.pry'; then
+            echo "⚠️  DEBUG: binding.pry found in staged changes"
+            DEBUG_FOUND=true
+        fi
+
+        if [[ "$DEBUG_FOUND" == "true" ]]; then
+            echo ""
+            echo "Remove debug statements before committing."
+            echo ""
+
+            if [[ "$GIT_HOOK_DEBUG_CHECK_STRICT" == "true" ]]; then
+                echo "❌ BLOCKED: Debug statements not allowed (strict mode)"
+                echo ""
+                echo "To allow: Set GIT_HOOK_DEBUG_CHECK_STRICT=false in .claude/git-hooks.conf"
+                echo "To bypass: git commit --no-verify"
+                exit 1
+            else
+                echo "To block: Set GIT_HOOK_DEBUG_CHECK_STRICT=true in .claude/git-hooks.conf"
+            fi
+        fi
+    fi
+fi
+
+exit 0
