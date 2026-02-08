@@ -8,8 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTCLAUDE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Source symlink library for ownership detection
-# shellcheck source=scripts/lib/symlinks.sh
-source "$SCRIPT_DIR/lib/symlinks.sh"
+# shellcheck source=../lib/symlinks.sh
+source "$DOTCLAUDE_ROOT/lib/symlinks.sh"
 
 # Usage
 show_usage() {
@@ -56,7 +56,7 @@ done
 if [[ ! -f "$DOTCLAUDE_ROOT/.env" ]]; then
     echo "Error: No .env file found"
     echo ""
-    echo "Run 'deploy.sh global' to configure, or manually create .env with SCAN_PATHS."
+    echo "Run 'dotconfigs setup claude' to configure, or manually create .env with SCAN_PATHS."
     echo "Example: SCAN_PATHS=\"$HOME/Repositories,$HOME/Projects\""
     exit 1
 fi
@@ -67,7 +67,7 @@ source "$DOTCLAUDE_ROOT/.env"
 if [[ -z "${SCAN_PATHS:-}" ]]; then
     echo "Error: SCAN_PATHS not configured in .env"
     echo ""
-    echo "Run 'deploy.sh global' to configure, or set SCAN_PATHS in .env:"
+    echo "Run 'dotconfigs setup claude' to configure, or set SCAN_PATHS in .env:"
     echo "  SCAN_PATHS=\"$HOME/Repositories,$HOME/Projects\""
     exit 1
 fi

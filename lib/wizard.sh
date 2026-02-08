@@ -1,6 +1,5 @@
-#!/bin/bash
-# scripts/lib/wizard.sh — Interactive wizard helper functions
-# Sourced by deploy.sh. Do not execute directly.
+# lib/wizard.sh — Interactive wizard helper functions
+# Sourced by dotconfigs entry point.
 
 # Display a prompt and read user input with a default value
 # Args: prompt_text, default_value, variable_name

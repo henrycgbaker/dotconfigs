@@ -1,0 +1,566 @@
+#!/bin/bash
+# dotconfigs — Unified configuration management CLI entry point
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGINS_DIR="$SCRIPT_DIR/plugins"
+ENV_FILE="$SCRIPT_DIR/.env"
+
+# Source shared libraries eagerly (small files)
+source "$SCRIPT_DIR/lib/wizard.sh"
+source "$SCRIPT_DIR/lib/symlinks.sh"
+source "$SCRIPT_DIR/lib/discovery.sh"
+source "$SCRIPT_DIR/lib/validation.sh"
+source "$SCRIPT_DIR/lib/colours.sh"
+
+show_usage() {
+    cat <<EOF
+dotconfigs — Unified configuration management
+
+Usage:
+  dotconfigs setup <plugin>             Run setup wizard for plugin
+  dotconfigs deploy [plugin] [options]  Deploy plugin configuration
+  dotconfigs project [plugin] <path>    Scaffold project configuration
+  dotconfigs status [plugin]            Show deployment status
+  dotconfigs list                       List available plugins
+  dotconfigs help [command]             Show help for command
+  dotconfigs --help                     Show this help
+
+Commands:
+  setup      Interactive wizard to configure plugin (.env)
+  deploy     Deploy configuration from .env to filesystem
+             Options: --interactive, --force, --dry-run
+             Without plugin: deploys all configured plugins
+  project    Scaffold per-project configuration
+  status     Check deployment status and drift detection
+  list       List all available plugins
+  help       Show detailed help for specific command
+
+Examples:
+  dotconfigs setup claude               Configure Claude Code
+  dotconfigs deploy git                 Deploy git configuration
+  dotconfigs deploy --dry-run           Preview all deployments
+  dotconfigs deploy git --interactive   Deploy git with conflict prompts
+  dotconfigs status                     Show status of all plugins
+  dotconfigs project .                  Run all plugin project setup
+  dotconfigs project claude .           Run Claude project setup only
+  dotconfigs list                       Show all plugins
+  dotconfigs help deploy                Show deploy command help
+
+Available plugins:
+EOF
+    while IFS= read -r plugin; do
+        echo "  - $plugin"
+    done < <(discover_plugins "$PLUGINS_DIR")
+}
+
+show_command_help() {
+    local command="$1"
+
+    case "$command" in
+        setup)
+            cat <<EOF
+dotconfigs setup — Interactive configuration wizard
+
+Usage:
+  dotconfigs setup <plugin>
+
+Description:
+  Runs the interactive setup wizard for the specified plugin.
+  Creates or updates .env file with plugin configuration.
+
+Available plugins:
+EOF
+            while IFS= read -r plugin; do
+                echo "  - $plugin"
+            done < <(discover_plugins "$PLUGINS_DIR")
+            cat <<EOF
+
+Examples:
+  dotconfigs setup claude    Configure Claude Code settings
+  dotconfigs setup git       Configure git hooks and identity
+EOF
+            ;;
+        deploy)
+            cat <<EOF
+dotconfigs deploy — Deploy configuration to filesystem
+
+Usage:
+  dotconfigs deploy [plugin] [options]
+
+Description:
+  Deploys plugin configuration from .env to the filesystem.
+  Without a plugin name, deploys all configured plugins.
+
+Options:
+  --interactive    Prompt for conflict resolution (overwrite/skip/backup)
+  --force          Overwrite files without prompting
+  --dry-run        Preview changes without deploying
+
+Examples:
+  dotconfigs deploy                      Deploy all configured plugins
+  dotconfigs deploy claude               Deploy Claude configuration only
+  dotconfigs deploy git --interactive    Deploy git with conflict prompts
+  dotconfigs deploy --dry-run            Preview all deployments
+EOF
+            ;;
+        project)
+            cat <<EOF
+dotconfigs project — Scaffold per-project configuration
+
+Usage:
+  dotconfigs project [plugin] <path>
+
+Description:
+  Scaffolds per-project configuration files for the specified plugin.
+  Without a plugin name, runs project setup for all plugins.
+  Requires a git repository at the target path.
+
+Examples:
+  dotconfigs project .              Run all plugin project setup
+  dotconfigs project claude .       Run Claude project setup only
+  dotconfigs project git /path      Configure git for specific repo
+EOF
+            ;;
+        status)
+            cat <<EOF
+dotconfigs status — Check deployment status
+
+Usage:
+  dotconfigs status [plugin]
+
+Description:
+  Shows deployment status for plugin configuration files.
+  Detects drift (broken symlinks, foreign files, wrong targets).
+  Without a plugin name, shows status for all plugins.
+
+States:
+  ✓  Deployed      Symlink correctly points to dotconfigs
+  △  Drifted       Broken symlink, foreign file, or wrong target
+  ✗  Not deployed  File doesn't exist
+
+Examples:
+  dotconfigs status           Show status of all plugins
+  dotconfigs status claude    Show Claude plugin status only
+EOF
+            ;;
+        list)
+            cat <<EOF
+dotconfigs list — List available plugins
+
+Usage:
+  dotconfigs list
+
+Description:
+  Lists all available plugins with descriptions.
+
+Example:
+  dotconfigs list
+EOF
+            ;;
+        *)
+            echo "Error: Unknown command '$command'" >&2
+            echo "" >&2
+            echo "Available commands: setup, deploy, project, status, list, help" >&2
+            return 1
+            ;;
+    esac
+}
+
+cmd_help() {
+    if [[ $# -eq 0 ]]; then
+        show_usage
+    else
+        show_command_help "$1"
+    fi
+}
+
+cmd_setup() {
+    local plugin=$1
+
+    if [[ -z "$plugin" ]]; then
+        echo "Error: Plugin name required" >&2
+        show_usage
+        exit 1
+    fi
+
+    shift
+
+    if ! plugin_exists "$plugin"; then
+        echo "Error: Plugin '$plugin' not found" >&2
+        echo "" >&2
+        list_available_plugins
+        exit 1
+    fi
+
+    source "$PLUGINS_DIR/$plugin/setup.sh"
+    "plugin_${plugin}_setup" "$@"
+}
+
+_create_path_symlink() {
+    local dry_run="$1"
+    local force_mode="$2"
+
+    # Determine symlink target: prefer ~/.local/bin, fall back to /usr/local/bin
+    local target=""
+    if [[ -d "$HOME/.local/bin" ]]; then
+        target="$HOME/.local/bin/dotconfigs"
+    elif [[ -d "/usr/local/bin" ]]; then
+        target="/usr/local/bin/dotconfigs"
+    else
+        # Neither exists, try to create ~/.local/bin
+        if mkdir -p "$HOME/.local/bin" 2>/dev/null; then
+            target="$HOME/.local/bin/dotconfigs"
+        else
+            echo "Warning: Cannot create ~/.local/bin and /usr/local/bin not found" >&2
+            echo "To make dotconfigs available on PATH, add to your shell profile:" >&2
+            echo "  export PATH=\"$SCRIPT_DIR:\$PATH\"" >&2
+            return 0
+        fi
+    fi
+
+    # Dry-run mode
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Would create symlink: $target -> $SCRIPT_DIR/dotconfigs"
+        return 0
+    fi
+
+    # Check if symlink already exists and is correct
+    if [[ -L "$target" ]]; then
+        local current_target=$(readlink "$target")
+        if [[ "$current_target" == "$SCRIPT_DIR/dotconfigs" ]]; then
+            echo "dotconfigs already on PATH (symlink correct)"
+            return 0
+        else
+            # Symlink exists but points elsewhere
+            if [[ "$force_mode" != "true" ]]; then
+                echo "Warning: Symlink exists but points to: $current_target" >&2
+                wizard_yesno "Overwrite with dotconfigs symlink?" "n" || return 0
+            fi
+        fi
+    elif [[ -e "$target" ]]; then
+        # Regular file exists
+        echo "Warning: File exists at $target (not a symlink)" >&2
+        echo "Manual action required: remove or rename the file, then re-run deploy" >&2
+        return 0
+    fi
+
+    # Create symlink
+    if ln -sf "$SCRIPT_DIR/dotconfigs" "$target" 2>/dev/null; then
+        # Verify it's on PATH
+        if command -v dotconfigs >/dev/null 2>&1; then
+            echo "dotconfigs added to PATH: $target"
+        else
+            echo "Symlink created: $target" >&2
+            echo "Note: $(dirname "$target") may not be on your PATH" >&2
+            echo "Add to shell profile if needed: export PATH=\"$(dirname "$target"):\$PATH\"" >&2
+        fi
+    else
+        echo "Warning: Failed to create symlink at $target (permission denied?)" >&2
+        echo "To make dotconfigs available on PATH, add to your shell profile:" >&2
+        echo "  export PATH=\"$SCRIPT_DIR:\$PATH\"" >&2
+    fi
+}
+
+cmd_deploy() {
+    local plugin=""
+    local dry_run=false
+    local force_mode=false
+    local interactive_mode=false
+    local args=()
+
+    # Parse arguments: extract plugin name and flags
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                dry_run=true
+                shift
+                ;;
+            --force)
+                force_mode=true
+                shift
+                ;;
+            --interactive)
+                interactive_mode=true
+                shift
+                ;;
+            -*)
+                echo "Error: Unknown option '$1'" >&2
+                exit 1
+                ;;
+            *)
+                # First non-flag argument is the plugin name
+                if [[ -z "$plugin" ]]; then
+                    plugin="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Build args array to pass to plugin deploy functions
+    if [[ "$dry_run" == "true" ]]; then
+        args+=("--dry-run")
+        # Initialize colours for dry-run header
+        init_colours
+    fi
+
+    # Flag precedence: --dry-run overrides --force
+    if [[ "$dry_run" != "true" && "$force_mode" == "true" ]]; then
+        args+=("--force")
+    fi
+
+    if [[ "$interactive_mode" == "true" ]]; then
+        args+=("--interactive")
+    fi
+
+    if [[ -z "$plugin" ]]; then
+        # Deploy all configured plugins
+        if [[ "$dry_run" == "true" ]]; then
+            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+            echo "$(colour_cyan "  DRY RUN - No changes will be made")"
+            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+            echo ""
+        fi
+        echo "Deploying all configured plugins..."
+        local deployed_any=false
+        while IFS= read -r p; do
+            if [[ -f "$PLUGINS_DIR/$p/deploy.sh" ]]; then
+                echo ""
+                echo "==> Deploying $p"
+                source "$PLUGINS_DIR/$p/deploy.sh"
+                "plugin_${p}_deploy" "${args[@]}"
+                deployed_any=true
+            fi
+        done < <(discover_plugins "$PLUGINS_DIR")
+
+        if [[ "$deployed_any" == "false" ]]; then
+            echo "No plugins with deploy support found" >&2
+            exit 1
+        fi
+    else
+        # Deploy single plugin
+        if ! plugin_exists "$plugin"; then
+            echo "Error: Plugin '$plugin' not found" >&2
+            echo "" >&2
+            list_available_plugins
+            exit 1
+        fi
+
+        if [[ "$dry_run" == "true" ]]; then
+            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+            echo "$(colour_cyan "  DRY RUN - No changes will be made")"
+            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+            echo ""
+        fi
+
+        source "$PLUGINS_DIR/$plugin/deploy.sh"
+        "plugin_${plugin}_deploy" "${args[@]}"
+    fi
+
+    # Create PATH symlink (after all plugin deploys)
+    echo ""
+    echo "CLI availability:"
+    _create_path_symlink "$dry_run" "$force_mode"
+}
+
+cmd_status() {
+    local plugin_filter="${1:-}"
+
+    # Initialize colour codes
+    init_colours
+
+    # Check if .env exists
+    if [[ ! -f "$ENV_FILE" ]]; then
+        echo "Error: No configuration found. Run 'dotconfigs setup <plugin>' first." >&2
+        exit 1
+    fi
+
+    # Iterate over all plugins
+    while IFS= read -r plugin; do
+        # Skip if filter provided and doesn't match
+        if [[ -n "$plugin_filter" && "$plugin" != "$plugin_filter" ]]; then
+            continue
+        fi
+
+        # Source the plugin's deploy.sh if not already sourced
+        if [[ -f "$PLUGINS_DIR/$plugin/deploy.sh" ]]; then
+            source "$PLUGINS_DIR/$plugin/deploy.sh"
+        fi
+
+        # Check if plugin_<name>_status function exists
+        if declare -f "plugin_${plugin}_status" > /dev/null 2>&1; then
+            "plugin_${plugin}_status"
+        else
+            printf "%b %s\n" "$(colour_red "$plugin")" "not configured"
+        fi
+
+        echo ""
+    done < <(discover_plugins "$PLUGINS_DIR")
+}
+
+cmd_list() {
+    # Initialize colour codes
+    init_colours
+
+    # Source .env if it exists
+    if [[ -f "$ENV_FILE" ]]; then
+        source "$ENV_FILE"
+    fi
+
+    echo "Available plugins:"
+    echo ""
+
+    while IFS= read -r plugin; do
+        local is_installed=false
+
+        # Check if plugin is installed by looking for key env vars
+        case "$plugin" in
+            claude)
+                if [[ -n "${CLAUDE_DEPLOY_TARGET:-}" ]]; then
+                    is_installed=true
+                fi
+                ;;
+            git)
+                if [[ -n "${GIT_USER_NAME:-}" ]] || [[ -n "${GIT_USER_EMAIL:-}" ]]; then
+                    is_installed=true
+                fi
+                ;;
+            *)
+                # Generic check: try to load plugin config
+                if [[ -f "$PLUGINS_DIR/$plugin/deploy.sh" ]]; then
+                    source "$PLUGINS_DIR/$plugin/deploy.sh"
+                    if declare -f "_${plugin}_load_config" > /dev/null 2>&1; then
+                        if "_${plugin}_load_config" > /dev/null 2>&1; then
+                            is_installed=true
+                        fi
+                    fi
+                fi
+                ;;
+        esac
+
+        # Print with colour
+        if [[ "$is_installed" == "true" ]]; then
+            printf "  %b %s\n" "$(colour_green "$SYMBOL_OK")" "$plugin installed"
+        else
+            printf "  %b %s\n" "$(colour_red "$SYMBOL_MISSING")" "$plugin not installed"
+        fi
+    done < <(discover_plugins "$PLUGINS_DIR")
+}
+
+cmd_project() {
+    local plugin_filter=""
+    local project_path=""
+
+    # Parse arguments: could be "project ." or "project claude ."
+    # If first arg is a plugin name, treat it as filter
+    if [[ $# -gt 0 ]] && plugin_exists "$1"; then
+        plugin_filter="$1"
+        shift
+    fi
+
+    # If no path argument, try CWD detection
+    if [[ $# -eq 0 ]]; then
+        # Check if CWD is the dotconfigs repo itself
+        if [[ "$(pwd)" -ef "$SCRIPT_DIR" ]]; then
+            echo "Error: Cannot use dotconfigs repo as project target" >&2
+            echo "Specify a path: dotconfigs project <path>" >&2
+            exit 1
+        fi
+
+        # Check if CWD is a git repo
+        if ! git -C "$PWD" rev-parse --git-dir >/dev/null 2>&1; then
+            echo "Error: Current directory is not a git repository" >&2
+            echo "Either run from a git repo or specify path: dotconfigs project <path>" >&2
+            exit 1
+        fi
+
+        # Confirm with user
+        echo "Detected project: $(basename "$PWD") ($PWD)"
+        if wizard_yesno "Use this directory?" "y"; then
+            project_path="$PWD"
+        else
+            echo "Specify path: dotconfigs project <path>" >&2
+            exit 1
+        fi
+    else
+        project_path="$1"
+        shift
+    fi
+
+    # Resolve to absolute path
+    project_path=$(expand_path "$project_path")
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Invalid path: $project_path" >&2
+        exit 1
+    fi
+
+    # Validate git repo
+    if ! validate_git_repo "$project_path"; then
+        echo "Error: Not a git repository: $project_path" >&2
+        echo "Initialize with: git init" >&2
+        exit 1
+    fi
+
+    # Execute project setup
+    if [[ -n "$plugin_filter" ]]; then
+        # Single plugin mode
+        if [[ ! -f "$PLUGINS_DIR/$plugin_filter/project.sh" ]]; then
+            echo "Error: Plugin '$plugin_filter' does not support project setup" >&2
+            exit 1
+        fi
+
+        source "$PLUGINS_DIR/$plugin_filter/project.sh"
+        "plugin_${plugin_filter}_project" "$project_path"
+    else
+        # All plugins mode
+        local ran_any=false
+        while IFS= read -r plugin; do
+            if [[ -f "$PLUGINS_DIR/$plugin/project.sh" ]]; then
+                source "$PLUGINS_DIR/$plugin/project.sh"
+                "plugin_${plugin}_project" "$project_path"
+                ran_any=true
+            fi
+        done < <(discover_plugins "$PLUGINS_DIR")
+
+        if [[ "$ran_any" == "false" ]]; then
+            echo "No plugins with project setup found" >&2
+            exit 1
+        fi
+    fi
+}
+
+main() {
+    if [[ $# -eq 0 ]]; then
+        show_usage
+        exit 0
+    fi
+
+    case "$1" in
+        setup|deploy|project)
+            cmd_"$1" "${@:2}"
+            ;;
+        status)
+            cmd_status "${@:2}"
+            ;;
+        list)
+            cmd_list
+            ;;
+        help)
+            cmd_help "${@:2}"
+            ;;
+        --help|-h)
+            show_usage
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown command '$1'" >&2
+            echo "" >&2
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

@@ -55,46 +55,47 @@ All 29 v1.0 requirements delivered. See MILESTONES.md for summary.
 ### CLI Restructure
 
 - [ ] **CLI-01**: Single `dotconfigs` entry point script with subcommand routing
-- [ ] **CLI-02**: `dotconfigs setup [plugin]` runs per-plugin interactive wizard
-- [ ] **CLI-03**: `dotconfigs deploy [plugin]` performs per-plugin deployment from .env
-- [ ] **CLI-04**: `dotconfigs status [plugin]` shows current deployment state
-- [ ] **CLI-05**: `dotconfigs list` shows available plugins with status
-- [ ] **CLI-06**: Per-command and per-plugin help (`dotconfigs help [command]`)
+- [x] **CLI-02**: `dotconfigs setup [plugin]` runs per-plugin interactive wizard
+- [x] **CLI-03**: `dotconfigs deploy [plugin]` performs per-plugin deployment from .env
+- [x] **CLI-04**: `dotconfigs status [plugin]` shows current deployment state
+- [x] **CLI-05**: `dotconfigs list` shows available plugins with status
+- [x] **CLI-06**: Per-command and per-plugin help (`dotconfigs help [command]`)
+- [x] **CLI-07**: `dotconfigs` available on PATH — symlink created during deploy so CLI is callable from any directory
 
 ### Claude Plugin (Migration)
 
-- [ ] **CLPL-01**: Wizard code migrated to `plugins/claude/setup.sh` — feature parity with current deploy.sh wizard
-- [ ] **CLPL-02**: Deploy code migrated to `plugins/claude/deploy.sh` — CLAUDE.md build, settings.json, hooks, skills deployment
-- [ ] **CLPL-03**: Assets moved under `plugins/claude/` (hooks/, commands/, templates/)
-- [ ] **CLPL-04**: Project scaffolding preserved (`dotconfigs project .`)
+- [x] **CLPL-01**: Wizard code migrated to `plugins/claude/setup.sh` — feature parity with current deploy.sh wizard
+- [x] **CLPL-02**: Deploy code migrated to `plugins/claude/deploy.sh` — CLAUDE.md build, settings.json, hooks, skills deployment
+- [x] **CLPL-03**: Assets moved under `plugins/claude/` (hooks/, commands/, templates/)
+- [x] **CLPL-04**: Project scaffolding preserved (`dotconfigs project .`)
 
 ### Git Plugin (New)
 
-- [ ] **GITP-01**: Git hooks deployment — commit-msg and pre-push from `plugins/git/hooks/` to `.git/hooks/`
-- [ ] **GITP-02**: Git identity wizard — configure global user.name and user.email
-- [ ] **GITP-03**: Git workflow settings — init.defaultBranch, pull.rebase, push.default
-- [ ] **GITP-04**: Git aliases — st, co, br, ci, unstage, last
-- [ ] **GITP-05**: Hook scope — per-project deployment by default, opt-in global core.hooksPath with conflict warning
+- [x] **GITP-01**: Git hooks deployment — commit-msg and pre-push from `plugins/git/hooks/` to `.git/hooks/`
+- [x] **GITP-02**: Git identity wizard — configure global user.name and user.email
+- [x] **GITP-03**: Git workflow settings — init.defaultBranch, pull.rebase, push.default
+- [x] **GITP-04**: Git aliases — st, co, br, ci, unstage, last
+- [x] **GITP-05**: Hook scope — per-project deployment by default, opt-in global core.hooksPath with conflict warning
 
 ### Configuration
 
-- [ ] **CONF-01**: .env namespacing — plugin-prefixed keys (CLAUDE_*, GIT_*)
-- [ ] **CONF-02**: Unified .env file across all plugins — single source of config
-- [ ] **CONF-03**: Pre-filled wizard defaults from existing .env on re-run (already partially built on branch)
-- [ ] **CONF-04**: .env versioning (DOTCONFIGS_VERSION=2.0) with auto-migration from v1 schema
+- [x] **CONF-01**: .env namespacing — plugin-prefixed keys (CLAUDE_*, GIT_*)
+- [x] **CONF-02**: Unified .env file across all plugins — single source of config
+- [x] **CONF-03**: Pre-filled wizard defaults from existing .env on re-run (already partially built on branch)
+- [x] **CONF-04**: .env versioning (DOTCONFIGS_VERSION=2.0) written during setup
 
 ### Migration & Compatibility
 
-- [ ] **MIGR-01**: Strangler fig migration — incremental extraction from deploy.sh into plugins
-- [ ] **MIGR-02**: deploy.sh deprecated with wrapper that routes to `dotconfigs` CLI
+- [x] **MIGR-01**: Strangler fig migration — incremental extraction from deploy.sh into plugins
+- [x] **MIGR-02**: deploy.sh removed (clean break — functionality migrated to `dotconfigs` CLI)
 - [ ] **COMP-01**: Bash 3.2 compatible — no namerefs, associative arrays, or bash 4 string ops
-- [ ] **COMP-02**: macOS and Linux portable
-- [ ] **COMP-03**: GSD framework coexistence maintained — file-level symlinks
+- [x] **COMP-02**: macOS and Linux portable
+- [x] **COMP-03**: GSD framework coexistence maintained — file-level symlinks
 
 ### Quality
 
-- [ ] **QUAL-03**: Idempotent deploy — running deploy twice produces same result
-- [ ] **QUAL-04**: Conflict detection — warn before overwriting non-owned files
+- [x] **QUAL-03**: Idempotent deploy — running deploy twice produces same result
+- [x] **QUAL-04**: Conflict detection — warn before overwriting non-owned files
 
 ## Out of Scope
 
@@ -118,40 +119,41 @@ All 29 v1.0 requirements delivered. See MILESTONES.md for summary.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLUG-01 | Phase 4 | Pending |
-| PLUG-02 | Phase 4 | Pending |
-| PLUG-03 | Phase 4 | Pending |
-| PLUG-04 | Phase 4 | Pending |
-| PLUG-05 | Phase 4 | Pending |
-| CLI-01 | Phase 4 | Pending |
-| CLI-02 | Phase 5 | Pending |
-| CLI-03 | Phase 5 | Pending |
-| CLI-04 | Phase 7 | Pending |
-| CLI-05 | Phase 7 | Pending |
-| CLI-06 | Phase 7 | Pending |
-| CLPL-01 | Phase 5 | Pending |
-| CLPL-02 | Phase 5 | Pending |
-| CLPL-03 | Phase 5 | Pending |
-| CLPL-04 | Phase 5 | Pending |
-| GITP-01 | Phase 6 | Pending |
-| GITP-02 | Phase 6 | Pending |
-| GITP-03 | Phase 6 | Pending |
-| GITP-04 | Phase 6 | Pending |
-| GITP-05 | Phase 6 | Pending |
-| CONF-01 | Phase 5 | Pending |
-| CONF-02 | Phase 5 | Pending |
-| CONF-03 | Phase 5 | Pending |
-| CONF-04 | Phase 5 | Pending |
-| MIGR-01 | Phase 5 | Pending |
-| MIGR-02 | Phase 7 | Pending |
-| COMP-01 | Phase 4 | Pending |
-| COMP-02 | Phase 7 | Pending |
-| COMP-03 | Phase 5 | Pending |
-| QUAL-03 | Phase 7 | Pending |
-| QUAL-04 | Phase 7 | Pending |
+| PLUG-01 | Phase 4 | Complete |
+| PLUG-02 | Phase 4 | Complete |
+| PLUG-03 | Phase 4 | Complete |
+| PLUG-04 | Phase 4 | Complete |
+| PLUG-05 | Phase 4 | Complete |
+| CLI-01 | Phase 4 | Complete |
+| CLI-02 | Phase 5 | Complete |
+| CLI-03 | Phase 5 | Complete |
+| CLI-04 | Phase 7 | Complete |
+| CLI-05 | Phase 7 | Complete |
+| CLI-06 | Phase 7 | Complete |
+| CLI-07 | Phase 7 | Complete |
+| CLPL-01 | Phase 5 | Complete |
+| CLPL-02 | Phase 5 | Complete |
+| CLPL-03 | Phase 5 | Complete |
+| CLPL-04 | Phase 5 | Complete |
+| GITP-01 | Phase 6 | Complete |
+| GITP-02 | Phase 6 | Complete |
+| GITP-03 | Phase 6 | Complete |
+| GITP-04 | Phase 6 | Complete |
+| GITP-05 | Phase 6 | Complete |
+| CONF-01 | Phase 5 | Complete |
+| CONF-02 | Phase 5 | Complete |
+| CONF-03 | Phase 5 | Complete |
+| CONF-04 | Phase 5 | Complete |
+| MIGR-01 | Phase 5 | Complete |
+| MIGR-02 | Phase 7 | Complete |
+| COMP-01 | Phase 4 | Complete |
+| COMP-02 | Phase 7 | Complete |
+| COMP-03 | Phase 5 | Complete |
+| QUAL-03 | Phase 7 | Complete |
+| QUAL-04 | Phase 7 | Complete |
 
 **Coverage:**
-- v2.0 requirements: 31 total
+- v2.0 requirements: 32 total
 - Mapped to phases: 31
 - Unmapped: 0
 

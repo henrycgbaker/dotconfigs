@@ -9,10 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: 4 (Core Infrastructure & CLI Entry Point)
-Plan: Not yet created
-Status: Requirements and roadmap complete, ready for `/gsd:plan-phase`
-Last activity: 2026-02-07 — v2.0 requirements and roadmap defined
+Phase: 7 of 7 (Integration and Polish) — COMPLETE
+Plan: 5 of 5 in phase
+Status: Milestone audited — 2 critical bugs fixed
+Last activity: 2026-02-07 — Fixed audit critical bugs (colour_cyan, PLUGIN_DIR)
+
+Progress: ████████████ 100% (15/15 total plans across phases 4-7)
 
 ## Performance Metrics
 
@@ -20,6 +22,11 @@ Last activity: 2026-02-07 — v2.0 requirements and roadmap defined
 - Total plans completed: 12
 - Total execution time: 24min
 - Average duration: 2.0min
+
+**v2.0 (current):**
+- Total plans completed: 15
+- Total execution time: ~35min
+- Average duration: 2.3min
 
 ## Accumulated Context
 
@@ -44,28 +51,87 @@ New v2.0 decisions:
 - [v2.0]: Git plugin covers hooks + identity + gitconfig workflow
 - [v2.0]: Shell plugin deferred to v3
 - [v2.0]: Bash 3.2 fixes already on branch (refactor/lean-claude-setup)
-- [v2.0]: Strangler fig migration — deploy.sh becomes wrapper, not deleted
+- [v2.0]: Strangler fig migration — deploy.sh deleted (clean break per user decision)
+- [05-05]: deploy.sh clean break — deleted, not wrapped (user decision MIGR-01)
 - [v2.0]: Plugin function naming: `plugin_<name>_<action>`
 - [v2.0]: Eager lib loading, lazy plugin loading
+- [04-01]: No shebangs in lib/ files (sourced libraries, not executables)
+- [04-01]: Hybrid discovery.sh with plugin + legacy content discovery
+- [04-01]: Filesystem-based plugin discovery (find + basename pattern)
+- [04-02]: Subcommand-based CLI design (verified and implemented)
+- [04-02]: Lazy plugin loading (source on-demand in cmd_setup/cmd_deploy)
+- [04-02]: No shebang in plugin files (sourced libraries, not executables)
+- [04-02]: Error output to stderr, usage to stdout, non-zero exit codes
+- [05-01]: Assets organized under plugins/claude/ with subdirectories for templates, hooks, commands
+- [05-01]: Discovery functions accept plugin_dir parameter for flexibility
+- [05-01]: discover_hooks_conf_profiles function added for hooks.conf profile discovery
+- [05-01]: All lib/ references changed from dotclaude to dotconfigs
+- [05-02]: All Claude plugin keys get CLAUDE_* prefix (including git identity)
+- [05-02]: Migration logic comments out old keys with notice (not deleted)
+- [05-02]: 7-step wizard (dropped aliases, moved conflict review to deploy)
+- [05-02]: Summary + confirm before saving (user can cancel)
+- [05-03]: Plugin derives DOTCONFIGS_ROOT from PLUGIN_DIR location
+- [05-03]: Settings.json symlinked from repo root (global shared file)
+- [05-03]: Hooks/commands symlinked from plugin dir (plugin assets)
+- [05-03]: Shell aliases and remote deploy dropped (dead code)
+- [06-01]: Git hooks source of truth moved to plugins/git/hooks/
+- [06-01]: commit-msg uses research-based conventional commit regex with scope and breaking change support
+- [06-01]: pre-push protection configurable via GIT_HOOK_PREPUSH_PROTECTION (block/warn/off)
+- [06-01]: Claude plugin no longer manages git hooks or identity
+- [06-02]: Menu-based wizard (not linear walk-through) per user decision in 06-CONTEXT.md
+- [06-02]: Opinionated defaults: settings enabled by default, user opts out
+- [06-02]: Custom alias names validated against git built-in commands blacklist
+- [06-02]: Global hooks scope shows explicit conflict warning about core.hooksPath overriding per-project hooks
+- [06-02]: Pre-fill from .env values, fall back to git config on first run for identity
+- [06-03]: deploy.sh warns on drift before overwriting git config
+- [06-03]: Alias definitions fall back to hardcoded defaults when GIT_ALIAS_* env vars missing
+- [06-03]: Hooks deploy per-project by default, global deployment is opt-in
+- [06-03]: project.sh offers optional per-repo git identity configuration
+- [07-01]: TTY-aware colour output via [[ -t 1 ]] check (ANSI when TTY, plain when piped)
+- [07-01]: 5-state drift detection model (deployed, not-deployed, drifted-broken, drifted-foreign, drifted-wrong-target)
+- [07-01]: Hierarchical help system (overview + per-command detail)
+- [07-01]: Deploy-all mode when no plugin specified (dotconfigs deploy)
+- [07-02]: Plugin status functions follow plugin_<name>_status() naming convention
+- [07-02]: Status functions report per-file/per-config-item granularity
+- [07-02]: Git config items use _print_config_status() helper (separate from file status)
+- [07-02]: List command shows minimal output (plugin name + installed/not-installed)
+- [07-03]: backup_and_link interactive_mode supports three values: true/false/force
+- [07-03]: Diff option in conflict prompt shows file differences before decision
+- [07-03]: Backup suffix changed from .backup to .bak per shell convention
+- [07-03]: Deploy summary always printed (created/updated/skipped/unchanged)
+- [07-03]: --dry-run takes precedence over --force when both specified
+- [07-03]: Force mode suppresses git drift confirmation and all conflict prompts
+- [07-04]: README with no example terminal output (concise documentation approach)
+- [07-04]: ASCII architecture diagram in README (makes three-command model clear)
+- [07-04]: Deprecation notice for CLAUDE_GIT_* keys (moved to GIT_* namespace)
 
 ### Pending Todos
 
 - [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo)
 - [ ] **Git workflow**: Review squash-merge vs native git merge
 - [ ] **Explore hook**: Add hook for sonnet on explore agents (deferred to v3)
-- [ ] **README**: Comprehensive rewrite with latest workflows (deferred to v3)
 
 ### Blockers/Concerns
 
 - Settings.json deny rules have a known bug (Claude Code #6699, #8961) — PreToolUse hook workaround in place
-- Current branch `refactor/lean-claude-setup` has uncommitted bash 3.2 fixes + wizard improvements that need to be committed before Phase 4 planning
+- Hook symlink manually fixed after 05-01 asset move — `dotconfigs deploy claude` will handle this automatically in future
 
 **Resolved:**
 - Pre-commit hook COMMIT_EDITMSG timing bug — FIXED in v1.0 03-03
 - v1 CLI design mismatches (subcommands vs flags) — accepted as-is, cleaner design
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 001 | Fix milestone audit critical bugs (colour_cyan, PLUGIN_DIR) | 2026-02-07 | 1bd83e4 | [001-fix-milestone-audit-critical-bugs](./quick/001-fix-milestone-audit-critical-bugs/) |
+
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: v2.0 requirements and roadmap written, ready for phase 4 planning
+Stopped at: Completed phase 7 execution and verification — all phases done
 Resume file: None
+
+---
+
+**v2.0 Milestone:** All 4 phases (4-7) executed and verified. Audit complete — 2 critical bugs fixed. Ready for milestone completion.
