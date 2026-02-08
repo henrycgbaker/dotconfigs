@@ -15,7 +15,8 @@ Phase numbering continues from v1.0 (phases 1–3 complete).
 - [x] **Phase 4: Core Infrastructure & CLI Entry Point** - Create dotconfigs entry point, shared lib, plugin discovery, interface contract
 - [x] **Phase 5: Claude Plugin Extraction** - Migrate deploy.sh wizard and deployment into plugins/claude/ with .env namespacing
 - [x] **Phase 6: Git Plugin** - New git plugin for hooks, identity, workflow settings, and aliases
-- [ ] **Phase 7: Integration & Polish** - Status/list commands, conflict detection, testing, documentation
+- [x] **Phase 7: Integration & Polish** - Status/list commands, conflict detection, testing, documentation
+- [ ] **Phase 8: Hooks & Workflows Review** - Audit and rationalise hook/workflow placement across claude and git plugins
 
 ## Phase Details
 
@@ -128,10 +129,40 @@ Plans:
   9. `.env.example` documents all CLAUDE_* and GIT_* keys with descriptions and defaults
   10. `dotconfigs` is on PATH — callable from any directory
 
+### Phase 8: Hooks & Workflows Review
+**Goal**: Audit and rationalise all hooks and workflow enforcement across claude and git plugins — ensure each mechanism lives in the right plugin with the right enforcement level
+**Depends on**: Phase 7
+**Plans:** 6 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Config architecture + unified variable naming + existing hook refactor
+- [ ] 08-02-PLAN.md — Squash-merge audit + explore agent research
+- [ ] 08-03-PLAN.md — New git hooks (pre-commit, prepare-commit-msg, post-merge, post-checkout, post-rewrite)
+- [ ] 08-04-PLAN.md — Claude PreToolUse hook + settings template
+- [ ] 08-05-PLAN.md — Setup wizard + deploy + project expansion for full hook roster
+- [ ] 08-06-PLAN.md — Auto-generated roster documentation + README updates
+
+**Scope includes these pending todos:**
+- Review squash-merge vs native git merge workflow
+- Evaluate explore agent hook (sonnet model for explore agents)
+- Add brief GSD framework mention to README
+
+**Success Criteria** (what must be TRUE):
+  1. Every hook/enforcement mechanism has a clear rationale for which plugin owns it
+  2. AI attribution blocking placement decided (git hook only vs both plugins)
+  3. Conventional commit enforcement level decided and implemented (soft warn vs hard block)
+  4. hooks.conf profiles live in the correct plugin directory
+  5. No redundant overlap between plugins (or overlap is intentional and documented)
+  6. Missing enforcement gaps identified and addressed
+  7. Configuration hierarchy documented (hooks.conf vs .env vs hardcoded)
+  8. Squash-merge vs git merge workflow decision made and implemented
+  9. Explore agent hook evaluated (add or defer with rationale)
+  10. README updated with GSD framework mention
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 4 → 5 → 6 → 7
+Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 (Phases 5 and 6 may run in parallel if infrastructure is stable after Phase 4)
 
 | Phase | Plans Complete | Status | Completed |
@@ -140,6 +171,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7
 | 5. Claude Plugin Extraction | 5/5 | ✓ Complete | 2026-02-07 |
 | 6. Git Plugin | 3/3 | ✓ Complete | 2026-02-07 |
 | 7. Integration & Polish | 5/5 | ✓ Complete | 2026-02-07 |
+| 8. Hooks & Workflows Review | 0/6 | Planned | — |
 
 ## Accumulated Context
 
