@@ -2,6 +2,13 @@
 # Sourced by dotconfigs entry point. Do not execute directly.
 
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTCONFIGS_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
+ENV_FILE="$DOTCONFIGS_ROOT/.env"
+
+# Load .env if it exists (for GIT_HOOK_CONFIG_PATH)
+if [[ -f "$ENV_FILE" ]]; then
+    source "$ENV_FILE"
+fi
 
 # Main entry point — called by dotconfigs project command
 plugin_git_project() {
@@ -101,22 +108,70 @@ plugin_git_project() {
 
     echo ""
 
-    # Step 3: Per-project configuration note
-    echo "Step 3: Per-project hook configuration"
+    # Step 3: Deploy hook configuration file
+    echo "Step 3: Deploy hook configuration"
     echo "──────────────────────────────"
 
-    if [[ -f "$project_path/.claude/hooks.conf" ]]; then
-        echo "  ℹ Found existing .claude/hooks.conf"
-        echo "    Git hook settings can be overridden there"
+    # Determine config path (from .env or default)
+    local hook_config_path="${GIT_HOOK_CONFIG_PATH:-.githooks/config}"
+    local config_target="$project_path/$hook_config_path"
+    local config_dir=$(dirname "$config_target")
+    local config_template="$PLUGIN_DIR/templates/git-hooks.conf"
+
+    if wizard_yesno "Deploy hook configuration to $hook_config_path?" "y"; then
+        # Create directory if needed
+        mkdir -p "$config_dir"
+
+        # Check if config already exists
+        if [[ -f "$config_target" ]]; then
+            echo "  Config file already exists"
+            if wizard_yesno "  Overwrite?" "n"; then
+                cp "$config_template" "$config_target"
+                echo "  ✓ Updated $hook_config_path"
+            else
+                echo "  Skipped (existing config preserved)"
+            fi
+        else
+            cp "$config_template" "$config_target"
+            echo "  ✓ Deployed $hook_config_path"
+        fi
+
+        # Save config path to .dotconfigs.json
+        local dotconfigs_json="$project_path/.dotconfigs.json"
+        if command -v jq &> /dev/null; then
+            if [[ -f "$dotconfigs_json" ]]; then
+                # Update existing
+                local temp_json=$(mktemp)
+                jq --arg path "$hook_config_path" \
+                   '.plugins.git.hook_config_path = $path' \
+                   "$dotconfigs_json" > "$temp_json"
+                mv "$temp_json" "$dotconfigs_json"
+                echo "  ✓ Saved config path to .dotconfigs.json"
+            else
+                # Create new
+                jq -n --arg path "$hook_config_path" \
+                   '{version: "2.0", plugins: {git: {hook_config_path: $path}}}' \
+                   > "$dotconfigs_json"
+                echo "  ✓ Created .dotconfigs.json"
+            fi
+        else
+            echo "  ℹ jq not available - manual .dotconfigs.json update needed"
+        fi
     else
-        echo "  ℹ No .claude/hooks.conf found"
-        echo "    To customize conventional commit rules, run:"
-        echo "    dotconfigs project claude $project_path"
+        echo "  Skipped hook configuration"
     fi
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Project setup complete!"
     echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo "Deployed:"
+    echo "  - $deployed_count hook(s) to .git/hooks/"
+    echo "  - Hook configuration to $hook_config_path (if confirmed)"
+    echo ""
+    echo "Hook roster (7 hooks available):"
+    echo "  pre-commit, commit-msg, prepare-commit-msg, pre-push,"
+    echo "  post-merge, post-checkout, post-rewrite"
     echo ""
 }

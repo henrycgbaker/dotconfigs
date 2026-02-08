@@ -831,9 +831,22 @@ plugin_git_deploy() {
     echo "Hooks:"
     if [[ "${GIT_HOOKS_SCOPE:-project}" == "global" ]]; then
         _git_deploy_hooks_global_with_tracking "$dry_run" files_created files_updated files_unchanged
+        echo ""
+        echo "  Hook roster (7 hooks deployed):"
+        echo "    pre-commit         - secrets, large files, debug checks"
+        echo "    commit-msg         - AI attribution, WIP, conventional format"
+        echo "    prepare-commit-msg - branch name prefix"
+        echo "    pre-push           - branch protection"
+        echo "    post-merge         - dependency changes, migrations"
+        echo "    post-checkout      - branch info"
+        echo "    post-rewrite       - dependency changes (rebase)"
     else
         echo "  Hooks configured for per-project deployment."
         echo "  Run 'dotconfigs project git <path>' to deploy hooks to a specific repo."
+        echo ""
+        echo "  Hook roster (7 hooks available):"
+        echo "    pre-commit, commit-msg, prepare-commit-msg, pre-push,"
+        echo "    post-merge, post-checkout, post-rewrite"
     fi
     echo ""
 
