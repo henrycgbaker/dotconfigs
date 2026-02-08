@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 8 of 8 (Hooks & Workflows Review)
-Plan: 4 of 5 in phase
+Plan: 4 of 6 in phase
 Status: In progress
-Last activity: 2026-02-08 — Completed 08-04-PLAN.md execution
+Last activity: 2026-02-08 — Completed 08-03-PLAN.md execution
 
-Progress: █████████████░ 90% (19/21 total plans across phases 4-8)
+Progress: █████████████░ 94% (31/33 total plans across phases 4-8)
 
 ## Performance Metrics
 
@@ -24,8 +24,8 @@ Progress: █████████████░ 90% (19/21 total plans acro
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 19
-- Total execution time: ~45.0min
+- Total plans completed: 20
+- Total execution time: ~47.6min
 - Average duration: 2.4min
 
 ## Accumulated Context
@@ -111,8 +111,13 @@ New v2.0 decisions:
 - [08-01]: Deprecated hooks.conf profile templates, replaced with single documented template
 - [08-01]: Per-hook enable/disable via {PREFIX}_{HOOK_NAME}_ENABLED variables
 - [08-01]: Metadata headers in hooks for auto-documentation
-- [08-03]: pre-commit hook protects against commit to wrong branch, direct main commits, COMMIT_EDITMSG presence
-- [08-03]: prepare-commit-msg provides smart commit message templates based on branch naming conventions
+- [08-03]: Secrets detection blocks hard (no warn mode) — security-critical
+- [08-03]: Large file detection warns only — not a correctness issue
+- [08-03]: Debug statement detection configurable strict mode (warn vs block)
+- [08-03]: Branch prefix only on branch commits, skips merge/squash/amend
+- [08-03]: Post-* hooks informational only — never block workflow
+- [08-03]: Post-rewrite only checks rebase (not amend) — amend is single commit
+- [08-03]: Portable file size detection using wc -c (not stat) for macOS/Linux compatibility
 - [08-04]: PreToolUse hook blocks destructive commands and sensitive file writes (defence-in-depth for buggy settings.json)
 - [08-04]: Independent guards for destructive commands (CLAUDE_HOOK_DESTRUCTIVE_GUARD) and file protection (CLAUDE_HOOK_FILE_PROTECTION)
 - [08-04]: Graceful jq degradation — hook exits silently if jq missing (non-blocking)
@@ -142,9 +147,9 @@ New v2.0 decisions:
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 08-04-PLAN.md execution
+Stopped at: Completed 08-03-PLAN.md execution
 Resume file: None
 
 ---
 
-**Phase 8 Status:** 4 of 5 plans complete. Hooks architecture complete: unified config (08-01), audit (08-02), new git hooks (08-03), PreToolUse hook (08-04). One plan remaining (08-05).
+**Phase 8 Status:** 4 of 6 plans complete. Hooks architecture complete: unified config (08-01), audit (08-02), new git hooks (08-03), PreToolUse hook (08-04). Two plans remaining (08-05, 08-06).
