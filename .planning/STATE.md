@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 8 of 8 (Hooks & Workflows Review)
-Plan: 2 of 3 in phase
+Plan: 1 of 3 in phase
 Status: In progress
-Last activity: 2026-02-08 — Completed 08-02-PLAN.md
+Last activity: 2026-02-08 — Completed 08-01-PLAN.md execution
 
-Progress: ████████████░░ 89% (17/19 total plans across phases 4-8)
+Progress: ████████████░░ 84% (16/19 total plans across phases 4-8)
 
 ## Performance Metrics
 
@@ -24,9 +24,9 @@ Progress: ████████████░░ 89% (17/19 total plans acro
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 17
-- Total execution time: ~36.5min
-- Average duration: 2.1min
+- Total plans completed: 16
+- Total execution time: ~38.7min
+- Average duration: 2.4min
 
 ## Accumulated Context
 
@@ -104,17 +104,20 @@ New v2.0 decisions:
 - [07-04]: README with no example terminal output (concise documentation approach)
 - [07-04]: ASCII architecture diagram in README (makes three-command model clear)
 - [07-04]: Deprecation notice for CLAUDE_GIT_* keys (moved to GIT_* namespace)
-- [08-01]: Config loading functions in lib/config.sh (load_git_hook_config, get_config_value)
-- [08-01]: Config precedence: project > global env > defaults
-- [08-02]: /squash-merge is sole merge command (no /merge-branch alternative) per SQMRG-01
-- [08-02]: Explore agent model selection deferred to GSD external PR per EXPLORE-01 (not feasible with current Claude Code API)
+- [08-01]: Unified hook variable naming: GIT_HOOK_* for git hooks, CLAUDE_HOOK_* for claude hooks
+- [08-01]: AI attribution blocking now configurable (GIT_HOOK_BLOCK_AI_ATTRIBUTION) with strong default ON
+- [08-01]: Config hierarchy: hardcoded default → env var → config file
+- [08-01]: Multi-path config discovery for backwards compatibility
+- [08-01]: Deprecated hooks.conf profile templates, replaced with single documented template
+- [08-01]: Per-hook enable/disable via {PREFIX}_{HOOK_NAME}_ENABLED variables
+- [08-01]: Metadata headers in hooks for auto-documentation
 
 ### Pending Todos
 
-- [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo) — DEFERRED: Not feasible with current Claude Code API (no model control in SubagentStart hook or Task tool)
-- [x] ~~**Git workflow**: Review squash-merge vs native git merge~~ → Completed 08-02
-- [x] ~~**Explore hook**: Add hook for sonnet on explore agents~~ → Researched 08-02, deferred (API limitation)
-- [ ] **README**: Add brief mention of GSD framework → Remaining in Phase 8
+- [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo)
+- [ ] **Git workflow**: Review squash-merge vs native git merge → Phase 8
+- [ ] **Explore hook**: Add hook for sonnet on explore agents → Phase 8
+- [ ] **README**: Add brief mention of GSD framework → Phase 8
 
 ### Blockers/Concerns
 
@@ -134,9 +137,9 @@ New v2.0 decisions:
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 08-02-PLAN.md
+Stopped at: Completed 08-01-PLAN.md execution
 Resume file: None
 
 ---
 
-**Phase 8 Status:** 2 of 3 plans complete. Config architecture established (08-01), squash-merge audited + explore agent research complete (08-02). Remaining: 08-03 (TBD).
+**Phase 8 Status:** 1 of 3 plans complete. Unified hook configuration architecture established (08-01). Next: 08-02 and 08-03.
