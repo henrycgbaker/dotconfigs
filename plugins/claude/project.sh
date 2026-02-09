@@ -486,8 +486,8 @@ MDEOF
         added_count=$((added_count + 1))
     fi
 
-    if ! grep -q "^\.claude-project$" "$git_exclude" 2>/dev/null; then
-        echo ".claude-project" >> "$git_exclude"
+    if ! grep -q "^\.dotconfigs\.json$" "$git_exclude" 2>/dev/null; then
+        echo ".dotconfigs.json" >> "$git_exclude"
         added_count=$((added_count + 1))
     fi
 
@@ -517,7 +517,7 @@ MDEOF
     echo "Step 6: Version control for .dotconfigs.json"
     echo "──────────────────────────────"
 
-    if wizard_yesno "  Commit .dotconfigs.json to git?" "y"; then
+    if wizard_yesno "  Commit .dotconfigs.json to git?" "n"; then
         echo "  ✓ .dotconfigs.json will be tracked in git"
         echo "    (Commit it manually with: git add .dotconfigs.json)"
     else
