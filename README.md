@@ -281,6 +281,8 @@ dotconfigs/
 ├── scripts/                   # Utility scripts
 │   ├── generate-roster.sh     # Auto-generates docs/ROSTER.md from hook metadata
 │   └── registry-scan.sh       # Registry scanning utility
+├── tests/                     # E2E validation
+│   └── validate-deploy.sh     # Verify deployed config matches tool reality
 └── docs/                      # Additional documentation
     ├── ROSTER.md              # Complete hook/command/config reference (generated)
     └── usage-guide.md         # Claude Code configuration guide
