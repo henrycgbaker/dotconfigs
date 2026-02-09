@@ -20,34 +20,35 @@ show_usage() {
 dots — Unified configuration management
 
 Usage:
-  dots setup <plugin>             Run setup wizard for plugin
-  dots deploy [plugin] [options]  Deploy plugin configuration
-  dots project [plugin] <path>    Scaffold project configuration
-  dots status [plugin]            Show deployment status
-  dots list                       List available plugins
-  dots help [command]             Show help for command
-  dots --help                     Show this help
+  dots setup                              Initialize tool (deploy target, PATH)
+  dots global-configs <plugin>            Configure plugin defaults (.env)
+  dots project-configs [plugin] <path>    Configure per-project overrides
+  dots deploy [plugin] [options]          Deploy configuration to filesystem
+  dots status [plugin]                    Show deployment status
+  dots list                               List available plugins
+  dots help [command]                     Show help for command
+  dots --help                             Show this help
 
 Commands:
-  setup      Interactive wizard to configure plugin (.env)
-  deploy     Deploy configuration from .env to filesystem
-             Options: --interactive, --force, --dry-run
-             Without plugin: deploys all configured plugins
-  project    Scaffold per-project configuration
-  status     Check deployment status and drift detection
-  list       List all available plugins
-  help       Show detailed help for specific command
+  setup           Initialize dots tool (one-time setup)
+  global-configs  Interactive wizard to configure plugin defaults (.env)
+  project-configs Scaffold per-project configuration overrides
+  deploy          Deploy configuration from .env to filesystem
+                  Options: --interactive, --force, --dry-run
+                  Without plugin: deploys all configured plugins
+  status          Check deployment status and drift detection
+  list            List all available plugins
+  help            Show detailed help for specific command
 
 Examples:
-  dots setup claude               Configure Claude Code
-  dots deploy git                 Deploy git configuration
+  dots setup                      Initialize dots
+  dots global-configs claude      Configure Claude defaults
+  dots project-configs claude .   Override Claude config for project
+  dots deploy                     Deploy all configurations
+  dots deploy git                 Deploy git configuration only
   dots deploy --dry-run           Preview all deployments
-  dots deploy git --interactive   Deploy git with conflict prompts
   dots status                     Show status of all plugins
-  dots project .                  Run all plugin project setup
-  dots project claude .           Run Claude project setup only
   dots list                       Show all plugins
-  dots help deploy                Show deploy command help
 
 Available plugins:
 EOF
@@ -62,14 +63,31 @@ show_command_help() {
     case "$command" in
         setup)
             cat <<EOF
-dots setup — Interactive configuration wizard
+dots setup — Initialize dots tool
 
 Usage:
-  dots setup <plugin>
+  dots setup
+
+Description:
+  One-time initialization of the dots tool.
+  Configures deploy target directory and adds tool to PATH.
+  Run this once before configuring individual plugins.
+
+Example:
+  dots setup    Initialize dots
+EOF
+            ;;
+        global-configs)
+            cat <<EOF
+dots global-configs — Configure plugin defaults
+
+Usage:
+  dots global-configs <plugin>
 
 Description:
   Runs the interactive setup wizard for the specified plugin.
   Creates or updates .env file with plugin configuration.
+  These are global defaults applied across all projects.
 
 Available plugins:
 EOF
@@ -79,9 +97,33 @@ EOF
             cat <<EOF
 
 Examples:
-  dots setup claude    Configure Claude Code settings
-  dots setup git       Configure git hooks and identity
+  dots global-configs claude    Configure Claude Code settings
+  dots global-configs git       Configure git hooks and identity
 EOF
+            ;;
+        project-configs)
+            cat <<EOF
+dots project-configs — Scaffold per-project configuration
+
+Usage:
+  dots project-configs [plugin] <path>
+
+Description:
+  Scaffolds per-project configuration files for the specified plugin.
+  These override global defaults from .env for specific projects.
+  Without a plugin name, runs project setup for all plugins.
+  Requires a git repository at the target path.
+
+Examples:
+  dots project-configs .              Run all plugin project setup
+  dots project-configs claude .       Run Claude project setup only
+  dots project-configs git /path      Configure git for specific repo
+EOF
+            ;;
+        project)
+            echo "Warning: 'dots project' is deprecated. Use 'dots project-configs' instead." >&2
+            echo "" >&2
+            show_command_help "project-configs"
             ;;
         deploy)
             cat <<EOF
@@ -106,24 +148,6 @@ Examples:
   dots deploy --dry-run            Preview all deployments
 EOF
             ;;
-        project)
-            cat <<EOF
-dots project — Scaffold per-project configuration
-
-Usage:
-  dots project [plugin] <path>
-
-Description:
-  Scaffolds per-project configuration files for the specified plugin.
-  Without a plugin name, runs project setup for all plugins.
-  Requires a git repository at the target path.
-
-Examples:
-  dots project .              Run all plugin project setup
-  dots project claude .       Run Claude project setup only
-  dots project git /path      Configure git for specific repo
-EOF
-            ;;
         status)
             cat <<EOF
 dots status — Check deployment status
@@ -137,7 +161,7 @@ Description:
   Without a plugin name, shows status for all plugins.
 
 States:
-  ✓  Deployed      Symlink correctly points to dotconfigs
+  ✓  Deployed      Symlink correctly points to dots
   △  Drifted       Broken symlink, foreign file, or wrong target
   ✗  Not deployed  File doesn't exist
 
@@ -163,7 +187,7 @@ EOF
         *)
             echo "Error: Unknown command '$command'" >&2
             echo "" >&2
-            echo "Available commands: setup, deploy, project, status, list, help" >&2
+            echo "Available commands: setup, global-configs, project-configs, deploy, status, list, help" >&2
             return 1
             ;;
     esac
@@ -177,7 +201,11 @@ cmd_help() {
     fi
 }
 
-cmd_setup() {
+cmd_setup_legacy() {
+    echo "Warning: 'dots setup <plugin>' is deprecated" >&2
+    echo "Use: 'dots global-configs <plugin>' to configure .env" >&2
+    echo "" >&2
+
     local plugin=$1
 
     if [[ -z "$plugin" ]]; then
@@ -199,6 +227,50 @@ cmd_setup() {
     "plugin_${plugin}_setup" "$@"
 }
 
+cmd_setup() {
+    echo "dots — Tool Setup"
+    echo ""
+
+    # Deploy target
+    local default_target="$HOME/.claude"
+    wizard_prompt "Deploy target directory" "$default_target" DOTCONFIGS_DEPLOY_TARGET
+    DOTCONFIGS_DEPLOY_TARGET="${DOTCONFIGS_DEPLOY_TARGET/#\~/$HOME}"
+
+    # Save to .env
+    wizard_save_env "$ENV_FILE" "DOTCONFIGS_DEPLOY_TARGET" "$DOTCONFIGS_DEPLOY_TARGET"
+
+    echo ""
+    echo "Setup complete. Configuration saved to .env"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Run 'dots global-configs <plugin>' to configure plugins"
+    echo "  2. Run 'dots deploy' to deploy configurations"
+    echo "  3. Use 'dots --help' for all commands"
+    echo ""
+}
+
+cmd_global_configs() {
+    local plugin=$1
+
+    if [[ -z "$plugin" ]]; then
+        echo "Error: Plugin name required" >&2
+        echo "Usage: dots global-configs <plugin>" >&2
+        echo "" >&2
+        list_available_plugins
+        exit 1
+    fi
+
+    if ! plugin_exists "$plugin"; then
+        echo "Error: Plugin '$plugin' not found" >&2
+        list_available_plugins
+        exit 1
+    fi
+
+    # Load and run plugin wizard
+    source "$PLUGINS_DIR/$plugin/setup.sh"
+    "plugin_${plugin}_setup" "$@"
+}
+
 _create_path_symlink() {
     local dry_run="$1"
     local force_mode="$2"
@@ -206,16 +278,16 @@ _create_path_symlink() {
     # Determine symlink target: prefer ~/.local/bin, fall back to /usr/local/bin
     local target=""
     if [[ -d "$HOME/.local/bin" ]]; then
-        target="$HOME/.local/bin/dotconfigs"
+        target="$HOME/.local/bin/dots"
     elif [[ -d "/usr/local/bin" ]]; then
-        target="/usr/local/bin/dotconfigs"
+        target="/usr/local/bin/dots"
     else
         # Neither exists, try to create ~/.local/bin
         if mkdir -p "$HOME/.local/bin" 2>/dev/null; then
-            target="$HOME/.local/bin/dotconfigs"
+            target="$HOME/.local/bin/dots"
         else
             echo "Warning: Cannot create ~/.local/bin and /usr/local/bin not found" >&2
-            echo "To make dotconfigs available on PATH, add to your shell profile:" >&2
+            echo "To make dots available on PATH, add to your shell profile:" >&2
             echo "  export PATH=\"$SCRIPT_DIR:\$PATH\"" >&2
             return 0
         fi
@@ -223,21 +295,21 @@ _create_path_symlink() {
 
     # Dry-run mode
     if [[ "$dry_run" == "true" ]]; then
-        echo "Would create symlink: $target -> $SCRIPT_DIR/dotconfigs"
+        echo "Would create symlink: $target -> $SCRIPT_DIR/dots"
         return 0
     fi
 
     # Check if symlink already exists and is correct
     if [[ -L "$target" ]]; then
         local current_target=$(readlink "$target")
-        if [[ "$current_target" == "$SCRIPT_DIR/dotconfigs" ]]; then
-            echo "dotconfigs already on PATH (symlink correct)"
+        if [[ "$current_target" == "$SCRIPT_DIR/dots" ]]; then
+            echo "dots already on PATH (symlink correct)"
             return 0
         else
             # Symlink exists but points elsewhere
             if [[ "$force_mode" != "true" ]]; then
                 echo "Warning: Symlink exists but points to: $current_target" >&2
-                wizard_yesno "Overwrite with dotconfigs symlink?" "n" || return 0
+                wizard_yesno "Overwrite with dots symlink?" "n" || return 0
             fi
         fi
     elif [[ -e "$target" ]]; then
@@ -248,10 +320,10 @@ _create_path_symlink() {
     fi
 
     # Create symlink
-    if ln -sf "$SCRIPT_DIR/dotconfigs" "$target" 2>/dev/null; then
+    if ln -sf "$SCRIPT_DIR/dots" "$target" 2>/dev/null; then
         # Verify it's on PATH
-        if command -v dotconfigs >/dev/null 2>&1; then
-            echo "dotconfigs added to PATH: $target"
+        if command -v dots >/dev/null 2>&1; then
+            echo "dots added to PATH: $target"
         else
             echo "Symlink created: $target" >&2
             echo "Note: $(dirname "$target") may not be on your PATH" >&2
@@ -259,7 +331,7 @@ _create_path_symlink() {
         fi
     else
         echo "Warning: Failed to create symlink at $target (permission denied?)" >&2
-        echo "To make dotconfigs available on PATH, add to your shell profile:" >&2
+        echo "To make dots available on PATH, add to your shell profile:" >&2
         echo "  export PATH=\"$SCRIPT_DIR:\$PATH\"" >&2
     fi
 }
@@ -450,11 +522,11 @@ cmd_list() {
     done < <(discover_plugins "$PLUGINS_DIR")
 }
 
-cmd_project() {
+cmd_project_configs() {
     local plugin_filter=""
     local project_path=""
 
-    # Parse arguments: could be "project ." or "project claude ."
+    # Parse arguments: could be "project-configs ." or "project-configs claude ."
     # If first arg is a plugin name, treat it as filter
     if [[ $# -gt 0 ]] && plugin_exists "$1"; then
         plugin_filter="$1"
@@ -463,9 +535,9 @@ cmd_project() {
 
     # If no path argument, try CWD detection
     if [[ $# -eq 0 ]]; then
-        # Check if CWD is the dotconfigs repo itself
+        # Check if CWD is the dots repo itself
         if [[ "$(pwd)" -ef "$SCRIPT_DIR" ]]; then
-            echo "Error: Cannot use dotconfigs repo as project target" >&2
+            echo "Error: Cannot use dots repo as project target" >&2
             echo "Specify a path: dots project <path>" >&2
             exit 1
         fi
@@ -539,8 +611,28 @@ main() {
     fi
 
     case "$1" in
-        setup|deploy|project)
-            cmd_"$1" "${@:2}"
+        setup)
+            # Check if plugin arg provided (legacy mode)
+            if [[ $# -gt 1 ]]; then
+                cmd_setup_legacy "${@:2}"
+            else
+                cmd_setup
+            fi
+            ;;
+        global-configs)
+            cmd_global_configs "${@:2}"
+            ;;
+        project-configs)
+            cmd_project_configs "${@:2}"
+            ;;
+        project)
+            echo "Warning: 'dots project' is deprecated" >&2
+            echo "Use: 'dots project-configs' instead" >&2
+            echo "" >&2
+            cmd_project_configs "${@:2}"
+            ;;
+        deploy)
+            cmd_deploy "${@:2}"
             ;;
         status)
             cmd_status "${@:2}"
