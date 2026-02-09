@@ -659,12 +659,13 @@ Default behavior → ASK or APPROVE
 
 ```bash
 # On primary machine
-cd ~/Repositories/dotclaude
+cd ~/Repositories/dotconfigs
 git add . && git commit -m "Update config"
 git push
 
 # On other machine
-cd ~/Repositories/dotclaude
+cd ~/Repositories/dotconfigs
 git pull
-# Symlinks auto-update
+# Symlinks auto-update — run deploy to apply any new settings
+dotconfigs deploy
 ```
