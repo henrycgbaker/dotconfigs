@@ -105,17 +105,20 @@ backup_and_link() {
         dotconfigs_root="$(dirname "$dotconfigs_root")"
     done
 
+    # Compute relative source path for display
+    local rel_src="${src#$dotconfigs_root/}"
+
     # If dest doesn't exist, create symlink
     if [[ ! -e "$dest" && ! -L "$dest" ]]; then
         link_file "$src" "$dest"
-        echo "  ✓ Linked $name"
+        echo "  ✓ Linked $rel_src -> $dest"
         return 0
     fi
 
     # If dest exists and is owned by dotconfigs, overwrite silently
     if is_dotconfigs_owned "$dest" "$dotconfigs_root"; then
         link_file "$src" "$dest"
-        echo "  ✓ Updated $name"
+        echo "  ✓ Updated $rel_src -> $dest"
         return 0
     fi
 
@@ -123,13 +126,14 @@ backup_and_link() {
     if [[ "$interactive_mode" == "force" ]]; then
         # Force mode: overwrite without prompting
         link_file "$src" "$dest"
-        echo "  ✓ Overwrote $name (forced)"
+        echo "  ✓ Overwrote $rel_src -> $dest (forced)"
         return 0
     elif [[ "$interactive_mode" == "true" ]]; then
         # Interactive mode: prompt with diff option
         while true; do
             echo "  ! Conflict: $name already exists and not managed by dotconfigs"
-            echo "    Current: $dest"
+            echo "    Source: $rel_src"
+            echo "    Target: $dest"
             echo "    Options: [o]verwrite, [s]kip, [b]ackup, [d]iff"
             read -p "    Choice: " choice
             choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
@@ -149,14 +153,14 @@ backup_and_link() {
                     ;;
                 o|overwrite)
                     link_file "$src" "$dest"
-                    echo "  ✓ Overwrote $name"
+                    echo "  ✓ Overwrote $rel_src -> $dest"
                     return 0
                     ;;
                 b|backup)
                     local backup="${dest}.bak.$(date +%Y%m%d-%H%M%S)"
                     mv "$dest" "$backup"
                     link_file "$src" "$dest"
-                    echo "  ✓ Backed up to $backup and linked $name"
+                    echo "  ✓ Backed up to $backup and linked $rel_src -> $dest"
                     return 0
                     ;;
                 s|skip|*)
