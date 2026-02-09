@@ -19,6 +19,14 @@ EOF
     wizard_save_env "$env_file" "CLAUDE_DEPLOY_TARGET" "$CLAUDE_DEPLOY_TARGET"
     wizard_save_env "$env_file" "CLAUDE_SETTINGS_ENABLED" "$CLAUDE_SETTINGS_ENABLED"
 
+    # Save CLAUDE.md exclusion settings
+    if [[ -n "$CLAUDE_MD_EXCLUDE_GLOBAL" ]]; then
+        wizard_save_env "$env_file" "CLAUDE_MD_EXCLUDE_GLOBAL" "$CLAUDE_MD_EXCLUDE_GLOBAL"
+    fi
+    if [[ -n "$CLAUDE_MD_EXCLUDE_PATTERN" ]]; then
+        wizard_save_env "$env_file" "CLAUDE_MD_EXCLUDE_PATTERN" "$CLAUDE_MD_EXCLUDE_PATTERN"
+    fi
+
     # Save CLAUDE.md sections as space-separated list
     local sections_str="${CLAUDE_MD_SECTIONS_ENABLED[*]}"
     wizard_save_env "$env_file" "CLAUDE_MD_SECTIONS" "$sections_str"
@@ -117,6 +125,48 @@ plugin_claude_setup() {
         CLAUDE_SETTINGS_ENABLED="true"
     else
         CLAUDE_SETTINGS_ENABLED="false"
+    fi
+
+    # Step 2b: CLAUDE.md Exclusion
+    echo ""
+    echo "─────────────────────────────────────────────────────────────"
+    echo "  CLAUDE.md Git Exclusion"
+    echo "─────────────────────────────────────────────────────────────"
+    echo ""
+    echo "CLAUDE.md files contain project instructions for Claude Code."
+    echo "You can exclude them from git repositories to prevent committing"
+    echo "project instructions to source control."
+    echo ""
+
+    local exclude_default="n"
+    local prev_exclude="${CLAUDE_MD_EXCLUDE_GLOBAL:-}"
+    [[ "$prev_exclude" == "true" ]] && exclude_default="y"
+
+    if wizard_yesno "Exclude CLAUDE.md from git globally?" "$exclude_default"; then
+        CLAUDE_MD_EXCLUDE_GLOBAL="true"
+
+        echo ""
+        echo "Select exclusion pattern:"
+        echo "  1) CLAUDE.md (root only)"
+        echo "  2) **/*CLAUDE.md (all directories)"
+        echo ""
+
+        local pattern_default="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
+        read -p "Choice [1-2, default: ${pattern_default}]: " pattern_choice
+
+        case "$pattern_choice" in
+            2)
+                CLAUDE_MD_EXCLUDE_PATTERN="**/*CLAUDE.md"
+                ;;
+            *)
+                CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md"
+                ;;
+        esac
+
+        echo "  → Will exclude: $CLAUDE_MD_EXCLUDE_PATTERN"
+    else
+        CLAUDE_MD_EXCLUDE_GLOBAL="false"
+        CLAUDE_MD_EXCLUDE_PATTERN=""
     fi
 
     # Step 3: CLAUDE.md sections

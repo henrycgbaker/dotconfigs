@@ -109,3 +109,68 @@ wizard_save_env() {
         echo "${key}=\"${value}\"" >> "$env_file"
     fi
 }
+
+# Display checkbox menu for multi-select
+# Args: title, options_array_name, selected_array_name
+# Usage: wizard_checkbox_menu "Select configs:" available_configs selected_configs
+wizard_checkbox_menu() {
+    local title="$1"
+    local options_var="$2"
+    local selected_var="$3"
+
+    # Get arrays by name (bash 3.2 compatible)
+    eval "local opts_str=\"\${${options_var}[*]}\""
+    eval "local sel_str=\"\${${selected_var}[*]}\""
+
+    # Convert to arrays
+    local opts=($opts_str)
+    local sel=($sel_str)
+
+    while true; do
+        echo "$title"
+        echo "  (Enter number to toggle, 'done' to finish, 'all' to select all)"
+        echo ""
+
+        local i=1
+        for opt in "${opts[@]}"; do
+            local checked=" "
+            if _is_in_list "$opt" "$sel_str"; then
+                checked="x"
+            fi
+            echo "  [$checked] $i) $opt"
+            i=$((i + 1))
+        done
+        echo ""
+
+        read -p "Choice: " choice
+
+        if [[ "$choice" == "done" ]] || [[ -z "$choice" ]]; then
+            # Update the selected array by reference
+            eval "${selected_var}=(\${sel[@]})"
+            return 0
+        elif [[ "$choice" == "all" ]]; then
+            sel=("${opts[@]}")
+            sel_str="${sel[*]}"
+            continue
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le "${#opts[@]}" ]]; then
+            local idx=$((choice - 1))
+            local item="${opts[$idx]}"
+
+            # Toggle: remove if present, add if absent
+            if _is_in_list "$item" "$sel_str"; then
+                # Remove from selected
+                local new_sel=()
+                for s in "${sel[@]}"; do
+                    [[ "$s" != "$item" ]] && new_sel+=("$s")
+                done
+                sel=("${new_sel[@]}")
+            else
+                # Add to selected
+                sel+=("$item")
+            fi
+            sel_str="${sel[*]}"
+        else
+            echo "Invalid choice, try again"
+        fi
+    done
+}
