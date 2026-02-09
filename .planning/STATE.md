@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 9 of 9 (Config UX Redesign)
-Plan: 1 of ? in phase
+Plan: 2 of ? in phase
 Status: In progress
-Last activity: 2026-02-09 — Completed 09-01-PLAN.md
+Last activity: 2026-02-09 — Completed 09-02-PLAN.md
 
-Progress: ██████████████░ 94% (34/34 completed + Phase 9 in progress)
+Progress: ██████████████░ 94% (35/35 completed + Phase 9 in progress)
 
 ## Performance Metrics
 
@@ -24,9 +24,9 @@ Progress: ██████████████░ 94% (34/34 completed + P
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 23
-- Total execution time: ~56.5min
-- Average duration: 2.5min
+- Total plans completed: 24
+- Total execution time: ~58.5min
+- Average duration: 2.4min
 
 ## Accumulated Context
 
@@ -130,6 +130,10 @@ New v2.0 decisions:
 - [08-06]: Auto-generated ROSTER.md with hooks, commands, and config reference tables
 - [08-06]: Configuration hierarchy documented in README (three-tier model with precedence)
 - [08-06]: Plugin config ownership documented (git-hooks.conf vs claude-hooks.conf)
+- [09-02]: Colour badge helpers for G/L provenance (cyan Global, green Local, dim not-managed)
+- [09-02]: Wizard helpers for opt-in category menus and config toggles
+- [09-02]: Complete settings-template.json with all common rules (Python/Node/git/docker/hooks)
+- [09-02]: Root settings.json gitignored to prevent committing personal config
 
 ### Pending Todos
 
@@ -158,8 +162,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T13:14:14Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-02-09T23:29:15Z
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
 
 ---
