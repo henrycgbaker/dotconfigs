@@ -98,14 +98,14 @@ wizard_save_env() {
 
     # Check if key already exists
     if grep -q "^${key}=" "$env_file" 2>/dev/null; then
-        # Update existing key
+        # Update existing key (with quoting)
         if [[ "$OSTYPE" == "darwin"* ]]; then
             sed -i '' "s|^${key}=.*|${key}=\"${value}\"|" "$env_file"
         else
             sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$env_file"
         fi
     else
-        # Append new key
+        # Append new key (with quoting)
         echo "${key}=\"${value}\"" >> "$env_file"
     fi
 }
