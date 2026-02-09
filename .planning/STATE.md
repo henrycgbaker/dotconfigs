@@ -152,6 +152,10 @@ New v2.0 decisions:
 - [09-07]: .env format retained — JSON migration deferred to v3 (quoting bug fixed in quick-002, not symptomatic of format issues)
 - [09-07]: Legacy githooks/ directory removed — plugins/git/hooks/ is sole source of truth for git hooks
 - [09-07]: Orphaned discovery functions cleaned up (discover_githooks, discover_settings_templates, discover_hooks_conf_profiles)
+- [003-01]: GSD install removed from Claude wizard — npm handles installation independently
+- [003-01]: Content previews added before section/skill toggle menus — shows first line from templates
+- [003-01]: Settings.json assembly simplified to single-template copy — no jq/python3 dependencies
+- [003-01]: CLAUDE.md exclusion offers 'both' pattern option in first-run flow
 
 ### Pending Todos
 
@@ -173,6 +177,7 @@ New v2.0 decisions:
 |---|-------------|------|--------|-----------|
 | 001 | Fix milestone audit critical bugs (colour_cyan, PLUGIN_DIR) | 2026-02-07 | 1bd83e4 | [001-fix-milestone-audit-critical-bugs](./quick/001-fix-milestone-audit-critical-bugs/) |
 | 002 | Rename CLI to 'dots', restructure commands, add CLAUDE.md exclusion | 2026-02-09 | 683ace8 | [002-fix-git-wizard-bug-restructure-cli-setup](./quick/002-fix-git-wizard-bug-restructure-cli-setup/) |
+| 003-01 | Claude wizard UX improvements (remove GSD, add previews, simplify settings) | 2026-02-09 | b36d8d0 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 003-02 | Fix Git wizard UX issues (prompt format, config path labels) | 2026-02-09 | 46d9d79 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 
 ### Roadmap Evolution
@@ -181,8 +186,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T16:47:58Z
-Stopped at: Completed quick task 003-02 — Git wizard UX fixes
+Last session: 2026-02-09T15:49:50Z
+Stopped at: Completed quick task 003-01 — Claude wizard UX improvements
 Resume file: None
 
 ---
