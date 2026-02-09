@@ -44,29 +44,37 @@ _git_wizard_workflow() {
 
     # Core settings
     local pull_rebase_default="${GIT_PULL_REBASE:-true}"
-    if wizard_yesno "  Manage pull.rebase? (default: true)" "$([ "$pull_rebase_default" != "false" ] && echo y || echo n)"; then
-        wizard_prompt "    pull.rebase value [true/false]" "$pull_rebase_default" GIT_PULL_REBASE
+    local manage_default="n"
+    [[ -n "${GIT_PULL_REBASE:-}" ]] && manage_default="y"
+    if wizard_yesno "  Manage pull.rebase?" "$manage_default"; then
+        wizard_prompt "    pull.rebase" "$pull_rebase_default" GIT_PULL_REBASE
     else
         unset GIT_PULL_REBASE
     fi
 
     local push_default_default="${GIT_PUSH_DEFAULT:-simple}"
-    if wizard_yesno "  Manage push.default? (default: simple)" "$([ -n "${GIT_PUSH_DEFAULT:-}" ] && echo y || echo n)"; then
-        wizard_prompt "    push.default value [simple/current]" "$push_default_default" GIT_PUSH_DEFAULT
+    manage_default="n"
+    [[ -n "${GIT_PUSH_DEFAULT:-}" ]] && manage_default="y"
+    if wizard_yesno "  Manage push.default?" "$manage_default"; then
+        wizard_prompt "    push.default" "$push_default_default" GIT_PUSH_DEFAULT
     else
         unset GIT_PUSH_DEFAULT
     fi
 
     local fetch_prune_default="${GIT_FETCH_PRUNE:-true}"
-    if wizard_yesno "  Manage fetch.prune? (default: true)" "$([ "$fetch_prune_default" != "false" ] && echo y || echo n)"; then
-        wizard_prompt "    fetch.prune value [true/false]" "$fetch_prune_default" GIT_FETCH_PRUNE
+    manage_default="n"
+    [[ -n "${GIT_FETCH_PRUNE:-}" ]] && manage_default="y"
+    if wizard_yesno "  Manage fetch.prune?" "$manage_default"; then
+        wizard_prompt "    fetch.prune" "$fetch_prune_default" GIT_FETCH_PRUNE
     else
         unset GIT_FETCH_PRUNE
     fi
 
     local default_branch="${GIT_INIT_DEFAULT_BRANCH:-main}"
-    if wizard_yesno "  Manage init.defaultBranch? (default: main)" "$([ -n "${GIT_INIT_DEFAULT_BRANCH:-}" ] && echo y || echo n)"; then
-        wizard_prompt "    init.defaultBranch value" "$default_branch" GIT_INIT_DEFAULT_BRANCH
+    manage_default="n"
+    [[ -n "${GIT_INIT_DEFAULT_BRANCH:-}" ]] && manage_default="y"
+    if wizard_yesno "  Manage init.defaultBranch?" "$manage_default"; then
+        wizard_prompt "    init.defaultBranch" "$default_branch" GIT_INIT_DEFAULT_BRANCH
     else
         unset GIT_INIT_DEFAULT_BRANCH
     fi
@@ -76,22 +84,28 @@ _git_wizard_workflow() {
     echo ""
 
     local rerere_default="${GIT_RERERE_ENABLED:-false}"
-    if wizard_yesno "  Manage rerere.enabled? (reuse conflict resolutions)" "$([ "$rerere_default" == "true" ] && echo y || echo n)"; then
-        wizard_prompt "    rerere.enabled value [true/false]" "$rerere_default" GIT_RERERE_ENABLED
+    manage_default="n"
+    [[ -n "${GIT_RERERE_ENABLED:-}" ]] && manage_default="y"
+    if wizard_yesno "  Manage rerere.enabled? (reuse conflict resolutions)" "$manage_default"; then
+        wizard_prompt "    rerere.enabled" "$rerere_default" GIT_RERERE_ENABLED
     else
         unset GIT_RERERE_ENABLED
     fi
 
     local diff_algo_default="${GIT_DIFF_ALGORITHM:-}"
-    if wizard_yesno "  Manage diff.algorithm? (better diff output)" "$([ -n "$diff_algo_default" ] && echo y || echo n)"; then
-        wizard_prompt "    diff.algorithm value [histogram/patience/minimal]" "${diff_algo_default:-histogram}" GIT_DIFF_ALGORITHM
+    manage_default="n"
+    [[ -n "${GIT_DIFF_ALGORITHM:-}" ]] && manage_default="y"
+    if wizard_yesno "  Manage diff.algorithm? (better diff output)" "$manage_default"; then
+        wizard_prompt "    diff.algorithm" "${diff_algo_default:-histogram}" GIT_DIFF_ALGORITHM
     else
         unset GIT_DIFF_ALGORITHM
     fi
 
     local autocorrect_default="${GIT_HELP_AUTOCORRECT:-}"
-    if wizard_yesno "  Manage help.autocorrect? (auto-run typo corrections)" "$([ -n "$autocorrect_default" ] && echo y || echo n)"; then
-        wizard_prompt "    help.autocorrect value (deciseconds)" "${autocorrect_default:-10}" GIT_HELP_AUTOCORRECT
+    manage_default="n"
+    [[ -n "${GIT_HELP_AUTOCORRECT:-}" ]] && manage_default="y"
+    if wizard_yesno "  Manage help.autocorrect? (auto-run typo corrections)" "$manage_default"; then
+        wizard_prompt "    help.autocorrect (deciseconds)" "${autocorrect_default:-10}" GIT_HELP_AUTOCORRECT
     else
         unset GIT_HELP_AUTOCORRECT
     fi
@@ -100,7 +114,7 @@ _git_wizard_workflow() {
 # Internal: Aliases section wizard (opt-in model)
 _git_wizard_aliases() {
     wizard_header 3 "Aliases"
-    echo "Configure git command aliases"
+    echo "Add git command aliases"
     echo ""
 
     # Default aliases with definitions
@@ -116,7 +130,7 @@ _git_wizard_aliases() {
     local alias_names=(unstage last lg amend undo wip)
     local enabled_names=""
 
-    echo "Default aliases (select which to manage):"
+    echo "Default aliases (select which to add):"
     echo ""
 
     for alias_name in "${alias_names[@]}"; do
