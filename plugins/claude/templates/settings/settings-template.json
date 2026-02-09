@@ -1,5 +1,4 @@
 {
-  "_template_note": "This is a complete reference template. Copy to your project root as settings.json and remove sections you don't need.",
   "permissions": {
     "allow": [
       "Bash(ruff:*)",
@@ -26,7 +25,7 @@
   },
   "sandbox": {
     "enabled": true,
-    "excluded_commands": [
+    "excludedCommands": [
       "git",
       "docker"
     ]

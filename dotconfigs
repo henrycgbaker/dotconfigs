@@ -42,7 +42,7 @@ Commands:
   global-configs  Interactive wizard to configure plugin defaults (.env)
   project-configs Scaffold per-project configuration overrides
   deploy          Deploy configuration from .env to filesystem
-                  Options: --force, --dry-run
+                  Options: --force, --dry-run, --regenerate
                   Without plugin: deploys all configured plugins
   status          Check deployment status and drift detection
   list            List all available plugins
@@ -147,6 +147,11 @@ Description:
 Options:
   --force          Overwrite all conflicts without prompting
   --dry-run        Preview changes without deploying
+  --regenerate     Rebuild generated files from templates (with backup)
+
+Generated files (CLAUDE.md, settings.json) are only created from
+templates on first deploy. After that, they're your files to edit.
+Use --regenerate to reset them from templates (creates backups).
 
 Conflicts (files not managed by dotconfigs) prompt for resolution:
 overwrite, skip, backup, or diff. Use --force to skip prompts.
@@ -156,6 +161,7 @@ Examples:
   dotconfigs deploy claude               Deploy Claude configuration only
   dotconfigs deploy --force              Deploy all, overwrite conflicts
   dotconfigs deploy --dry-run            Preview all deployments
+  dotconfigs deploy --regenerate         Rebuild generated files from templates
 EOF
             ;;
         status)
@@ -347,6 +353,7 @@ cmd_deploy() {
     local dry_run=false
     local force_mode=false
     local interactive_mode=true
+    local regenerate=false
     local args=()
 
     # Parse arguments: extract plugin name and flags
@@ -358,6 +365,10 @@ cmd_deploy() {
                 ;;
             --force)
                 force_mode=true
+                shift
+                ;;
+            --regenerate)
+                regenerate=true
                 shift
                 ;;
             -*)
@@ -388,6 +399,10 @@ cmd_deploy() {
 
     if [[ "$interactive_mode" == "true" && "$force_mode" != "true" ]]; then
         args+=("--interactive")
+    fi
+
+    if [[ "$regenerate" == "true" ]]; then
+        args+=("--regenerate")
     fi
 
     if [[ -z "$plugin" ]]; then
