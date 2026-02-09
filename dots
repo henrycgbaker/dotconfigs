@@ -1,5 +1,5 @@
 #!/bin/bash
-# dotconfigs — Unified configuration management CLI entry point
+# dots — Unified configuration management CLI entry point
 
 set -e
 
@@ -17,16 +17,16 @@ source "$SCRIPT_DIR/lib/config.sh"
 
 show_usage() {
     cat <<EOF
-dotconfigs — Unified configuration management
+dots — Unified configuration management
 
 Usage:
-  dotconfigs setup <plugin>             Run setup wizard for plugin
-  dotconfigs deploy [plugin] [options]  Deploy plugin configuration
-  dotconfigs project [plugin] <path>    Scaffold project configuration
-  dotconfigs status [plugin]            Show deployment status
-  dotconfigs list                       List available plugins
-  dotconfigs help [command]             Show help for command
-  dotconfigs --help                     Show this help
+  dots setup <plugin>             Run setup wizard for plugin
+  dots deploy [plugin] [options]  Deploy plugin configuration
+  dots project [plugin] <path>    Scaffold project configuration
+  dots status [plugin]            Show deployment status
+  dots list                       List available plugins
+  dots help [command]             Show help for command
+  dots --help                     Show this help
 
 Commands:
   setup      Interactive wizard to configure plugin (.env)
@@ -39,15 +39,15 @@ Commands:
   help       Show detailed help for specific command
 
 Examples:
-  dotconfigs setup claude               Configure Claude Code
-  dotconfigs deploy git                 Deploy git configuration
-  dotconfigs deploy --dry-run           Preview all deployments
-  dotconfigs deploy git --interactive   Deploy git with conflict prompts
-  dotconfigs status                     Show status of all plugins
-  dotconfigs project .                  Run all plugin project setup
-  dotconfigs project claude .           Run Claude project setup only
-  dotconfigs list                       Show all plugins
-  dotconfigs help deploy                Show deploy command help
+  dots setup claude               Configure Claude Code
+  dots deploy git                 Deploy git configuration
+  dots deploy --dry-run           Preview all deployments
+  dots deploy git --interactive   Deploy git with conflict prompts
+  dots status                     Show status of all plugins
+  dots project .                  Run all plugin project setup
+  dots project claude .           Run Claude project setup only
+  dots list                       Show all plugins
+  dots help deploy                Show deploy command help
 
 Available plugins:
 EOF
@@ -62,10 +62,10 @@ show_command_help() {
     case "$command" in
         setup)
             cat <<EOF
-dotconfigs setup — Interactive configuration wizard
+dots setup — Interactive configuration wizard
 
 Usage:
-  dotconfigs setup <plugin>
+  dots setup <plugin>
 
 Description:
   Runs the interactive setup wizard for the specified plugin.
@@ -79,16 +79,16 @@ EOF
             cat <<EOF
 
 Examples:
-  dotconfigs setup claude    Configure Claude Code settings
-  dotconfigs setup git       Configure git hooks and identity
+  dots setup claude    Configure Claude Code settings
+  dots setup git       Configure git hooks and identity
 EOF
             ;;
         deploy)
             cat <<EOF
-dotconfigs deploy — Deploy configuration to filesystem
+dots deploy — Deploy configuration to filesystem
 
 Usage:
-  dotconfigs deploy [plugin] [options]
+  dots deploy [plugin] [options]
 
 Description:
   Deploys plugin configuration from .env to the filesystem.
@@ -100,18 +100,18 @@ Options:
   --dry-run        Preview changes without deploying
 
 Examples:
-  dotconfigs deploy                      Deploy all configured plugins
-  dotconfigs deploy claude               Deploy Claude configuration only
-  dotconfigs deploy git --interactive    Deploy git with conflict prompts
-  dotconfigs deploy --dry-run            Preview all deployments
+  dots deploy                      Deploy all configured plugins
+  dots deploy claude               Deploy Claude configuration only
+  dots deploy git --interactive    Deploy git with conflict prompts
+  dots deploy --dry-run            Preview all deployments
 EOF
             ;;
         project)
             cat <<EOF
-dotconfigs project — Scaffold per-project configuration
+dots project — Scaffold per-project configuration
 
 Usage:
-  dotconfigs project [plugin] <path>
+  dots project [plugin] <path>
 
 Description:
   Scaffolds per-project configuration files for the specified plugin.
@@ -119,17 +119,17 @@ Description:
   Requires a git repository at the target path.
 
 Examples:
-  dotconfigs project .              Run all plugin project setup
-  dotconfigs project claude .       Run Claude project setup only
-  dotconfigs project git /path      Configure git for specific repo
+  dots project .              Run all plugin project setup
+  dots project claude .       Run Claude project setup only
+  dots project git /path      Configure git for specific repo
 EOF
             ;;
         status)
             cat <<EOF
-dotconfigs status — Check deployment status
+dots status — Check deployment status
 
 Usage:
-  dotconfigs status [plugin]
+  dots status [plugin]
 
 Description:
   Shows deployment status for plugin configuration files.
@@ -142,22 +142,22 @@ States:
   ✗  Not deployed  File doesn't exist
 
 Examples:
-  dotconfigs status           Show status of all plugins
-  dotconfigs status claude    Show Claude plugin status only
+  dots status           Show status of all plugins
+  dots status claude    Show Claude plugin status only
 EOF
             ;;
         list)
             cat <<EOF
-dotconfigs list — List available plugins
+dots list — List available plugins
 
 Usage:
-  dotconfigs list
+  dots list
 
 Description:
   Lists all available plugins with descriptions.
 
 Example:
-  dotconfigs list
+  dots list
 EOF
             ;;
         *)
@@ -374,7 +374,7 @@ cmd_status() {
 
     # Check if .env exists
     if [[ ! -f "$ENV_FILE" ]]; then
-        echo "Error: No configuration found. Run 'dotconfigs setup <plugin>' first." >&2
+        echo "Error: No configuration found. Run 'dots setup <plugin>' first." >&2
         exit 1
     fi
 
@@ -466,14 +466,14 @@ cmd_project() {
         # Check if CWD is the dotconfigs repo itself
         if [[ "$(pwd)" -ef "$SCRIPT_DIR" ]]; then
             echo "Error: Cannot use dotconfigs repo as project target" >&2
-            echo "Specify a path: dotconfigs project <path>" >&2
+            echo "Specify a path: dots project <path>" >&2
             exit 1
         fi
 
         # Check if CWD is a git repo
         if ! git -C "$PWD" rev-parse --git-dir >/dev/null 2>&1; then
             echo "Error: Current directory is not a git repository" >&2
-            echo "Either run from a git repo or specify path: dotconfigs project <path>" >&2
+            echo "Either run from a git repo or specify path: dots project <path>" >&2
             exit 1
         fi
 
@@ -482,7 +482,7 @@ cmd_project() {
         if wizard_yesno "Use this directory?" "y"; then
             project_path="$PWD"
         else
-            echo "Specify path: dotconfigs project <path>" >&2
+            echo "Specify path: dots project <path>" >&2
             exit 1
         fi
     else
