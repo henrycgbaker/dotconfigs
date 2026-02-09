@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: Quick task 004 of ongoing (Fix UAT deploy provenance + project wizard)
-Plan: 1 of 2
-Status: In progress
-Last activity: 2026-02-09 — Completed 004-01-PLAN.md (deploy source provenance)
+Plan: 2 of 2
+Status: Complete
+Last activity: 2026-02-09 — Completed 004-02-PLAN.md (fix project-configs wizard)
 
-Progress: ████████████████ 100% (44/44 completed in v2.0, quick tasks ongoing)
+Progress: ████████████████ 100% (44/44 completed in v2.0, quick task 004 complete)
 
 ## Performance Metrics
 
@@ -159,6 +159,8 @@ New v2.0 decisions:
 - [003-03]: Edit mode uses indexed eval access for bash 3.2 compatibility (prevents garbled display)
 - [003-03]: Edit mode labels descriptive without redundant 'enabled' suffix
 - [003-03]: 'Rerun as new' option added before entering edit mode (unsets all CLAUDE_* vars)
+- [004-02]: Array-based plugin collection in cmd_project_configs to preserve stdin for interactive prompts
+- [004-02]: Separate discovery (stdin-consuming) from execution (interactive) phases
 
 ### Pending Todos
 
@@ -187,6 +189,7 @@ New v2.0 decisions:
 | 003-03 | Fix edit mode (selection logic, display, labels, rerun option) | 2026-02-09 | 9140124 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 003-04 | Polish setup command one-time init | 2026-02-09 | e0d75d2 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 004-01 | Add deploy source provenance | 2026-02-09 | a461bbc | [004-fix-uat-deploy-provenance-project-wizard](./quick/004-fix-uat-deploy-provenance-project-wizard/) |
+| 004-02 | Fix project-configs wizard (stdin consumption, CLAUDE.md, hooks.json) | 2026-02-09 | 5be5c68 | [004-fix-uat-deploy-provenance-project-wizard](./quick/004-fix-uat-deploy-provenance-project-wizard/) |
 
 ### Roadmap Evolution
 
@@ -195,8 +198,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09 19:05:05 UTC
-Stopped at: Completed 004-01-PLAN.md (deploy source provenance)
+Last session: 2026-02-09 19:05:53 UTC
+Stopped at: Completed 004-02-PLAN.md (fix project-configs wizard)
 Resume file: None
 
 ---
