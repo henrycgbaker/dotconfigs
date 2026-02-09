@@ -171,10 +171,10 @@ Plans:
 - [x] 09-03-PLAN.md — Claude global-configs wizard rewrite (opt-in categories, edit mode)
 - [x] 09-04-PLAN.md — Git global-configs wizard rewrite (opt-in categories, select→read, edit mode)
 - [x] 09-05-PLAN.md — Project-configs G/L indicators + CLAUDE.md exclusion in deploy + settings assembly
-- [ ] 09-06-PLAN.md — [gap closure] Fix boolean opt-out and collection defaults in claude/setup.sh
-- [ ] 09-07-PLAN.md — [gap closure] Remove legacy githooks/, orphaned functions, record .env→JSON deferral
-- [ ] 09-08-PLAN.md — [gap closure] README overhaul (naming, commands, architecture diagram, directory tree)
-- [ ] 09-09-PLAN.md — [gap closure] Fix docs/usage-guide.md (remove TODO, fix dotclaude references)
+- [x] 09-06-PLAN.md — [gap closure] Fix boolean opt-out and collection defaults in claude/setup.sh
+- [x] 09-07-PLAN.md — [gap closure] Remove legacy githooks/, orphaned functions, record .env→JSON deferral
+- [x] 09-08-PLAN.md — [gap closure] README overhaul (naming, commands, architecture diagram, directory tree)
+- [x] 09-09-PLAN.md — [gap closure] Fix docs/usage-guide.md (remove TODO, fix dotclaude references)
 
 **Bundled todos:**
 - .env → JSON migration (needs discussion during planning)
@@ -243,7 +243,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9
 | 6. Git Plugin | 3/3 | ✓ Complete | 2026-02-07 |
 | 7. Integration & Polish | 5/5 | ✓ Complete | 2026-02-07 |
 | 8. Hooks & Workflows Review | 6/6 | ✓ Complete | 2026-02-08 |
-| 9. Config UX Redesign | 5/9 | Gap Closure | — |
+| 9. Config UX Redesign | 9/9 | ✓ Complete | 2026-02-09 |
 
 ## Accumulated Context
 
