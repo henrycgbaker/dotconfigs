@@ -195,7 +195,7 @@ New v2.0 decisions:
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Completed quick task 003 — Fix all open UAT issues (tests 5, 6, 7, 11)
+Stopped at: UAT complete — all 17 tests passing. Deploy refactored to consistent symlink model.
 Resume file: None
 
 ---
