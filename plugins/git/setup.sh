@@ -215,19 +215,20 @@ _git_wizard_hooks() {
         echo ""
     fi
 
-    # Config file location (only for project scope) - REPLACE SELECT LOOP
+    # Config file location (only for project scope)
     if [[ "$GIT_HOOKS_SCOPE" == "project" ]]; then
         echo ""
         echo "Hook config file location:"
-        echo "  1) .githooks/config"
-        echo "  2) .claude/git-hooks.conf"
-        echo "  3) .git/hooks/hooks.conf"
-        echo "  4) Custom path"
+        echo "  1) .githooks/config         (tracked — committed to repo)"
+        echo "  2) .claude/git-hooks.conf   (tracked — committed to repo)"
+        echo "  3) .claude/hooks.conf       (tracked — committed to repo)"
+        echo "  4) .git/hooks/hooks.conf    (untracked — per-clone only)"
+        echo "  5) Custom path"
         echo ""
 
         local config_default="${GIT_HOOK_CONFIG_PATH:-.githooks/config}"
         local config_choice=""
-        read -p "Select [1-4, default: 1]: " config_choice
+        read -p "Select [1-5, default: 1]: " config_choice
 
         case "$config_choice" in
             1|"")
@@ -237,9 +238,12 @@ _git_wizard_hooks() {
                 GIT_HOOK_CONFIG_PATH=".claude/git-hooks.conf"
                 ;;
             3)
-                GIT_HOOK_CONFIG_PATH=".git/hooks/hooks.conf"
+                GIT_HOOK_CONFIG_PATH=".claude/hooks.conf"
                 ;;
             4)
+                GIT_HOOK_CONFIG_PATH=".git/hooks/hooks.conf"
+                ;;
+            5)
                 read -p "Enter custom path: " GIT_HOOK_CONFIG_PATH
                 [[ -z "$GIT_HOOK_CONFIG_PATH" ]] && GIT_HOOK_CONFIG_PATH="$config_default"
                 ;;
@@ -502,6 +506,9 @@ _git_wizard_summary() {
         echo "  [not managed]"
     fi
     echo ""
+
+    # Show destination path in dim text
+    printf "\n  %b%s%b\n" "$COLOUR_DIM" "Settings will be saved to .env" "$COLOUR_RESET"
 }
 
 # Internal: Save all opted-in GIT_* config to .env
