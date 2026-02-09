@@ -17,6 +17,7 @@ Phase numbering continues from v1.0 (phases 1–3 complete).
 - [x] **Phase 6: Git Plugin** - New git plugin for hooks, identity, workflow settings, and aliases
 - [x] **Phase 7: Integration & Polish** - Status/list commands, conflict detection, testing, documentation
 - [x] **Phase 8: Hooks & Workflows Review** - Audit and rationalise hook/workflow placement across claude and git plugins
+- [ ] **Phase 9: Config UX Redesign** - Opt-in config selection, project-configs wizard with global value indicators, CLAUDE.md exclusion, fix remaining bugs
 
 ## Phase Details
 
@@ -159,10 +160,76 @@ Plans:
   9. Explore agent hook evaluated (add or defer with rationale)
   10. README updated with GSD framework mention
 
+### Phase 9: Config UX Redesign
+**Goal**: Complete the configuration UX overhaul: opt-in config selection, project-configs wizard with global value indicators, settings.json logical separation, CLAUDE.md exclusion, .env→JSON migration discussion, CLI naming fix, and remaining bug fixes
+**Depends on**: Phase 8 + Quick Task 002 (CLI restructure)
+**Plans:** 5 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — CLI naming reversal (dotconfigs primary, dots symlink) + list terminology fix
+- [ ] 09-02-PLAN.md — Lib infrastructure (G/L colour badges, wizard helpers, settings template, .gitignore)
+- [ ] 09-03-PLAN.md — Claude global-configs wizard rewrite (opt-in categories, edit mode)
+- [ ] 09-04-PLAN.md — Git global-configs wizard rewrite (opt-in categories, select→read, edit mode)
+- [ ] 09-05-PLAN.md — Project-configs G/L indicators + CLAUDE.md exclusion in deploy + settings assembly
+
+**Bundled todos:**
+- .env → JSON migration (needs discussion during planning)
+- settings.json wizard design (resolved: Option A with logical separation)
+- Rename CLI (resolved: revert rename, add `dots` as alias)
+- dotgit hooks management (subsumed by opt-in toggleable hooks)
+
+**Success Criteria** (what must be TRUE):
+  1. `dotconfigs global-configs {plugin}` shows all available configs — user picks which to manage (opt-in)
+  2. Selected configs show opinionated defaults (user can change) — unselected configs remain unset in .env
+  3. `dotconfigs project-configs {plugin}` shows all configs with visual indicators for globally-set values (bold/colour/label)
+  4. Project-level config overrides global (standard local-over-global precedence)
+  5. CLAUDE.md exclusion applied during `dotconfigs deploy` — pattern written to .git/info/exclude (NOT .gitignore)
+  6. Per-project CLAUDE.md override available in `dotconfigs project-configs`
+  7. No hardcoded defaults fill unset values — if user doesn't set it, it stays unset
+  8. All remaining `select` loops replaced with `read` prompts (2 in git setup, 1 in claude project)
+  9. CLI naming: `dotconfigs` is primary executable, `dots` is convenience alias/symlink. All docs reference `dotconfigs`
+  10. `dotconfigs list` says "deployed" / "not deployed" instead of "installed" / "not installed"
+  11. settings.json: core defaults deployed in initial setup, hooks added later via hooks wizard (clean logical separation)
+  12. Root settings.json gitignored (personal instance), template in plugins/claude/templates/
+  13. .env → JSON migration: discuss during planning, implement if agreed (or defer to v3)
+
+**Design decisions (from UAT discussion):**
+
+*Config selection model:*
+- **Opt-in model:** User explicitly chooses which configs to manage at each level. Not "set everything with defaults" — opt-in to manage, opt-out from suggested value
+- **Unset = unset:** If user doesn't pick a config, nothing is written. No hardcoded fallback. Tools handle missing values gracefully
+- **Global vs local:** global-configs sets .env (user's defaults), project-configs overrides per-project. Same wizard principle, project-configs additionally shows what's already set globally
+- **Precedence:** Per-project config → .env (global) → unset. Each tool/plugin resolves its own precedence — brief mention in docs, not detailed (out of scope)
+
+*CLI naming:*
+- **Repo name:** `dotconfigs` (keep)
+- **Tool/executable:** `dotconfigs` (keep as primary)
+- **CLI shortcut:** `dots` as alias/symlink to `dotconfigs` (convenience only)
+- **Docs:** All reference `dotconfigs`. Mention `dots` alias once in README
+- **Action:** Revert quick task 002 rename (currently backwards: `dots` is primary, `dotconfigs` is symlink)
+
+*settings.json:*
+- **Option A:** Deploy with sensible core defaults (deny secrets, ask .env). No interactive rule configuration
+- **Logical separation:** Initial setup deploys core settings.json (permissions, sandbox). Hooks (PostToolUse formatter, PreToolUse guard) are configured LATER through the hooks section of the wizard, then injected into settings.json during deploy
+- **Template selection:** Wizard asks which language rules to include (python, node, both, none) — trivial addition
+- **Personal instance:** Root settings.json must be gitignored before repo goes public. Contains user-specific rules (nvidia-smi, docker, /proc/* reads)
+- **Template:** Clean assembled version in plugins/claude/templates/ is the public template
+
+*CLAUDE.md exclusion:*
+- Goes in .git/info/exclude (NOT .gitignore — no Claude/CLAUDE.md references in tracked files)
+- Global default set in setup + per-project override in project-configs
+- User wants ALL CLAUDE.md files excluded from all repos generally
+
+*.env → JSON migration (discussion needed):*
+- Current .env has quoting issues (fixed but symptomatic of format limitations)
+- JSON would allow: nesting, arrays, types, no quoting issues, consistency with .dotconfigs.json
+- Concerns: jq dependency (bash 3.2 portability), migration path for existing users, scope of changes
+- Decision: discuss during Phase 9 planning, implement or defer to v3
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
+Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9
 (Phases 5 and 6 may run in parallel if infrastructure is stable after Phase 4)
 
 | Phase | Plans Complete | Status | Completed |
@@ -172,6 +239,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 6. Git Plugin | 3/3 | ✓ Complete | 2026-02-07 |
 | 7. Integration & Polish | 5/5 | ✓ Complete | 2026-02-07 |
 | 8. Hooks & Workflows Review | 6/6 | ✓ Complete | 2026-02-08 |
+| 9. Config UX Redesign | 0/5 | Planned | — |
 
 ## Accumulated Context
 
