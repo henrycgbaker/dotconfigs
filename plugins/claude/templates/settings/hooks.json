@@ -5,7 +5,7 @@
         "matchers": [
           { "tool_name": "Bash" }
         ],
-        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "command": ".claude/hooks/block-destructive.sh",
         "timeout": 10000
       },
       {
@@ -13,7 +13,7 @@
           { "tool_name": "Write" },
           { "tool_name": "Edit" }
         ],
-        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "command": ".claude/hooks/block-destructive.sh",
         "timeout": 10000
       }
     ],
@@ -23,7 +23,7 @@
           { "tool_name": "Write" },
           { "tool_name": "Edit" }
         ],
-        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/post-tool-format.py",
+        "command": ".claude/hooks/post-tool-format.py",
         "timeout": 30000
       }
     ]

@@ -385,23 +385,37 @@ EOF
                 ;;
         esac
     else
-        if wizard_yesno "  Create minimal project CLAUDE.md?" "y"; then
-            # Create minimal project CLAUDE.md
-            cat > "$claude_md_target" <<EOF
+        if wizard_yesno "  Create project CLAUDE.md from global sections?" "y"; then
+            # Source deploy.sh to get _claude_build_md if not already loaded
+            if ! declare -f _claude_build_md > /dev/null 2>&1; then
+                source "$PLUGIN_DIR/deploy.sh"
+            fi
+
+            # Load config to get CLAUDE_MD_SECTIONS
+            if [[ -n "${CLAUDE_MD_SECTIONS:-}" ]]; then
+                IFS=' ' read -ra _sections <<< "$CLAUDE_MD_SECTIONS"
+            else
+                _sections=()
+            fi
+
+            if [[ ${#_sections[@]} -gt 0 ]]; then
+                # Build assembled CLAUDE.md in plugin dir, then copy to project
+                _claude_build_md "$PLUGIN_DIR" "${_sections[@]}"
+                cp "$PLUGIN_DIR/CLAUDE.md" "$claude_md_target"
+                printf "  ✓ Built CLAUDE.md from global sections "
+                colour_badge_local
+                echo " (${#_sections[@]} sections)"
+            else
+                # No sections configured — create minimal stub
+                cat > "$claude_md_target" <<MDEOF
 # $(basename "$project_path")
 
 Project type: $project_type
-
-## Configuration
-
-This project uses dotconfigs for Claude Code configuration.
-- Settings: .claude/settings.json
-- Hooks: .claude/hooks.conf
-- Global instructions: ~/.claude/CLAUDE.md
-EOF
-            printf "  ✓ Created minimal CLAUDE.md "
-            colour_badge_local
-            echo ""
+MDEOF
+                printf "  ✓ Created minimal CLAUDE.md "
+                colour_badge_local
+                echo " (no global sections configured)"
+            fi
         else
             echo "  Skipped CLAUDE.md"
         fi

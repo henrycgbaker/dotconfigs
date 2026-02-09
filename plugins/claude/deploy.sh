@@ -325,6 +325,7 @@ plugin_claude_deploy() {
     # 1. Build and symlink settings.json
     if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
         local settings_source="$PLUGIN_DIR/settings.json"
+        local rel_settings="${settings_source#$DOTCONFIGS_ROOT/}"
 
         if [[ "$regenerate" == "true" && -f "$settings_source" ]]; then
             # Regenerate: warn and offer backup
@@ -354,19 +355,19 @@ plugin_claude_deploy() {
         if [[ "$dry_run" == "true" ]]; then
             case "$state" in
                 deployed)
-                    echo "  Unchanged: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
+                    echo "  Unchanged: $rel_settings -> $CLAUDE_DEPLOY_TARGET/settings.json"
                     files_unchanged=$((files_unchanged + 1))
                     ;;
                 not-deployed)
-                    echo "  Would link: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
+                    echo "  Would link: $rel_settings -> $CLAUDE_DEPLOY_TARGET/settings.json"
                     files_created=$((files_created + 1))
                     ;;
                 drifted-*)
                     if [[ "$interactive_mode" == "force" ]]; then
-                        echo "  Would overwrite: settings.json (--force)"
+                        echo "  Would overwrite: $rel_settings -> $CLAUDE_DEPLOY_TARGET/settings.json (--force)"
                         files_updated=$((files_updated + 1))
                     else
-                        echo "  Would prompt: conflict at settings.json"
+                        echo "  Would prompt: conflict at $CLAUDE_DEPLOY_TARGET/settings.json (source: $rel_settings)"
                         files_skipped=$((files_skipped + 1))
                     fi
                     ;;
@@ -374,7 +375,7 @@ plugin_claude_deploy() {
         else
             case "$state" in
                 deployed)
-                    echo "  Unchanged: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
+                    echo "  Unchanged: $rel_settings -> $CLAUDE_DEPLOY_TARGET/settings.json"
                     files_unchanged=$((files_unchanged + 1))
                     ;;
                 *)
@@ -395,6 +396,7 @@ plugin_claude_deploy() {
     # 2. Build and symlink CLAUDE.md
     if [[ ${#CLAUDE_MD_SECTIONS_ARRAY[@]} -gt 0 ]]; then
         local claude_md_source="$PLUGIN_DIR/CLAUDE.md"
+        local rel_claude_md="${claude_md_source#$DOTCONFIGS_ROOT/}"
 
         if [[ "$regenerate" == "true" && -f "$claude_md_source" ]]; then
             # Regenerate: warn and offer backup
@@ -423,19 +425,19 @@ plugin_claude_deploy() {
         if [[ "$dry_run" == "true" ]]; then
             case "$state" in
                 deployed)
-                    echo "  Unchanged: CLAUDE.md → $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+                    echo "  Unchanged: $rel_claude_md -> $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
                     files_unchanged=$((files_unchanged + 1))
                     ;;
                 not-deployed)
-                    echo "  Would link: CLAUDE.md → $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+                    echo "  Would link: $rel_claude_md -> $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
                     files_created=$((files_created + 1))
                     ;;
                 drifted-*)
                     if [[ "$interactive_mode" == "force" ]]; then
-                        echo "  Would overwrite: CLAUDE.md (--force)"
+                        echo "  Would overwrite: $rel_claude_md -> $CLAUDE_DEPLOY_TARGET/CLAUDE.md (--force)"
                         files_updated=$((files_updated + 1))
                     else
-                        echo "  Would prompt: conflict at CLAUDE.md"
+                        echo "  Would prompt: conflict at $CLAUDE_DEPLOY_TARGET/CLAUDE.md (source: $rel_claude_md)"
                         files_skipped=$((files_skipped + 1))
                     fi
                     ;;
@@ -443,7 +445,7 @@ plugin_claude_deploy() {
         else
             case "$state" in
                 deployed)
-                    echo "  Unchanged: CLAUDE.md → $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+                    echo "  Unchanged: $rel_claude_md -> $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
                     files_unchanged=$((files_unchanged + 1))
                     ;;
                 *)
@@ -475,24 +477,25 @@ plugin_claude_deploy() {
         for hook in "${CLAUDE_HOOKS_ENABLED_ARRAY[@]}"; do
             local target="$CLAUDE_DEPLOY_TARGET/hooks/$hook"
             local source="$PLUGIN_DIR/hooks/$hook"
+            local rel_hook="${source#$DOTCONFIGS_ROOT/}"
             local state=$(check_file_state "$target" "$source" "$DOTCONFIGS_ROOT")
 
             if [[ "$dry_run" == "true" ]]; then
                 case "$state" in
                     deployed)
-                        echo "  Unchanged: hooks/$hook"
+                        echo "  Unchanged: $rel_hook -> $target"
                         files_unchanged=$((files_unchanged + 1))
                         ;;
                     not-deployed)
-                        echo "  Would link: hooks/$hook"
+                        echo "  Would link: $rel_hook -> $target"
                         files_created=$((files_created + 1))
                         ;;
                     drifted-*)
                         if [[ "$interactive_mode" == "force" ]]; then
-                            echo "  Would overwrite: hooks/$hook (--force)"
+                            echo "  Would overwrite: $rel_hook -> $target (--force)"
                             files_updated=$((files_updated + 1))
                         else
-                            echo "  Would prompt: conflict at hooks/$hook"
+                            echo "  Would prompt: conflict at $target (source: $rel_hook)"
                             files_skipped=$((files_skipped + 1))
                         fi
                         ;;
@@ -500,7 +503,7 @@ plugin_claude_deploy() {
             else
                 case "$state" in
                     deployed)
-                        echo "  Unchanged: hooks/$hook → $target"
+                        echo "  Unchanged: $rel_hook -> $target"
                         files_unchanged=$((files_unchanged + 1))
                         ;;
                     *)
@@ -529,24 +532,25 @@ plugin_claude_deploy() {
         for skill in "${CLAUDE_SKILLS_ENABLED_ARRAY[@]}"; do
             local target="$CLAUDE_DEPLOY_TARGET/commands/${skill}.md"
             local source="$PLUGIN_DIR/commands/${skill}.md"
+            local rel_skill="${source#$DOTCONFIGS_ROOT/}"
             local state=$(check_file_state "$target" "$source" "$DOTCONFIGS_ROOT")
 
             if [[ "$dry_run" == "true" ]]; then
                 case "$state" in
                     deployed)
-                        echo "  Unchanged: commands/${skill}.md"
+                        echo "  Unchanged: $rel_skill -> $target"
                         files_unchanged=$((files_unchanged + 1))
                         ;;
                     not-deployed)
-                        echo "  Would link: commands/${skill}.md"
+                        echo "  Would link: $rel_skill -> $target"
                         files_created=$((files_created + 1))
                         ;;
                     drifted-*)
                         if [[ "$interactive_mode" == "force" ]]; then
-                            echo "  Would overwrite: commands/${skill}.md (--force)"
+                            echo "  Would overwrite: $rel_skill -> $target (--force)"
                             files_updated=$((files_updated + 1))
                         else
-                            echo "  Would prompt: conflict at commands/${skill}.md"
+                            echo "  Would prompt: conflict at $target (source: $rel_skill)"
                             files_skipped=$((files_skipped + 1))
                         fi
                         ;;
@@ -554,7 +558,7 @@ plugin_claude_deploy() {
             else
                 case "$state" in
                     deployed)
-                        echo "  Unchanged: commands/${skill}.md → $target"
+                        echo "  Unchanged: $rel_skill -> $target"
                         files_unchanged=$((files_unchanged + 1))
                         ;;
                     *)
