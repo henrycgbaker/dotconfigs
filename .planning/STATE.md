@@ -156,6 +156,9 @@ New v2.0 decisions:
 - [003-01]: Content previews added before section/skill toggle menus — shows first line from templates
 - [003-01]: Settings.json assembly simplified to single-template copy — no jq/python3 dependencies
 - [003-01]: CLAUDE.md exclusion offers 'both' pattern option in first-run flow
+- [003-03]: Edit mode uses indexed eval access for bash 3.2 compatibility (prevents garbled display)
+- [003-03]: Edit mode labels descriptive without redundant 'enabled' suffix
+- [003-03]: 'Rerun as new' option added before entering edit mode (unsets all CLAUDE_* vars)
 
 ### Pending Todos
 
@@ -179,6 +182,7 @@ New v2.0 decisions:
 | 002 | Rename CLI to 'dots', restructure commands, add CLAUDE.md exclusion | 2026-02-09 | 683ace8 | [002-fix-git-wizard-bug-restructure-cli-setup](./quick/002-fix-git-wizard-bug-restructure-cli-setup/) |
 | 003-01 | Claude wizard UX improvements (remove GSD, add previews, simplify settings) | 2026-02-09 | b36d8d0 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 003-02 | Fix Git wizard UX issues (prompt format, config path labels) | 2026-02-09 | 46d9d79 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
+| 003-03 | Fix edit mode (selection logic, display, labels, rerun option) | 2026-02-09 | 9140124 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 
 ### Roadmap Evolution
 
@@ -186,8 +190,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T15:49:50Z
-Stopped at: Completed quick task 003-01 — Claude wizard UX improvements
+Last session: 2026-02-09T15:53:35Z
+Stopped at: Completed quick task 003-03 — Edit mode fixes (selection, display, labels, rerun)
 Resume file: None
 
 ---
