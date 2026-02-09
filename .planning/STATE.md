@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: 9 of 9 (Config UX Redesign)
-Plan: 9 of 9 (all gap closure plans complete)
-Status: Phase verified — all 13 must-haves passed
-Last activity: 2026-02-09 — Completed gap closure plans 09-06 through 09-09
+Phase: Quick task 004 of ongoing (Fix UAT deploy provenance + project wizard)
+Plan: 1 of 2
+Status: In progress
+Last activity: 2026-02-09 — Completed 004-01-PLAN.md (deploy source provenance)
 
-Progress: ████████████████ 100% (44/44 completed)
+Progress: ████████████████ 100% (44/44 completed in v2.0, quick tasks ongoing)
 
 ## Performance Metrics
 
@@ -186,6 +186,7 @@ New v2.0 decisions:
 | 003-02 | Fix Git wizard UX issues (prompt format, config path labels) | 2026-02-09 | 46d9d79 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 003-03 | Fix edit mode (selection logic, display, labels, rerun option) | 2026-02-09 | 9140124 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 003-04 | Polish setup command one-time init | 2026-02-09 | e0d75d2 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
+| 004-01 | Add deploy source provenance | 2026-02-09 | a461bbc | [004-fix-uat-deploy-provenance-project-wizard](./quick/004-fix-uat-deploy-provenance-project-wizard/) |
 
 ### Roadmap Evolution
 
@@ -194,8 +195,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09
-Stopped at: UAT complete — all 17 tests passing. Deploy refactored to consistent symlink model.
+Last session: 2026-02-09 19:05:05 UTC
+Stopped at: Completed 004-01-PLAN.md (deploy source provenance)
 Resume file: None
 
 ---
