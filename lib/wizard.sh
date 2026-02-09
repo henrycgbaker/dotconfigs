@@ -217,30 +217,24 @@ wizard_edit_mode_display() {
     local values_var="$2"
     local managed_var="$3"
 
-    # Get arrays by name (bash 3.2 compatible)
-    eval "local labels_str=\"\${${labels_var}[*]}\""
-    eval "local values_str=\"\${${values_var}[*]}\""
-    eval "local managed_str=\"\${${managed_var}[*]}\""
+    # Get array length (bash 3.2 compatible — no namerefs)
+    eval "local count=\${#${labels_var}[@]}"
 
-    local labels=($labels_str)
-    local values=($values_str)
-    local managed=($managed_str)
+    local i=0
+    while [[ $i -lt $count ]]; do
+        eval "local label=\"\${${labels_var}[$i]}\""
+        eval "local value=\"\${${values_var}[$i]}\""
+        eval "local is_managed=\"\${${managed_var}[$i]}\""
 
-    local i=1
-    local j=0
-    for label in "${labels[@]}"; do
-        local value="${values[$j]}"
-        local is_managed="${managed[$j]}"
-
+        local display_num=$((i + 1))
         if [[ "$is_managed" == "true" ]]; then
-            echo "  $i) $label: $value"
+            echo "  $display_num) $label = $value"
         else
-            printf "  %d) %s: " "$i" "$label"
+            printf "  %d) %s: " "$display_num" "$label"
             colour_not_managed
             echo ""
         fi
         i=$((i + 1))
-        j=$((j + 1))
     done
 }
 
