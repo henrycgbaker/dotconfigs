@@ -183,6 +183,7 @@ New v2.0 decisions:
 | 003-01 | Claude wizard UX improvements (remove GSD, add previews, simplify settings) | 2026-02-09 | b36d8d0 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 003-02 | Fix Git wizard UX issues (prompt format, config path labels) | 2026-02-09 | 46d9d79 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 | 003-03 | Fix edit mode (selection logic, display, labels, rerun option) | 2026-02-09 | 9140124 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
+| 003-04 | Polish setup command one-time init | 2026-02-09 | e0d75d2 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 
 ### Roadmap Evolution
 
@@ -190,8 +191,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T15:53:35Z
-Stopped at: Completed quick task 003-03 — Edit mode fixes (selection, display, labels, rerun)
+Last session: 2026-02-09
+Stopped at: Completed quick task 003 — Fix all open UAT issues (tests 5, 6, 7, 11)
 Resume file: None
 
 ---
