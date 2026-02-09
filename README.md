@@ -111,6 +111,8 @@ Deploy reads `.env` and applies configuration:
 - **Claude plugin:** Symlinks settings.json, CLAUDE.md, hooks, commands to `~/.claude/`
 - **Git plugin:** Writes to `git config --global`, creates aliases, optionally deploys hooks
 
+**Conflict resolution:** Deploy uses **file-level symlinks** (not directory-level) and tracks ownership. If a file at the deploy target already exists and isn't a dotconfigs symlink, it's treated as a "foreign" file — you'll be prompted to overwrite, skip, backup, or diff. This means dotconfigs safely coexists with other tools (e.g., GSD framework) that share `~/.claude/` directories like `commands/` and `hooks/`. Each tool's files are individually tracked; deploying dotconfigs won't clobber files belonging to other tools.
+
 ### dotconfigs project-configs [plugin] [path]
 
 Scaffolds per-repository configuration files. Can be run from within a project (auto-detects) or with an explicit path.
