@@ -11,3 +11,6 @@
 
 # Environment configuration (machine-specific)
 .env
+
+# Personal Claude settings (machine-specific)
+settings.json

@@ -1,0 +1,67 @@
+{
+  "_template_note": "This is a complete reference template. Copy to your project root as settings.json and remove sections you don't need.",
+  "permissions": {
+    "allow": [
+      "Bash(ruff:*)",
+      "Bash(pytest:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(pnpm:*)",
+      "Bash(git:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)"
+    ],
+    "deny": [
+      "Read(*.pem)",
+      "Read(*credentials*)",
+      "Read(*secret*)"
+    ],
+    "ask": [
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "excluded_commands": [
+      "git",
+      "docker"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matchers": [
+          { "tool_name": "Bash" }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "timeout": 10000
+      },
+      {
+        "matchers": [
+          { "tool_name": "Write" },
+          { "tool_name": "Edit" }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "timeout": 10000
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matchers": [
+          { "tool_name": "Write" },
+          { "tool_name": "Edit" }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/post-tool-format.py",
+        "timeout": 30000
+      }
+    ]
+  },
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1"
+  }
+}
