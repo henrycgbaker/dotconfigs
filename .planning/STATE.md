@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 9 of 9 (Config UX Redesign)
-Plan: 9 of 9 gap closure
-Status: Phase complete
-Last activity: 2026-02-09 — Completed 09-09-PLAN.md
+Plan: 6 of 9 gap closure
+Status: Gap closure in progress
+Last activity: 2026-02-09 — Completed 09-06-PLAN.md
 
-Progress: ███████████████ 100% (43/44 completed)
+Progress: ███████████████░ 98% (41/42 completed)
 
 ## Performance Metrics
 
@@ -146,6 +146,9 @@ New v2.0 decisions:
 - [09-05]: CLAUDE.md exclusion applied during deploy (reads from .env, writes to .git/info/exclude)
 - [09-05]: Settings.json assembled from templates during deploy with language rule selection (Python/Node)
 - [09-05]: Select loop eliminated from claude project.sh (replaced with read prompt)
+- [09-06]: Boolean opt-out uses unset instead of setting to 'false' to ensure save logic skips them
+- [09-06]: First-run sections and skills start empty (opt-in) rather than pre-selected (opt-out)
+- [09-06]: Default detection logic changed from checking for 'false' to checking for 'true'
 - [09-07]: .env format retained — JSON migration deferred to v3 (quoting bug fixed in quick-002, not symptomatic of format issues)
 - [09-07]: Legacy githooks/ directory removed — plugins/git/hooks/ is sole source of truth for git hooks
 - [09-07]: Orphaned discovery functions cleaned up (discover_githooks, discover_settings_templates, discover_hooks_conf_profiles)
@@ -177,8 +180,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T14:01:04Z
-Stopped at: Completed 09-09-PLAN.md
+Last session: 2026-02-09T14:01:22Z
+Stopped at: Completed 09-06-PLAN.md
 Resume file: None
 
 ---
