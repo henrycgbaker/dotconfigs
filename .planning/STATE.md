@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 9 of 9 (Config UX Redesign)
-Plan: 2 of ? in phase
+Plan: 3 of 5 in phase
 Status: In progress
-Last activity: 2026-02-09 — Completed 09-02-PLAN.md
+Last activity: 2026-02-09 — Completed 09-03-PLAN.md
 
 Progress: ██████████████░ 94% (35/35 completed + Phase 9 in progress)
 
@@ -134,6 +134,10 @@ New v2.0 decisions:
 - [09-02]: Wizard helpers for opt-in category menus and config toggles
 - [09-02]: Complete settings-template.json with all common rules (Python/Node/git/docker/hooks)
 - [09-02]: Root settings.json gitignored to prevent committing personal config
+- [09-03]: Category-based opt-in wizard for Claude global-configs (3 categories: Deploy targets, Content, Behaviour)
+- [09-03]: Edit mode on re-run with numbered config list and [not managed] indicators
+- [09-03]: Git identity removed from Claude wizard (responsibility moved to git plugin)
+- [09-03]: Opt-in save logic — only writes non-empty config values to .env
 
 ### Pending Todos
 
@@ -162,8 +166,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T23:29:15Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-02-09T13:20:45Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None
 
 ---
