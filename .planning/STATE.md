@@ -164,6 +164,8 @@ New v2.0 decisions:
 
 - [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo)
 - [x] **README**: Add brief mention of GSD framework — DONE in 08-06
+- [ ] **Wizard UX**: Unify rerun/edit-mode logic between Claude and Git wizards (currently different flows)
+- [ ] **Wizard UX**: Improve toggle menu previews (inline first-line for hooks, richer formatting)
 
 ### Blockers/Concerns
 
@@ -188,6 +190,7 @@ New v2.0 decisions:
 ### Roadmap Evolution
 
 - Phase 9 added: Config UX Redesign — opt-in config selection, project-configs wizard, CLAUDE.md exclusion, bug fixes (from UAT findings + quick task 002 gaps)
+- Phase 10 added: Per-Hook Scope Granularity — per-hook global/project deployment (v3 priority, deferred from UAT test 6c)
 
 ## Session Continuity
 

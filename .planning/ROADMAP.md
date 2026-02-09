@@ -18,6 +18,7 @@ Phase numbering continues from v1.0 (phases 1–3 complete).
 - [x] **Phase 7: Integration & Polish** - Status/list commands, conflict detection, testing, documentation
 - [x] **Phase 8: Hooks & Workflows Review** - Audit and rationalise hook/workflow placement across claude and git plugins
 - [ ] **Phase 9: Config UX Redesign** - Opt-in config selection, project-configs wizard with global value indicators, CLAUDE.md exclusion, fix remaining bugs
+- [ ] **Phase 10: Per-Hook Scope Granularity** - Allow individual hooks to be deployed globally or per-project independently
 
 ## Phase Details
 
@@ -230,10 +231,32 @@ Plans:
 - Concerns: jq dependency (bash 3.2 portability), migration path for existing users, scope of changes
 - Decision: discuss during Phase 9 planning, implement or defer to v3
 
+### Phase 10: Per-Hook Scope Granularity
+**Goal**: Allow individual hooks to be deployed globally or per-project independently, replacing the current all-or-nothing scope model
+**Depends on**: Phase 9 (v3 priority — immediate)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 10 to break down)
+
+**Success Criteria** (what must be TRUE):
+  1. Each hook can independently be scoped to global or per-project
+  2. Wizard allows per-hook scope selection (not just a single global/project toggle)
+  3. Deploy respects individual hook scope settings
+  4. Existing all-or-nothing config migrated or backwards-compatible
+  5. `GIT_HOOK_{NAME}_SCOPE` variables (or equivalent) stored in .env
+
+**Context:**
+- UAT Test 6c identified this as a gap: "Per-hook granularity for scope (global vs project) and location — requires fundamental changes to the hook deployment model"
+- Deferred from quick-003 as "major rearchitecture"
+- Current model: single `GIT_HOOKS_SCOPE` applies to all hooks
+- `core.hooksPath` creates either/or: when set, git ignores `.git/hooks/` entirely
+- Need to solve the mixed deployment problem (some hooks global, some per-project)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9
+Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9 → 10
 (Phases 5 and 6 may run in parallel if infrastructure is stable after Phase 4)
 
 | Phase | Plans Complete | Status | Completed |
@@ -244,6 +267,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9
 | 7. Integration & Polish | 5/5 | ✓ Complete | 2026-02-07 |
 | 8. Hooks & Workflows Review | 6/6 | ✓ Complete | 2026-02-08 |
 | 9. Config UX Redesign | 9/9 | ✓ Complete | 2026-02-09 |
+| 10. Per-Hook Scope Granularity | 0/0 | Not started | — |
 
 ## Accumulated Context
 
