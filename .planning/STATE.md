@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 9 of 9 (Config UX Redesign)
-Plan: 5 of 5 in phase
-Status: Phase complete
-Last activity: 2026-02-09 — Completed 09-05-PLAN.md
+Plan: 7 of 9 gap closure
+Status: Gap closure in progress
+Last activity: 2026-02-09 — Completed 09-07-PLAN.md
 
-Progress: ███████████████ 100% (40/40 completed)
+Progress: ███████████████ 100% (42/44 completed)
 
 ## Performance Metrics
 
@@ -146,6 +146,9 @@ New v2.0 decisions:
 - [09-05]: CLAUDE.md exclusion applied during deploy (reads from .env, writes to .git/info/exclude)
 - [09-05]: Settings.json assembled from templates during deploy with language rule selection (Python/Node)
 - [09-05]: Select loop eliminated from claude project.sh (replaced with read prompt)
+- [09-07]: .env format retained — JSON migration deferred to v3 (quoting bug fixed in quick-002, not symptomatic of format issues)
+- [09-07]: Legacy githooks/ directory removed — plugins/git/hooks/ is sole source of truth for git hooks
+- [09-07]: Orphaned discovery functions cleaned up (discover_githooks, discover_settings_templates, discover_hooks_conf_profiles)
 
 ### Pending Todos
 
@@ -174,12 +177,12 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T13:28:21Z
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-02-09T14:00:56Z
+Stopped at: Completed 09-07-PLAN.md
 Resume file: None
 
 ---
 
 **Phase 8 Status:** COMPLETE (6/6 plans). Hooks architecture and CLI integration complete.
 **Quick Task 002:** COMPLETE. CLI renamed to `dots`, commands restructured, .env quoting fixed.
-**Phase 9 Status:** COMPLETE (5/5 plans). Config UX redesign with opt-in wizards, G/L provenance, and CLAUDE.md exclusion complete.
+**Phase 9 Status:** Gap closure in progress (7/9 plans). Config UX redesign core complete, cleanup and docs remaining.
