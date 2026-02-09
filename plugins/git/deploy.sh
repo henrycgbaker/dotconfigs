@@ -9,7 +9,7 @@ ENV_FILE="$DOTCONFIGS_ROOT/.env"
 # Returns: 1 if .env doesn't exist, 0 otherwise
 _git_load_config() {
     if [[ ! -f "$ENV_FILE" ]]; then
-        echo "Error: No configuration found. Run 'dotconfigs setup git' first." >&2
+        echo "Error: No configuration found. Run 'dotconfigs setup' then 'dotconfigs global-configs git' first." >&2
         return 1
     fi
 
@@ -507,13 +507,13 @@ plugin_git_status() {
         expected_value="$GIT_USER_NAME"
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$expected_value" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("user.name")
         config_states+=("$state")
@@ -525,13 +525,13 @@ plugin_git_status() {
         expected_value="$GIT_USER_EMAIL"
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$expected_value" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("user.email")
         config_states+=("$state")
@@ -544,13 +544,13 @@ plugin_git_status() {
         expected_value="$GIT_PULL_REBASE"
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$expected_value" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("pull.rebase")
         config_states+=("$state")
@@ -562,13 +562,13 @@ plugin_git_status() {
         expected_value="$GIT_PUSH_DEFAULT"
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$expected_value" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("push.default")
         config_states+=("$state")
@@ -580,13 +580,13 @@ plugin_git_status() {
         expected_value="$GIT_FETCH_PRUNE"
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$expected_value" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("fetch.prune")
         config_states+=("$state")
@@ -598,13 +598,13 @@ plugin_git_status() {
         expected_value="$GIT_INIT_DEFAULT_BRANCH"
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$expected_value" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("init.defaultBranch")
         config_states+=("$state")
@@ -633,13 +633,13 @@ plugin_git_status() {
         current_value=$(git config --global --get "alias.$alias_name" 2>/dev/null || echo "")
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$expected_value" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("alias.$alias_name")
         config_states+=("$state")
@@ -652,13 +652,13 @@ plugin_git_status() {
         current_value=$(git config --global --get core.hooksPath 2>/dev/null || echo "")
         if [[ -z "$current_value" ]]; then
             state="not-deployed"
-            ((count_missing++))
+            count_missing=$((count_missing + 1))
         elif [[ "$current_value" != "$hooks_path" ]]; then
             state="drifted"
-            ((count_drift++))
+            count_drift=$((count_drift + 1))
         else
             state="deployed"
-            ((count_ok++))
+            count_ok=$((count_ok + 1))
         fi
         config_names+=("core.hooksPath (global)")
         config_states+=("$state")
@@ -668,7 +668,7 @@ plugin_git_status() {
         config_names+=("hooks (per-project)")
         config_states+=("deployed")
         config_details+=("|")
-        ((count_ok++))
+        count_ok=$((count_ok + 1))
     fi
 
     # Print plugin header with overall status
@@ -759,26 +759,26 @@ plugin_git_deploy() {
             if [[ "$dry_run" == "true" ]]; then
                 if [[ -z "$current_name" ]]; then
                     echo "  Would set user.name: $GIT_USER_NAME"
-                    ((files_created++))
+                    files_created=$((files_created + 1))
                 elif [[ "$current_name" != "$GIT_USER_NAME" ]]; then
                     echo "  Would update user.name: $current_name -> $GIT_USER_NAME"
-                    ((files_updated++))
+                    files_updated=$((files_updated + 1))
                 else
                     echo "  Unchanged: user.name"
-                    ((files_unchanged++))
+                    files_unchanged=$((files_unchanged + 1))
                 fi
             else
                 if [[ -z "$current_name" ]]; then
                     git config --global user.name "$GIT_USER_NAME"
                     echo "  ✓ Set user.name: $GIT_USER_NAME"
-                    ((files_created++))
+                    files_created=$((files_created + 1))
                 elif [[ "$current_name" != "$GIT_USER_NAME" ]]; then
                     git config --global user.name "$GIT_USER_NAME"
                     echo "  ✓ Updated user.name: $GIT_USER_NAME"
-                    ((files_updated++))
+                    files_updated=$((files_updated + 1))
                 else
                     echo "  Unchanged: user.name"
-                    ((files_unchanged++))
+                    files_unchanged=$((files_unchanged + 1))
                 fi
             fi
         fi
@@ -788,26 +788,26 @@ plugin_git_deploy() {
             if [[ "$dry_run" == "true" ]]; then
                 if [[ -z "$current_email" ]]; then
                     echo "  Would set user.email: $GIT_USER_EMAIL"
-                    ((files_created++))
+                    files_created=$((files_created + 1))
                 elif [[ "$current_email" != "$GIT_USER_EMAIL" ]]; then
                     echo "  Would update user.email: $current_email -> $GIT_USER_EMAIL"
-                    ((files_updated++))
+                    files_updated=$((files_updated + 1))
                 else
                     echo "  Unchanged: user.email"
-                    ((files_unchanged++))
+                    files_unchanged=$((files_unchanged + 1))
                 fi
             else
                 if [[ -z "$current_email" ]]; then
                     git config --global user.email "$GIT_USER_EMAIL"
                     echo "  ✓ Set user.email: $GIT_USER_EMAIL"
-                    ((files_created++))
+                    files_created=$((files_created + 1))
                 elif [[ "$current_email" != "$GIT_USER_EMAIL" ]]; then
                     git config --global user.email "$GIT_USER_EMAIL"
                     echo "  ✓ Updated user.email: $GIT_USER_EMAIL"
-                    ((files_updated++))
+                    files_updated=$((files_updated + 1))
                 else
                     echo "  Unchanged: user.email"
-                    ((files_unchanged++))
+                    files_unchanged=$((files_unchanged + 1))
                 fi
             fi
         fi
@@ -842,7 +842,7 @@ plugin_git_deploy() {
         echo "    post-rewrite       - dependency changes (rebase)"
     else
         echo "  Hooks configured for per-project deployment."
-        echo "  Run 'dotconfigs project git <path>' to deploy hooks to a specific repo."
+        echo "  Run 'dotconfigs project-configs git <path>' to deploy hooks to a specific repo."
         echo ""
         echo "  Hook roster (7 hooks available):"
         echo "    pre-commit, commit-msg, prepare-commit-msg, pre-push,"

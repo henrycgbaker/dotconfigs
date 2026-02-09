@@ -33,7 +33,7 @@ is_dotconfigs_owned() {
 
 # Check file deployment state for status reporting
 # Args: target_path, expected_source, dotconfigs_root
-# Returns: State string via stdout, exit code: 0 (deployed), 1 (not-deployed), 2 (drifted)
+# Returns: State string via stdout. Always returns 0 (safe with set -e).
 check_file_state() {
     local target_path="$1"
     local expected_source="$2"
@@ -43,13 +43,13 @@ check_file_state() {
     # Case 1: Target doesn't exist (and isn't a dangling symlink)
     if [[ ! -e "$target_path" && ! -L "$target_path" ]]; then
         echo "not-deployed"
-        return 1
+        return 0
     fi
 
     # Case 2: Target is a symlink but broken (dangling)
     if [[ -L "$target_path" && ! -e "$target_path" ]]; then
         echo "drifted-broken"
-        return 2
+        return 0
     fi
 
     # Case 3: Target is a symlink and owned by dotconfigs
@@ -66,28 +66,27 @@ check_file_state() {
         # Compare resolved path to expected source
         if [[ "$link_target" == "$expected_source" ]]; then
             echo "deployed"
-            return 0
         else
             echo "drifted-wrong-target"
-            return 2
         fi
+        return 0
     fi
 
     # Case 4: Target is a symlink but NOT owned by dotconfigs
     if [[ -L "$target_path" ]]; then
         echo "drifted-foreign"
-        return 2
+        return 0
     fi
 
     # Case 5: Target is a regular file (not a symlink)
     if [[ -f "$target_path" ]]; then
         echo "drifted-foreign"
-        return 2
+        return 0
     fi
 
     # Fallback: Unknown state
     echo "not-deployed"
-    return 1
+    return 0
 }
 
 # Create a symlink with conflict handling

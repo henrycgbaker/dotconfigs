@@ -199,6 +199,12 @@ _claude_build_md() {
     local templates_dir="$plugin_dir/templates/claude-md"
     local output_file="$deploy_target/CLAUDE.md"
 
+    # Handle broken symlinks or missing parent directory
+    if [[ -L "$output_file" && ! -e "$output_file" ]]; then
+        rm -f "$output_file"
+    fi
+    mkdir -p "$(dirname "$output_file")"
+
     # Clear output file
     > "$output_file"
 
@@ -242,7 +248,7 @@ _claude_build_md() {
 # Sets global variables: CLAUDE_DEPLOY_TARGET, CLAUDE_SETTINGS_ENABLED, etc.
 _claude_load_config() {
     if [[ ! -f "$ENV_FILE" ]]; then
-        echo "Error: No configuration found. Run 'dotconfigs setup claude' first." >&2
+        echo "Error: No configuration found. Run 'dotconfigs setup' then 'dotconfigs global-configs claude' first." >&2
         return 1
     fi
 
@@ -325,23 +331,23 @@ plugin_claude_status() {
             # Special case for CLAUDE.md (generated file)
             if [[ -f "$target_path" ]]; then
                 state="deployed"
-                ((count_ok++))
+                count_ok=$((count_ok + 1))
             else
                 state="not-deployed"
-                ((count_missing++))
+                count_missing=$((count_missing + 1))
             fi
         else
             # Regular symlink check
             state=$(check_file_state "$target_path" "$expected_source" "$DOTCONFIGS_ROOT")
             case "$state" in
                 deployed)
-                    ((count_ok++))
+                    count_ok=$((count_ok + 1))
                     ;;
                 drifted-*)
-                    ((count_drift++))
+                    count_drift=$((count_drift + 1))
                     ;;
                 not-deployed)
-                    ((count_missing++))
+                    count_missing=$((count_missing + 1))
                     ;;
             esac
         fi
@@ -420,11 +426,11 @@ plugin_claude_deploy() {
     if [[ ! -d "$CLAUDE_DEPLOY_TARGET" ]]; then
         if [[ "$dry_run" == "true" ]]; then
             echo "  Would create $CLAUDE_DEPLOY_TARGET"
-            ((files_created++))
+            files_created=$((files_created + 1))
         else
             mkdir -p "$CLAUDE_DEPLOY_TARGET"
             echo "  ✓ Created $CLAUDE_DEPLOY_TARGET"
-            ((files_created++))
+            files_created=$((files_created + 1))
         fi
     fi
 
@@ -451,19 +457,19 @@ plugin_claude_deploy() {
             case "$state" in
                 deployed)
                     echo "  Unchanged: settings.json"
-                    ((files_unchanged++))
+                    files_unchanged=$((files_unchanged + 1))
                     ;;
                 not-deployed)
                     echo "  Would link: settings.json"
-                    ((files_created++))
+                    files_created=$((files_created + 1))
                     ;;
                 drifted-*)
                     if [[ "$interactive_mode" == "force" ]]; then
                         echo "  Would overwrite: settings.json (--force)"
-                        ((files_updated++))
+                        files_updated=$((files_updated + 1))
                     else
                         echo "  Would prompt: conflict at settings.json"
-                        ((files_skipped++))
+                        files_skipped=$((files_skipped + 1))
                     fi
                     ;;
             esac
@@ -471,17 +477,17 @@ plugin_claude_deploy() {
             case "$state" in
                 deployed)
                     echo "  Unchanged: settings.json"
-                    ((files_unchanged++))
+                    files_unchanged=$((files_unchanged + 1))
                     ;;
                 *)
                     if backup_and_link "$DOTCONFIGS_ROOT/settings.json" "$CLAUDE_DEPLOY_TARGET/settings.json" "settings.json" "$interactive_mode"; then
                         if [[ "$state" == "not-deployed" ]]; then
-                            ((files_created++))
+                            files_created=$((files_created + 1))
                         else
-                            ((files_updated++))
+                            files_updated=$((files_updated + 1))
                         fi
                     else
-                        ((files_skipped++))
+                        files_skipped=$((files_skipped + 1))
                     fi
                     ;;
             esac
@@ -494,10 +500,10 @@ plugin_claude_deploy() {
         if [[ "$dry_run" == "true" ]]; then
             if [[ -f "$CLAUDE_DEPLOY_TARGET/CLAUDE.md" ]]; then
                 echo "  Would update: CLAUDE.md"
-                ((files_updated++))
+                files_updated=$((files_updated + 1))
             else
                 echo "  Would create: CLAUDE.md"
-                ((files_created++))
+                files_created=$((files_created + 1))
             fi
         else
             local existed=false
@@ -506,9 +512,9 @@ plugin_claude_deploy() {
             fi
             _claude_build_md "$PLUGIN_DIR" "$CLAUDE_DEPLOY_TARGET" "${CLAUDE_MD_SECTIONS_ARRAY[@]}"
             if [[ "$existed" == "true" ]]; then
-                ((files_updated++))
+                files_updated=$((files_updated + 1))
             else
-                ((files_created++))
+                files_created=$((files_created + 1))
             fi
         fi
     fi
@@ -529,19 +535,19 @@ plugin_claude_deploy() {
                 case "$state" in
                     deployed)
                         echo "  Unchanged: hooks/$hook"
-                        ((files_unchanged++))
+                        files_unchanged=$((files_unchanged + 1))
                         ;;
                     not-deployed)
                         echo "  Would link: hooks/$hook"
-                        ((files_created++))
+                        files_created=$((files_created + 1))
                         ;;
                     drifted-*)
                         if [[ "$interactive_mode" == "force" ]]; then
                             echo "  Would overwrite: hooks/$hook (--force)"
-                            ((files_updated++))
+                            files_updated=$((files_updated + 1))
                         else
                             echo "  Would prompt: conflict at hooks/$hook"
-                            ((files_skipped++))
+                            files_skipped=$((files_skipped + 1))
                         fi
                         ;;
                 esac
@@ -549,17 +555,17 @@ plugin_claude_deploy() {
                 case "$state" in
                     deployed)
                         echo "  Unchanged: hooks/$hook"
-                        ((files_unchanged++))
+                        files_unchanged=$((files_unchanged + 1))
                         ;;
                     *)
                         if backup_and_link "$source" "$target" "hooks/$hook" "$interactive_mode"; then
                             if [[ "$state" == "not-deployed" ]]; then
-                                ((files_created++))
+                                files_created=$((files_created + 1))
                             else
-                                ((files_updated++))
+                                files_updated=$((files_updated + 1))
                             fi
                         else
-                            ((files_skipped++))
+                            files_skipped=$((files_skipped + 1))
                         fi
                         ;;
                 esac
@@ -583,19 +589,19 @@ plugin_claude_deploy() {
                 case "$state" in
                     deployed)
                         echo "  Unchanged: commands/${skill}.md"
-                        ((files_unchanged++))
+                        files_unchanged=$((files_unchanged + 1))
                         ;;
                     not-deployed)
                         echo "  Would link: commands/${skill}.md"
-                        ((files_created++))
+                        files_created=$((files_created + 1))
                         ;;
                     drifted-*)
                         if [[ "$interactive_mode" == "force" ]]; then
                             echo "  Would overwrite: commands/${skill}.md (--force)"
-                            ((files_updated++))
+                            files_updated=$((files_updated + 1))
                         else
                             echo "  Would prompt: conflict at commands/${skill}.md"
-                            ((files_skipped++))
+                            files_skipped=$((files_skipped + 1))
                         fi
                         ;;
                 esac
@@ -603,17 +609,17 @@ plugin_claude_deploy() {
                 case "$state" in
                     deployed)
                         echo "  Unchanged: commands/${skill}.md"
-                        ((files_unchanged++))
+                        files_unchanged=$((files_unchanged + 1))
                         ;;
                     *)
                         if backup_and_link "$source" "$target" "commands/${skill}.md" "$interactive_mode"; then
                             if [[ "$state" == "not-deployed" ]]; then
-                                ((files_created++))
+                                files_created=$((files_created + 1))
                             else
-                                ((files_updated++))
+                                files_updated=$((files_updated + 1))
                             fi
                         else
-                            ((files_skipped++))
+                            files_skipped=$((files_skipped + 1))
                         fi
                         ;;
                 esac

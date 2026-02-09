@@ -675,7 +675,7 @@ plugin_claude_setup() {
     echo "Configuration saved to $ENV_FILE"
     echo ""
     echo "Next steps:"
-    echo "  1. Run 'dots deploy claude' to deploy to filesystem"
+    echo "  1. Run 'dotconfigs deploy claude' to deploy to filesystem"
     echo "  2. Customise settings in .env if needed"
     echo ""
 }
