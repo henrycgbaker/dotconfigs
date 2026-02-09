@@ -196,12 +196,6 @@ _git_wizard_hooks() {
     # Config file location (only for project scope)
     if [[ "$GIT_HOOKS_SCOPE" == "project" ]]; then
         echo ""
-        echo "Config file location:"
-        echo "  1) .githooks/config (standard)"
-        echo "  2) .claude/git-hooks.conf (integrated with Claude setup)"
-        echo "  3) .git/hooks/hooks.conf (legacy)"
-        echo "  4) Custom path"
-        echo ""
         local config_default="${GIT_HOOK_CONFIG_PATH:-.githooks/config}"
         PS3="Select config location [$config_default]: "
         select config_path in ".githooks/config" ".claude/git-hooks.conf" ".git/hooks/hooks.conf" "custom"; do
@@ -209,6 +203,11 @@ _git_wizard_hooks() {
                 custom)
                     read -p "Enter custom path: " config_path
                     GIT_HOOK_CONFIG_PATH="$config_path"
+                    break
+                    ;;
+                "")
+                    # Empty input (Enter) = accept default
+                    GIT_HOOK_CONFIG_PATH="$config_default"
                     break
                     ;;
                 *)
