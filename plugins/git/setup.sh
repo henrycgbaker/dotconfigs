@@ -1,7 +1,18 @@
 # plugins/git/setup.sh — Git configuration setup wizard
 # Sourced by dotconfigs entry point. Do not execute directly.
 
-# Internal: Identity section wizard
+# Internal helper: Check if value is in space-separated list
+_is_in_list() {
+    local needle="$1"
+    local haystack="$2"
+
+    for item in $haystack; do
+        [[ "$item" == "$needle" ]] && return 0
+    done
+    return 1
+}
+
+# Internal: Identity section wizard (opt-in model)
 _git_wizard_identity() {
     wizard_header 1 "Identity"
     echo "Configure git user.name and user.email (applied globally)"
@@ -22,74 +33,71 @@ _git_wizard_identity() {
     wizard_prompt "Git user.email" "$default_email" GIT_USER_EMAIL
 }
 
-# Internal: Workflow settings section wizard
+# Internal: Workflow settings section wizard (opt-in model)
 _git_wizard_workflow() {
     wizard_header 2 "Workflow Settings"
     echo "Configure git workflow preferences"
     echo ""
 
-    echo "Core settings (recommended defaults):"
+    echo "Select which workflow settings to manage (opinionated defaults pre-filled):"
     echo ""
 
-    # Core settings (enabled by default, user opts out)
-    local pull_rebase_default="y"
-    [[ "${GIT_PULL_REBASE:-true}" == "false" ]] && pull_rebase_default="n"
-    if wizard_yesno "  pull.rebase = true (rebase instead of merge on pull)" "$pull_rebase_default"; then
-        GIT_PULL_REBASE="true"
+    # Core settings
+    local pull_rebase_default="${GIT_PULL_REBASE:-true}"
+    if wizard_yesno "  Manage pull.rebase? (default: true)" "$([ "$pull_rebase_default" != "false" ] && echo y || echo n)"; then
+        wizard_prompt "    pull.rebase value [true/false]" "$pull_rebase_default" GIT_PULL_REBASE
     else
-        GIT_PULL_REBASE="false"
+        unset GIT_PULL_REBASE
     fi
 
-    local push_default_default="y"
-    [[ "${GIT_PUSH_DEFAULT:-simple}" != "simple" ]] && push_default_default="n"
-    if wizard_yesno "  push.default = simple (push current branch only)" "$push_default_default"; then
-        GIT_PUSH_DEFAULT="simple"
+    local push_default_default="${GIT_PUSH_DEFAULT:-simple}"
+    if wizard_yesno "  Manage push.default? (default: simple)" "$([ -n "${GIT_PUSH_DEFAULT:-}" ] && echo y || echo n)"; then
+        wizard_prompt "    push.default value [simple/current]" "$push_default_default" GIT_PUSH_DEFAULT
     else
-        GIT_PUSH_DEFAULT="current"
+        unset GIT_PUSH_DEFAULT
     fi
 
-    local fetch_prune_default="y"
-    [[ "${GIT_FETCH_PRUNE:-true}" == "false" ]] && fetch_prune_default="n"
-    if wizard_yesno "  fetch.prune = true (auto-delete removed remote branches)" "$fetch_prune_default"; then
-        GIT_FETCH_PRUNE="true"
+    local fetch_prune_default="${GIT_FETCH_PRUNE:-true}"
+    if wizard_yesno "  Manage fetch.prune? (default: true)" "$([ "$fetch_prune_default" != "false" ] && echo y || echo n)"; then
+        wizard_prompt "    fetch.prune value [true/false]" "$fetch_prune_default" GIT_FETCH_PRUNE
     else
-        GIT_FETCH_PRUNE="false"
+        unset GIT_FETCH_PRUNE
     fi
 
     local default_branch="${GIT_INIT_DEFAULT_BRANCH:-main}"
-    wizard_prompt "  init.defaultBranch (default branch name for new repos)" "$default_branch" GIT_INIT_DEFAULT_BRANCH
+    if wizard_yesno "  Manage init.defaultBranch? (default: main)" "$([ -n "${GIT_INIT_DEFAULT_BRANCH:-}" ] && echo y || echo n)"; then
+        wizard_prompt "    init.defaultBranch value" "$default_branch" GIT_INIT_DEFAULT_BRANCH
+    else
+        unset GIT_INIT_DEFAULT_BRANCH
+    fi
 
     echo ""
     echo "Advanced settings (opt-in):"
     echo ""
 
-    # Advanced settings (opt-in, disabled by default)
-    local rerere_default="n"
-    [[ "${GIT_RERERE_ENABLED:-false}" == "true" ]] && rerere_default="y"
-    if wizard_yesno "  rerere.enabled = true (reuse recorded conflict resolutions)" "$rerere_default"; then
-        GIT_RERERE_ENABLED="true"
+    local rerere_default="${GIT_RERERE_ENABLED:-false}"
+    if wizard_yesno "  Manage rerere.enabled? (reuse conflict resolutions)" "$([ "$rerere_default" == "true" ] && echo y || echo n)"; then
+        wizard_prompt "    rerere.enabled value [true/false]" "$rerere_default" GIT_RERERE_ENABLED
     else
-        GIT_RERERE_ENABLED="false"
+        unset GIT_RERERE_ENABLED
     fi
 
-    local diff_algo_default="n"
-    [[ -n "${GIT_DIFF_ALGORITHM:-}" ]] && diff_algo_default="y"
-    if wizard_yesno "  diff.algorithm = histogram (better diff output)" "$diff_algo_default"; then
-        GIT_DIFF_ALGORITHM="histogram"
+    local diff_algo_default="${GIT_DIFF_ALGORITHM:-}"
+    if wizard_yesno "  Manage diff.algorithm? (better diff output)" "$([ -n "$diff_algo_default" ] && echo y || echo n)"; then
+        wizard_prompt "    diff.algorithm value [histogram/patience/minimal]" "${diff_algo_default:-histogram}" GIT_DIFF_ALGORITHM
     else
-        GIT_DIFF_ALGORITHM=""
+        unset GIT_DIFF_ALGORITHM
     fi
 
-    local autocorrect_default="n"
-    [[ -n "${GIT_HELP_AUTOCORRECT:-}" ]] && autocorrect_default="y"
-    if wizard_yesno "  help.autocorrect = 10 (auto-run typo corrections after 1s)" "$autocorrect_default"; then
-        GIT_HELP_AUTOCORRECT="10"
+    local autocorrect_default="${GIT_HELP_AUTOCORRECT:-}"
+    if wizard_yesno "  Manage help.autocorrect? (auto-run typo corrections)" "$([ -n "$autocorrect_default" ] && echo y || echo n)"; then
+        wizard_prompt "    help.autocorrect value (deciseconds)" "${autocorrect_default:-10}" GIT_HELP_AUTOCORRECT
     else
-        GIT_HELP_AUTOCORRECT=""
+        unset GIT_HELP_AUTOCORRECT
     fi
 }
 
-# Internal: Aliases section wizard
+# Internal: Aliases section wizard (opt-in model)
 _git_wizard_aliases() {
     wizard_header 3 "Aliases"
     echo "Configure git command aliases"
@@ -104,21 +112,21 @@ _git_wizard_aliases() {
     local default_alias_wip="commit -am \"WIP\""
 
     # Pre-fill enabled list from .env
-    local enabled_list="${GIT_ALIASES_ENABLED:-unstage last lg amend undo wip}"
+    local enabled_list="${GIT_ALIASES_ENABLED:-}"
     local alias_names=(unstage last lg amend undo wip)
     local enabled_names=""
 
-    echo "Default aliases (enable/disable each):"
+    echo "Default aliases (select which to manage):"
     echo ""
 
     for alias_name in "${alias_names[@]}"; do
         local alias_var="default_alias_${alias_name}"
         local alias_cmd="${!alias_var}"
-        local alias_default="y"
+        local alias_default="n"
 
-        # Check if this alias was previously disabled
-        if ! _is_in_list "$alias_name" "$enabled_list"; then
-            alias_default="n"
+        # Check if this alias was previously enabled
+        if _is_in_list "$alias_name" "$enabled_list"; then
+            alias_default="y"
         fi
 
         if wizard_yesno "  $alias_name = $alias_cmd" "$alias_default"; then
@@ -174,7 +182,7 @@ _git_wizard_aliases() {
     GIT_ALIASES_ENABLED="${enabled_names# }"
 }
 
-# Internal: Hooks section wizard
+# Internal: Hooks section wizard (opt-in model)
 _git_wizard_hooks() {
     wizard_header 4 "Hooks"
     echo "Configure git hook preferences"
@@ -193,31 +201,39 @@ _git_wizard_hooks() {
         echo ""
     fi
 
-    # Config file location (only for project scope)
+    # Config file location (only for project scope) - REPLACE SELECT LOOP
     if [[ "$GIT_HOOKS_SCOPE" == "project" ]]; then
         echo ""
+        echo "Hook config file location:"
+        echo "  1) .githooks/config"
+        echo "  2) .claude/git-hooks.conf"
+        echo "  3) .git/hooks/hooks.conf"
+        echo "  4) Custom path"
+        echo ""
+
         local config_default="${GIT_HOOK_CONFIG_PATH:-.githooks/config}"
-        PS3="Select config location [$config_default]: "
-        select config_path in ".githooks/config" ".claude/git-hooks.conf" ".git/hooks/hooks.conf" "custom"; do
-            case "$config_path" in
-                custom)
-                    read -p "Enter custom path: " config_path
-                    GIT_HOOK_CONFIG_PATH="$config_path"
-                    break
-                    ;;
-                "")
-                    # Empty input (Enter) = accept default
-                    GIT_HOOK_CONFIG_PATH="$config_default"
-                    break
-                    ;;
-                *)
-                    if [[ -n "$config_path" ]]; then
-                        GIT_HOOK_CONFIG_PATH="$config_path"
-                        break
-                    fi
-                    ;;
-            esac
-        done
+        local config_choice=""
+        read -p "Select [1-4, default: 1]: " config_choice
+
+        case "$config_choice" in
+            1|"")
+                GIT_HOOK_CONFIG_PATH=".githooks/config"
+                ;;
+            2)
+                GIT_HOOK_CONFIG_PATH=".claude/git-hooks.conf"
+                ;;
+            3)
+                GIT_HOOK_CONFIG_PATH=".git/hooks/hooks.conf"
+                ;;
+            4)
+                read -p "Enter custom path: " GIT_HOOK_CONFIG_PATH
+                [[ -z "$GIT_HOOK_CONFIG_PATH" ]] && GIT_HOOK_CONFIG_PATH="$config_default"
+                ;;
+            *)
+                echo "Invalid choice, using default: .githooks/config"
+                GIT_HOOK_CONFIG_PATH=".githooks/config"
+                ;;
+        esac
     fi
 
     # Hook roster - Pre-commit checks
@@ -278,21 +294,33 @@ _git_wizard_hooks() {
         GIT_HOOK_CONVENTIONAL_COMMITS="false"
     fi
 
-    # Hook roster - Pre-push
+    # Hook roster - Pre-push - REPLACE SELECT LOOP
     echo ""
     echo "Pre-push protection:"
-    echo "  1) warn  - show warning but allow push"
-    echo "  2) block - prevent accidental force-push to main/master"
-    echo "  3) off   - no pre-push checks"
+    echo "  1) warn  — show warning but allow push"
+    echo "  2) block — prevent force-push to main/master"
+    echo "  3) off   — no pre-push checks"
     echo ""
+
     local protection_default="${GIT_HOOK_BRANCH_PROTECTION:-warn}"
-    PS3="Select protection level [$protection_default]: "
-    select protection_level in "warn" "block" "off"; do
-        if [[ -n "$protection_level" ]]; then
-            GIT_HOOK_BRANCH_PROTECTION="$protection_level"
-            break
-        fi
-    done
+    local protection_choice=""
+    read -p "Select [1-3, default: 1]: " protection_choice
+
+    case "$protection_choice" in
+        1|"")
+            GIT_HOOK_BRANCH_PROTECTION="warn"
+            ;;
+        2)
+            GIT_HOOK_BRANCH_PROTECTION="block"
+            ;;
+        3)
+            GIT_HOOK_BRANCH_PROTECTION="off"
+            ;;
+        *)
+            echo "Invalid choice, using default: warn"
+            GIT_HOOK_BRANCH_PROTECTION="warn"
+            ;;
+    esac
 
     # Hook roster - Prepare commit message
     echo ""
@@ -366,7 +394,103 @@ _git_wizard_hooks() {
     fi
 }
 
-# Internal: Save all GIT_* config to .env
+# Internal: Show edit mode menu for reconfiguration
+_git_wizard_edit_mode() {
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  Edit Mode — Current Configuration"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo "Select categories to reconfigure:"
+    echo ""
+
+    # Show current state
+    local identity_status="[not managed]"
+    [[ -n "${GIT_USER_NAME:-}" ]] && identity_status="configured"
+
+    local workflow_status="[not managed]"
+    [[ -n "${GIT_PULL_REBASE:-}" ]] && workflow_status="configured"
+
+    local aliases_status="[not managed]"
+    [[ -n "${GIT_ALIASES_ENABLED:-}" ]] && aliases_status="configured"
+
+    local hooks_status="[not managed]"
+    [[ -n "${GIT_HOOKS_SCOPE:-}" ]] && hooks_status="configured"
+
+    echo "  1) Identity           — $identity_status"
+    echo "  2) Workflow Settings  — $workflow_status"
+    echo "  3) Aliases            — $aliases_status"
+    echo "  4) Hooks              — $hooks_status"
+    echo "  5) Reconfigure all"
+    echo "  6) Keep current and exit"
+    echo ""
+}
+
+# Internal: Display summary (shows managed vs not managed)
+_git_wizard_summary() {
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  Configuration Summary"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+
+    # Identity
+    echo "Identity:"
+    if [[ -n "${GIT_USER_NAME:-}" ]]; then
+        echo "  user.name:  $GIT_USER_NAME"
+        echo "  user.email: ${GIT_USER_EMAIL:-[not managed]}"
+    else
+        echo "  [not managed]"
+    fi
+    echo ""
+
+    # Workflow
+    echo "Workflow:"
+    if [[ -n "${GIT_PULL_REBASE:-}" || -n "${GIT_PUSH_DEFAULT:-}" || -n "${GIT_FETCH_PRUNE:-}" || -n "${GIT_INIT_DEFAULT_BRANCH:-}" ]]; then
+        echo "  pull.rebase:         ${GIT_PULL_REBASE:-[not managed]}"
+        echo "  push.default:        ${GIT_PUSH_DEFAULT:-[not managed]}"
+        echo "  fetch.prune:         ${GIT_FETCH_PRUNE:-[not managed]}"
+        echo "  init.defaultBranch:  ${GIT_INIT_DEFAULT_BRANCH:-[not managed]}"
+        echo "  rerere.enabled:      ${GIT_RERERE_ENABLED:-[not managed]}"
+        echo "  diff.algorithm:      ${GIT_DIFF_ALGORITHM:-[not managed]}"
+        echo "  help.autocorrect:    ${GIT_HELP_AUTOCORRECT:-[not managed]}"
+    else
+        echo "  [not managed]"
+    fi
+    echo ""
+
+    # Aliases
+    echo "Aliases:"
+    if [[ -n "${GIT_ALIASES_ENABLED:-}" ]]; then
+        echo "  Enabled: $GIT_ALIASES_ENABLED"
+    else
+        echo "  [not managed]"
+    fi
+    echo ""
+
+    # Hooks
+    echo "Hooks:"
+    if [[ -n "${GIT_HOOKS_SCOPE:-}" ]]; then
+        echo "  Scope:                    $GIT_HOOKS_SCOPE"
+        [[ -n "${GIT_HOOK_CONFIG_PATH:-}" ]] && echo "  Config path:              $GIT_HOOK_CONFIG_PATH"
+        echo "  Secrets check:            ${GIT_HOOK_SECRETS_CHECK:-[not managed]}"
+        echo "  Large file check:         ${GIT_HOOK_LARGE_FILE_CHECK:-[not managed]}"
+        echo "  Debug check:              ${GIT_HOOK_DEBUG_CHECK:-[not managed]}"
+        echo "  Block AI attribution:     ${GIT_HOOK_BLOCK_AI_ATTRIBUTION:-[not managed]}"
+        echo "  Block WIP on main:        ${GIT_HOOK_WIP_BLOCK_ON_MAIN:-[not managed]}"
+        echo "  Conventional commits:     ${GIT_HOOK_CONVENTIONAL_COMMITS:-[not managed]}"
+        echo "  Branch protection:        ${GIT_HOOK_BRANCH_PROTECTION:-[not managed]}"
+        echo "  Branch prefix:            ${GIT_HOOK_BRANCH_PREFIX:-[not managed]}"
+        echo "  Dependency check:         ${GIT_HOOK_DEPENDENCY_CHECK:-[not managed]}"
+        echo "  Migration reminder:       ${GIT_HOOK_MIGRATION_REMINDER:-[not managed]}"
+        echo "  Branch info:              ${GIT_HOOK_BRANCH_INFO:-[not managed]}"
+    else
+        echo "  [not managed]"
+    fi
+    echo ""
+}
+
+# Internal: Save all opted-in GIT_* config to .env
 _git_save_config() {
     local env_file="$1"
 
@@ -374,51 +498,51 @@ _git_save_config() {
     if [[ ! -f "$env_file" ]]; then
         cat > "$env_file" <<'EOF'
 # dotconfigs configuration
-# Generated by: dotconfigs setup git (wizard)
-# Re-run wizard: dotconfigs setup git
+# Generated by: dotconfigs global-configs git
+# Re-run wizard: dotconfigs global-configs git
 
 EOF
     fi
 
-    # Save identity
-    wizard_save_env "$env_file" "GIT_USER_NAME" "$GIT_USER_NAME"
-    wizard_save_env "$env_file" "GIT_USER_EMAIL" "$GIT_USER_EMAIL"
+    # Save identity (only if set)
+    [[ -n "${GIT_USER_NAME:-}" ]] && wizard_save_env "$env_file" "GIT_USER_NAME" "$GIT_USER_NAME"
+    [[ -n "${GIT_USER_EMAIL:-}" ]] && wizard_save_env "$env_file" "GIT_USER_EMAIL" "$GIT_USER_EMAIL"
 
-    # Save workflow settings
-    wizard_save_env "$env_file" "GIT_PULL_REBASE" "$GIT_PULL_REBASE"
-    wizard_save_env "$env_file" "GIT_PUSH_DEFAULT" "$GIT_PUSH_DEFAULT"
-    wizard_save_env "$env_file" "GIT_FETCH_PRUNE" "$GIT_FETCH_PRUNE"
-    wizard_save_env "$env_file" "GIT_INIT_DEFAULT_BRANCH" "$GIT_INIT_DEFAULT_BRANCH"
-    wizard_save_env "$env_file" "GIT_RERERE_ENABLED" "$GIT_RERERE_ENABLED"
-    [[ -n "$GIT_DIFF_ALGORITHM" ]] && wizard_save_env "$env_file" "GIT_DIFF_ALGORITHM" "$GIT_DIFF_ALGORITHM"
-    [[ -n "$GIT_HELP_AUTOCORRECT" ]] && wizard_save_env "$env_file" "GIT_HELP_AUTOCORRECT" "$GIT_HELP_AUTOCORRECT"
+    # Save workflow settings (only if set)
+    [[ -n "${GIT_PULL_REBASE:-}" ]] && wizard_save_env "$env_file" "GIT_PULL_REBASE" "$GIT_PULL_REBASE"
+    [[ -n "${GIT_PUSH_DEFAULT:-}" ]] && wizard_save_env "$env_file" "GIT_PUSH_DEFAULT" "$GIT_PUSH_DEFAULT"
+    [[ -n "${GIT_FETCH_PRUNE:-}" ]] && wizard_save_env "$env_file" "GIT_FETCH_PRUNE" "$GIT_FETCH_PRUNE"
+    [[ -n "${GIT_INIT_DEFAULT_BRANCH:-}" ]] && wizard_save_env "$env_file" "GIT_INIT_DEFAULT_BRANCH" "$GIT_INIT_DEFAULT_BRANCH"
+    [[ -n "${GIT_RERERE_ENABLED:-}" ]] && wizard_save_env "$env_file" "GIT_RERERE_ENABLED" "$GIT_RERERE_ENABLED"
+    [[ -n "${GIT_DIFF_ALGORITHM:-}" ]] && wizard_save_env "$env_file" "GIT_DIFF_ALGORITHM" "$GIT_DIFF_ALGORITHM"
+    [[ -n "${GIT_HELP_AUTOCORRECT:-}" ]] && wizard_save_env "$env_file" "GIT_HELP_AUTOCORRECT" "$GIT_HELP_AUTOCORRECT"
 
-    # Save aliases enabled list
-    wizard_save_env "$env_file" "GIT_ALIASES_ENABLED" "$GIT_ALIASES_ENABLED"
+    # Save aliases enabled list (only if set)
+    [[ -n "${GIT_ALIASES_ENABLED:-}" ]] && wizard_save_env "$env_file" "GIT_ALIASES_ENABLED" "$GIT_ALIASES_ENABLED"
 
     # Save individual alias definitions
-    for alias_name in $GIT_ALIASES_ENABLED; do
+    for alias_name in ${GIT_ALIASES_ENABLED:-}; do
         local alias_key="GIT_ALIAS_$(echo "$alias_name" | tr '[:lower:]' '[:upper:]')"
         local alias_value="${!alias_key}"
         [[ -n "$alias_value" ]] && wizard_save_env "$env_file" "$alias_key" "$alias_value"
     done
 
-    # Save hooks settings
-    wizard_save_env "$env_file" "GIT_HOOKS_SCOPE" "$GIT_HOOKS_SCOPE"
+    # Save hooks settings (only if set)
+    [[ -n "${GIT_HOOKS_SCOPE:-}" ]] && wizard_save_env "$env_file" "GIT_HOOKS_SCOPE" "$GIT_HOOKS_SCOPE"
     [[ -n "${GIT_HOOK_CONFIG_PATH:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONFIG_PATH" "$GIT_HOOK_CONFIG_PATH"
 
-    # Save hook toggles
-    wizard_save_env "$env_file" "GIT_HOOK_SECRETS_CHECK" "$GIT_HOOK_SECRETS_CHECK"
-    wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_CHECK" "$GIT_HOOK_LARGE_FILE_CHECK"
-    wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK" "$GIT_HOOK_DEBUG_CHECK"
-    wizard_save_env "$env_file" "GIT_HOOK_BLOCK_AI_ATTRIBUTION" "$GIT_HOOK_BLOCK_AI_ATTRIBUTION"
-    wizard_save_env "$env_file" "GIT_HOOK_WIP_BLOCK_ON_MAIN" "$GIT_HOOK_WIP_BLOCK_ON_MAIN"
-    wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS" "$GIT_HOOK_CONVENTIONAL_COMMITS"
-    wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PROTECTION" "$GIT_HOOK_BRANCH_PROTECTION"
-    wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PREFIX" "$GIT_HOOK_BRANCH_PREFIX"
-    wizard_save_env "$env_file" "GIT_HOOK_DEPENDENCY_CHECK" "$GIT_HOOK_DEPENDENCY_CHECK"
-    wizard_save_env "$env_file" "GIT_HOOK_MIGRATION_REMINDER" "$GIT_HOOK_MIGRATION_REMINDER"
-    wizard_save_env "$env_file" "GIT_HOOK_BRANCH_INFO" "$GIT_HOOK_BRANCH_INFO"
+    # Save hook toggles (only if set)
+    [[ -n "${GIT_HOOK_SECRETS_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_SECRETS_CHECK" "$GIT_HOOK_SECRETS_CHECK"
+    [[ -n "${GIT_HOOK_LARGE_FILE_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_CHECK" "$GIT_HOOK_LARGE_FILE_CHECK"
+    [[ -n "${GIT_HOOK_DEBUG_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK" "$GIT_HOOK_DEBUG_CHECK"
+    [[ -n "${GIT_HOOK_BLOCK_AI_ATTRIBUTION:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BLOCK_AI_ATTRIBUTION" "$GIT_HOOK_BLOCK_AI_ATTRIBUTION"
+    [[ -n "${GIT_HOOK_WIP_BLOCK_ON_MAIN:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_WIP_BLOCK_ON_MAIN" "$GIT_HOOK_WIP_BLOCK_ON_MAIN"
+    [[ -n "${GIT_HOOK_CONVENTIONAL_COMMITS:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS" "$GIT_HOOK_CONVENTIONAL_COMMITS"
+    [[ -n "${GIT_HOOK_BRANCH_PROTECTION:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PROTECTION" "$GIT_HOOK_BRANCH_PROTECTION"
+    [[ -n "${GIT_HOOK_BRANCH_PREFIX:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PREFIX" "$GIT_HOOK_BRANCH_PREFIX"
+    [[ -n "${GIT_HOOK_DEPENDENCY_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEPENDENCY_CHECK" "$GIT_HOOK_DEPENDENCY_CHECK"
+    [[ -n "${GIT_HOOK_MIGRATION_REMINDER:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_MIGRATION_REMINDER" "$GIT_HOOK_MIGRATION_REMINDER"
+    [[ -n "${GIT_HOOK_BRANCH_INFO:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_INFO" "$GIT_HOOK_BRANCH_INFO"
 
     # Save advanced settings if configured
     [[ -n "${GIT_HOOK_CONVENTIONAL_COMMITS_STRICT:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS_STRICT" "$GIT_HOOK_CONVENTIONAL_COMMITS_STRICT"
@@ -443,45 +567,30 @@ plugin_git_setup() {
         source "$ENV_FILE"
     fi
 
+    # Initialise colours
+    init_colours 2>/dev/null || true
+
     echo ""
     echo "╔════════════════════════════════════════════════════════════╗"
     echo "║               dotconfigs — Git Configuration               ║"
     echo "╚════════════════════════════════════════════════════════════╝"
     echo ""
 
-    # Menu loop
-    while true; do
-        echo ""
-        echo "═══════════════════════════════════════════════════════════"
-        echo "  Configuration Menu"
-        echo "═══════════════════════════════════════════════════════════"
-        echo ""
+    # Detect edit mode (re-run when .env has GIT_* keys)
+    local is_edit_mode=0
+    if [[ -n "${GIT_USER_NAME:-}" || -n "${GIT_PULL_REBASE:-}" || -n "${GIT_HOOKS_SCOPE:-}" ]]; then
+        is_edit_mode=1
+    fi
 
-        # Show section status
-        local identity_status="✗ not configured"
-        [[ -n "${GIT_USER_NAME:-}" ]] && identity_status="✓ configured"
+    # Edit mode or first-run mode
+    if [[ $is_edit_mode -eq 1 ]]; then
+        # Edit mode: show current state and let user pick categories to edit
+        _git_wizard_edit_mode
 
-        local workflow_status="✗ not configured"
-        [[ -n "${GIT_PULL_REBASE:-}" ]] && workflow_status="✓ configured"
+        local edit_choice=""
+        read -p "Select option [1-6]: " edit_choice
 
-        local aliases_status="✗ not configured"
-        [[ -n "${GIT_ALIASES_ENABLED:-}" ]] && aliases_status="✓ configured"
-
-        local hooks_status="✗ not configured"
-        [[ -n "${GIT_HOOKS_SCOPE:-}" ]] && hooks_status="✓ configured"
-
-        echo "  1) Configure Identity          $identity_status"
-        echo "  2) Configure Workflow Settings $workflow_status"
-        echo "  3) Configure Aliases           $aliases_status"
-        echo "  4) Configure Hooks             $hooks_status"
-        echo "  5) Configure All"
-        echo "  6) Done -- save and exit"
-        echo ""
-
-        local menu_choice=""
-        read -p "Select option [1-6]: " menu_choice
-
-        case "$menu_choice" in
+        case "$edit_choice" in
             1)
                 _git_wizard_identity
                 ;;
@@ -500,64 +609,80 @@ plugin_git_setup() {
                 _git_wizard_aliases
                 _git_wizard_hooks
                 ;;
-            6)
-                # Summary and save
+            6|"")
                 echo ""
-                echo "═══════════════════════════════════════════════════════════"
-                echo "  Configuration Summary"
-                echo "═══════════════════════════════════════════════════════════"
-                echo ""
-                echo "Identity:"
-                echo "  user.name:  ${GIT_USER_NAME:-<not set>}"
-                echo "  user.email: ${GIT_USER_EMAIL:-<not set>}"
-                echo ""
-                echo "Workflow:"
-                echo "  pull.rebase:         ${GIT_PULL_REBASE:-<not set>}"
-                echo "  push.default:        ${GIT_PUSH_DEFAULT:-<not set>}"
-                echo "  fetch.prune:         ${GIT_FETCH_PRUNE:-<not set>}"
-                echo "  init.defaultBranch:  ${GIT_INIT_DEFAULT_BRANCH:-<not set>}"
-                echo "  rerere.enabled:      ${GIT_RERERE_ENABLED:-false}"
-                echo "  diff.algorithm:      ${GIT_DIFF_ALGORITHM:-<not set>}"
-                echo "  help.autocorrect:    ${GIT_HELP_AUTOCORRECT:-<not set>}"
-                echo ""
-                echo "Aliases:"
-                echo "  Enabled: ${GIT_ALIASES_ENABLED:-<none>}"
-                echo ""
-                echo "Hooks:"
-                echo "  Scope:                    ${GIT_HOOKS_SCOPE:-<not set>}"
-                [[ -n "${GIT_HOOK_CONFIG_PATH:-}" ]] && echo "  Config path:              $GIT_HOOK_CONFIG_PATH"
-                echo "  Secrets check:            ${GIT_HOOK_SECRETS_CHECK:-<not set>}"
-                echo "  Large file check:         ${GIT_HOOK_LARGE_FILE_CHECK:-<not set>}"
-                echo "  Debug check:              ${GIT_HOOK_DEBUG_CHECK:-<not set>}"
-                echo "  Block AI attribution:     ${GIT_HOOK_BLOCK_AI_ATTRIBUTION:-<not set>}"
-                echo "  Block WIP on main:        ${GIT_HOOK_WIP_BLOCK_ON_MAIN:-<not set>}"
-                echo "  Conventional commits:     ${GIT_HOOK_CONVENTIONAL_COMMITS:-<not set>}"
-                echo "  Branch protection:        ${GIT_HOOK_BRANCH_PROTECTION:-<not set>}"
-                echo "  Branch prefix:            ${GIT_HOOK_BRANCH_PREFIX:-<not set>}"
-                echo "  Dependency check:         ${GIT_HOOK_DEPENDENCY_CHECK:-<not set>}"
-                echo "  Migration reminder:       ${GIT_HOOK_MIGRATION_REMINDER:-<not set>}"
-                echo "  Branch info:              ${GIT_HOOK_BRANCH_INFO:-<not set>}"
-                echo ""
-
-                if ! wizard_yesno "Save this configuration?" "y"; then
-                    echo ""
-                    echo "Configuration not saved. Re-run wizard to try again."
-                    return 0
-                fi
-
-                _git_save_config "$ENV_FILE"
-
-                echo ""
-                echo "Configuration saved to $ENV_FILE"
-                echo ""
-                echo "Next steps:"
-                echo "  1. Run 'dotconfigs deploy git' to apply settings"
-                echo ""
+                echo "No changes made. Current configuration preserved."
                 return 0
                 ;;
             *)
-                echo "Invalid selection. Please choose 1-6." >&2
+                echo "Invalid selection. No changes made." >&2
+                return 1
                 ;;
         esac
-    done
+    else
+        # First-run mode: show category menu
+        while true; do
+            echo ""
+            echo "═══════════════════════════════════════════════════════════"
+            echo "  Category Menu"
+            echo "═══════════════════════════════════════════════════════════"
+            echo ""
+            echo "  1) Identity"
+            echo "  2) Workflow Settings"
+            echo "  3) Aliases"
+            echo "  4) Hooks"
+            echo "  5) Configure all"
+            echo "  6) Done — show summary"
+            echo ""
+
+            local menu_choice=""
+            read -p "Select option [1-6]: " menu_choice
+
+            case "$menu_choice" in
+                1)
+                    _git_wizard_identity
+                    ;;
+                2)
+                    _git_wizard_workflow
+                    ;;
+                3)
+                    _git_wizard_aliases
+                    ;;
+                4)
+                    _git_wizard_hooks
+                    ;;
+                5)
+                    _git_wizard_identity
+                    _git_wizard_workflow
+                    _git_wizard_aliases
+                    _git_wizard_hooks
+                    ;;
+                6)
+                    break
+                    ;;
+                *)
+                    echo "Invalid selection. Please choose 1-6." >&2
+                    ;;
+            esac
+        done
+    fi
+
+    # Show summary
+    _git_wizard_summary
+
+    if ! wizard_yesno "Save this configuration?" "y"; then
+        echo ""
+        echo "Configuration not saved. Re-run wizard to try again."
+        return 0
+    fi
+
+    _git_save_config "$ENV_FILE"
+
+    echo ""
+    echo "Configuration saved to $ENV_FILE"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Run 'dotconfigs deploy git' to apply settings"
+    echo ""
+    return 0
 }
