@@ -9,6 +9,7 @@ init_colours() {
         COLOUR_YELLOW='\033[33m'
         COLOUR_RED='\033[31m'
         COLOUR_CYAN='\033[36m'
+        COLOUR_DIM='\033[2m'
         COLOUR_RESET='\033[0m'
         SYMBOL_OK='✓'
         SYMBOL_DRIFT='△'
@@ -19,6 +20,7 @@ init_colours() {
         COLOUR_YELLOW=''
         COLOUR_RED=''
         COLOUR_CYAN=''
+        COLOUR_DIM=''
         COLOUR_RESET=''
         SYMBOL_OK='[OK]'
         SYMBOL_DRIFT='[DRIFT]'
@@ -48,6 +50,24 @@ colour_red() {
 # Args: text
 colour_cyan() {
     printf "%b%s%b" "$COLOUR_CYAN" "$1" "$COLOUR_RESET"
+}
+
+# Print a Global provenance badge [G] in cyan
+# Args: none
+colour_badge_global() {
+    printf "%b[G]%b" "$COLOUR_CYAN" "$COLOUR_RESET"
+}
+
+# Print a Local provenance badge [L] in green
+# Args: none
+colour_badge_local() {
+    printf "%b[L]%b" "$COLOUR_GREEN" "$COLOUR_RESET"
+}
+
+# Print a "not managed" label in dim/grey
+# Args: none
+colour_not_managed() {
+    printf "%b[not managed]%b" "$COLOUR_DIM" "$COLOUR_RESET"
 }
 
 # Print formatted file status line
