@@ -253,6 +253,10 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9
 - **Settings.json bug:** Deny rules have Claude Code bugs (#6699, #8961) — PreToolUse hook workaround in place
 - **Bash 3.2 fixes:** Branch has uncommitted fixes for `local -n`, `${var,,}`, wizard pre-fill — fold into Phase 4
 
+### Deferred to v3
+
+- **.env → JSON migration:** Discussed during Phase 9 planning. Current .env format works well — quoting bug was fixed in quick-002 and is not symptomatic of deeper format issues. JSON would require jq dependency (problematic for bash 3.2 portability) and a migration path for existing users. Deferred to v3 if the need arises.
+
 ### Target Directory Structure
 
 ```
