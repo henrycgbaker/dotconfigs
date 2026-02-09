@@ -379,8 +379,8 @@ _claude_edit_mode() {
         values+=("$CLAUDE_DEPLOY_TARGET")
         managed+=("true")
 
-        # 1. Settings.json enabled
-        labels+=("Settings.json enabled")
+        # 1. Settings.json
+        labels+=("Settings.json")
         if [[ -n "$CLAUDE_SETTINGS_ENABLED" ]]; then
             values+=("$CLAUDE_SETTINGS_ENABLED")
             managed+=("true")
@@ -409,8 +409,8 @@ _claude_edit_mode() {
             managed+=("false")
         fi
 
-        # 4. Hooks enabled
-        labels+=("Hooks enabled")
+        # 4. Hooks
+        labels+=("Hooks")
         if [[ ${#CLAUDE_HOOKS_ENABLED[@]} -gt 0 ]]; then
             values+=("${CLAUDE_HOOKS_ENABLED[*]}")
             managed+=("true")
@@ -419,8 +419,8 @@ _claude_edit_mode() {
             managed+=("false")
         fi
 
-        # 5. Skills enabled
-        labels+=("Skills enabled")
+        # 5. Skills
+        labels+=("Skills")
         if [[ ${#CLAUDE_SKILLS_ENABLED[@]} -gt 0 ]]; then
             values+=("${CLAUDE_SKILLS_ENABLED[*]}")
             managed+=("true")
@@ -585,13 +585,31 @@ plugin_claude_setup() {
     fi
 
     if $edit_mode; then
-        # Edit mode: show current config and allow item-by-item editing
-        if _claude_edit_mode "$PLUGIN_DIR"; then
-            # User selected 'done', show summary and save
-            _claude_show_summary
-        else
-            # User selected 'categories', fall through to category menu
+        # Offer choice: edit existing or start fresh
+        echo "Existing configuration detected."
+        echo ""
+        echo "  1) Edit current configuration"
+        echo "  2) Start fresh (rerun wizard from scratch)"
+        echo ""
+        read -p "Choice [1-2, default: 1]: " mode_choice
+
+        if [[ "$mode_choice" == "2" ]]; then
+            # Unset all CLAUDE_* variables to start fresh
+            unset CLAUDE_DEPLOY_TARGET CLAUDE_SETTINGS_ENABLED CLAUDE_MD_EXCLUDE_GLOBAL
+            unset CLAUDE_MD_EXCLUDE_PATTERN
+            CLAUDE_MD_SECTIONS_ENABLED=()
+            CLAUDE_HOOKS_ENABLED=()
+            CLAUDE_SKILLS_ENABLED=()
             edit_mode=false
+        else
+            # Edit mode: show current config and allow item-by-item editing
+            if _claude_edit_mode "$PLUGIN_DIR"; then
+                # User selected 'done', show summary and save
+                _claude_show_summary
+            else
+                # User selected 'categories', fall through to category menu
+                edit_mode=false
+            fi
         fi
     fi
 
