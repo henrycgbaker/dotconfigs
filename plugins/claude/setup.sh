@@ -50,11 +50,6 @@ EOF
         wizard_save_env "$env_file" "CLAUDE_SKILLS_ENABLED" "$skills_str"
     fi
 
-    # GSD install
-    if [[ -n "$CLAUDE_GSD_INSTALL" ]]; then
-        wizard_save_env "$env_file" "CLAUDE_GSD_INSTALL" "$CLAUDE_GSD_INSTALL"
-    fi
-
     # Save dotconfigs version (config schema version)
     wizard_save_env "$env_file" "DOTCONFIGS_VERSION" "2.0"
 }
@@ -109,17 +104,6 @@ _claude_configure_deploy_targets() {
     local default_target="${CLAUDE_DEPLOY_TARGET:-$HOME/.claude}"
     wizard_prompt "Deploy target directory" "$default_target" CLAUDE_DEPLOY_TARGET
     CLAUDE_DEPLOY_TARGET="${CLAUDE_DEPLOY_TARGET/#\~/$HOME}"  # Expand tilde
-
-    # GSD framework
-    echo ""
-    echo "The Get Shit Done framework provides project planning agents."
-    local gsd_default="n"
-    [[ "$CLAUDE_GSD_INSTALL" == "true" ]] && gsd_default="y"
-    if wizard_yesno "Install GSD framework?" "$gsd_default"; then
-        CLAUDE_GSD_INSTALL="true"
-    else
-        unset CLAUDE_GSD_INSTALL
-    fi
 }
 
 # Internal: configure Content category
@@ -145,6 +129,19 @@ _claude_configure_content() {
     if [[ ${#available_sections[@]} -eq 0 ]]; then
         echo "  No CLAUDE.md sections found in templates directory"
     else
+        # Show content preview for each available section
+        echo "Available sections:"
+        for section in "${available_sections[@]}"; do
+            # Find matching template file
+            local template_file=$(find "$PLUGIN_DIR/templates/claude-md" -name "*-${section}.md" 2>/dev/null | head -1)
+            if [[ -f "$template_file" ]]; then
+                # Read first content line (skip header on line 1)
+                local preview=$(sed -n '3p' "$template_file" | sed 's/^- //' | cut -c1-60)
+                printf "  %-15s — %s...\n" "$section" "$preview"
+            fi
+        done
+        echo ""
+
         # Toggle each section
         local prev_sections="${CLAUDE_MD_SECTIONS:-}"
         local selected_sections=()
@@ -177,6 +174,17 @@ _claude_configure_content() {
     if [[ ${#available_skills[@]} -eq 0 ]]; then
         echo "  No skills found in commands directory"
     else
+        # Show content preview for each available skill
+        echo "Available skills:"
+        for skill in "${available_skills[@]}"; do
+            local skill_file="$PLUGIN_DIR/commands/${skill}.md"
+            if [[ -f "$skill_file" ]]; then
+                # Read description from frontmatter
+                local preview=$(grep "^description:" "$skill_file" | sed 's/^description: //' | cut -c1-60)
+                printf "  %-20s — %s...\n" "$skill" "$preview"
+            fi
+        done
+        # Pre-populate from previous config
         local prev_skills="${CLAUDE_SKILLS_ENABLED:-}"
         local selected_skills=()
 
@@ -234,15 +242,19 @@ _claude_configure_behaviour() {
         echo ""
         echo "Select exclusion pattern:"
         echo "  1) CLAUDE.md (root only)"
-        echo "  2) **/*CLAUDE.md (all directories)"
+        echo "  2) **/CLAUDE.md (all directories)"
+        echo "  3) Both (root + all directories)"
         echo ""
 
         local pattern_default="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
-        read -p "Choice [1-2, default: ${pattern_default}]: " pattern_choice
+        read -p "Choice [1-3, default: ${pattern_default}]: " pattern_choice
 
         case "$pattern_choice" in
             2)
-                CLAUDE_MD_EXCLUDE_PATTERN="**/*CLAUDE.md"
+                CLAUDE_MD_EXCLUDE_PATTERN="**/CLAUDE.md"
+                ;;
+            3)
+                CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md\n**/CLAUDE.md"
                 ;;
             *)
                 CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md"
@@ -297,15 +309,6 @@ _claude_show_summary() {
 
     # Deploy target (always managed)
     echo "Deploy target:      $CLAUDE_DEPLOY_TARGET"
-
-    # GSD install
-    if [[ -n "$CLAUDE_GSD_INSTALL" ]]; then
-        echo "GSD install:        $CLAUDE_GSD_INSTALL"
-    else
-        printf "GSD install:        "
-        colour_not_managed
-        echo ""
-    fi
 
     # Settings.json
     if [[ -n "$CLAUDE_SETTINGS_ENABLED" ]]; then
@@ -371,22 +374,12 @@ _claude_edit_mode() {
         local values=()
         local managed=()
 
-        # 1. Deploy target path
+        # 0. Deploy target path
         labels+=("Deploy target path")
         values+=("$CLAUDE_DEPLOY_TARGET")
         managed+=("true")
 
-        # 2. GSD framework install
-        labels+=("GSD framework install")
-        if [[ -n "$CLAUDE_GSD_INSTALL" ]]; then
-            values+=("$CLAUDE_GSD_INSTALL")
-            managed+=("true")
-        else
-            values+=("")
-            managed+=("false")
-        fi
-
-        # 3. Settings.json enabled
+        # 1. Settings.json enabled
         labels+=("Settings.json enabled")
         if [[ -n "$CLAUDE_SETTINGS_ENABLED" ]]; then
             values+=("$CLAUDE_SETTINGS_ENABLED")
@@ -396,7 +389,7 @@ _claude_edit_mode() {
             managed+=("false")
         fi
 
-        # 4. CLAUDE.md exclusion
+        # 2. CLAUDE.md exclusion
         labels+=("CLAUDE.md exclusion")
         if [[ -n "$CLAUDE_MD_EXCLUDE_GLOBAL" ]]; then
             values+=("$CLAUDE_MD_EXCLUDE_GLOBAL ($CLAUDE_MD_EXCLUDE_PATTERN)")
@@ -406,7 +399,7 @@ _claude_edit_mode() {
             managed+=("false")
         fi
 
-        # 5. CLAUDE.md sections
+        # 3. CLAUDE.md sections
         labels+=("CLAUDE.md sections")
         if [[ ${#CLAUDE_MD_SECTIONS_ENABLED[@]} -gt 0 ]]; then
             values+=("${CLAUDE_MD_SECTIONS_ENABLED[*]}")
@@ -416,7 +409,7 @@ _claude_edit_mode() {
             managed+=("false")
         fi
 
-        # 6. Hooks enabled
+        # 4. Hooks enabled
         labels+=("Hooks enabled")
         if [[ ${#CLAUDE_HOOKS_ENABLED[@]} -gt 0 ]]; then
             values+=("${CLAUDE_HOOKS_ENABLED[*]}")
@@ -426,7 +419,7 @@ _claude_edit_mode() {
             managed+=("false")
         fi
 
-        # 7. Skills enabled
+        # 5. Skills enabled
         labels+=("Skills enabled")
         if [[ ${#CLAUDE_SKILLS_ENABLED[@]} -gt 0 ]]; then
             values+=("${CLAUDE_SKILLS_ENABLED[*]}")
@@ -469,17 +462,6 @@ _claude_edit_mode() {
                     CLAUDE_DEPLOY_TARGET="${CLAUDE_DEPLOY_TARGET/#\~/$HOME}"
                     ;;
                 1)
-                    # GSD framework install
-                    echo ""
-                    local gsd_default="n"
-                    [[ "$CLAUDE_GSD_INSTALL" == "true" ]] && gsd_default="y"
-                    if wizard_yesno "Install GSD framework?" "$gsd_default"; then
-                        CLAUDE_GSD_INSTALL="true"
-                    else
-                        unset CLAUDE_GSD_INSTALL
-                    fi
-                    ;;
-                2)
                     # Settings.json enabled
                     echo ""
                     local settings_default="n"
@@ -490,7 +472,7 @@ _claude_edit_mode() {
                         unset CLAUDE_SETTINGS_ENABLED
                     fi
                     ;;
-                3)
+                2)
                     # CLAUDE.md exclusion
                     echo ""
                     local exclude_default="n"
@@ -500,12 +482,14 @@ _claude_edit_mode() {
                         echo ""
                         echo "Select exclusion pattern:"
                         echo "  1) CLAUDE.md (root only)"
-                        echo "  2) **/*CLAUDE.md (all directories)"
+                        echo "  2) **/CLAUDE.md (all directories)"
+                        echo "  3) Both (root + all directories)"
                         echo ""
                         local pattern_default="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
-                        read -p "Choice [1-2, default: ${pattern_default}]: " pattern_choice
+                        read -p "Choice [1-3, default: ${pattern_default}]: " pattern_choice
                         case "$pattern_choice" in
-                            2) CLAUDE_MD_EXCLUDE_PATTERN="**/*CLAUDE.md" ;;
+                            2) CLAUDE_MD_EXCLUDE_PATTERN="**/CLAUDE.md" ;;
+                            3) CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md\n**/CLAUDE.md" ;;
                             *) CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md" ;;
                         esac
                     else
@@ -513,7 +497,7 @@ _claude_edit_mode() {
                         unset CLAUDE_MD_EXCLUDE_PATTERN
                     fi
                     ;;
-                4)
+                3)
                     # CLAUDE.md sections
                     echo ""
                     local available_sections=()
@@ -530,7 +514,7 @@ _claude_edit_mode() {
                         CLAUDE_MD_SECTIONS_ENABLED=("${selected_sections[@]}")
                     fi
                     ;;
-                5)
+                4)
                     # Hooks enabled
                     echo ""
                     local available_hooks=()
@@ -547,7 +531,7 @@ _claude_edit_mode() {
                         CLAUDE_HOOKS_ENABLED=("${selected_hooks[@]}")
                     fi
                     ;;
-                6)
+                5)
                     # Skills enabled
                     echo ""
                     local available_skills=()
@@ -613,7 +597,7 @@ plugin_claude_setup() {
 
     if ! $edit_mode; then
         # First run or user chose category menu: category-based opt-in flow
-        local categories=("Deploy targets" "Content" "Behaviour" "Configure all" "Done — show summary")
+        local categories=("Deploy targets" "Content (sections, skills)" "Behaviour (settings, exclusion, hooks)" "Configure all" "Done — show summary")
 
         while true; do
             echo ""
