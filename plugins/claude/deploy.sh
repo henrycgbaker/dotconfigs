@@ -6,6 +6,188 @@ PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTCONFIGS_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
 ENV_FILE="$DOTCONFIGS_ROOT/.env"
 
+# Internal: Assemble settings.json from templates
+# Args: plugin_dir, output_file
+_claude_assemble_settings() {
+    local plugin_dir="$1"
+    local output_file="$2"
+    local templates_dir="$plugin_dir/templates/settings"
+
+    # Start with base.json
+    local base_file="$templates_dir/base.json"
+    if [[ ! -f "$base_file" ]]; then
+        echo "Error: base.json template not found" >&2
+        return 1
+    fi
+
+    # Create temp file for assembly
+    local temp_file=$(mktemp)
+    cp "$base_file" "$temp_file"
+
+    # Merge Python rules if enabled
+    if [[ "${CLAUDE_SETTINGS_PYTHON:-false}" == "true" ]]; then
+        local python_file="$templates_dir/python.json"
+        if [[ -f "$python_file" ]]; then
+            local temp_merge=$(mktemp)
+            if command -v jq &> /dev/null; then
+                jq -s '.[0] * .[1]' "$temp_file" "$python_file" > "$temp_merge"
+            else
+                # Fallback: Python-based merge
+                python3 <<EOF
+import json
+with open("$temp_file") as f:
+    base = json.load(f)
+with open("$python_file") as f:
+    overlay = json.load(f)
+
+def deep_merge(base, overlay):
+    for key, value in overlay.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            deep_merge(base[key], value)
+        elif key in base and isinstance(base[key], list) and isinstance(value, list):
+            base[key].extend(value)
+        else:
+            base[key] = value
+    return base
+
+result = deep_merge(base, overlay)
+with open("$temp_merge", "w") as f:
+    json.dump(result, f, indent=2)
+EOF
+            fi
+            mv "$temp_merge" "$temp_file"
+        fi
+    fi
+
+    # Merge Node rules if enabled
+    if [[ "${CLAUDE_SETTINGS_NODE:-false}" == "true" ]]; then
+        local node_file="$templates_dir/node.json"
+        if [[ -f "$node_file" ]]; then
+            local temp_merge=$(mktemp)
+            if command -v jq &> /dev/null; then
+                jq -s '.[0] * .[1]' "$temp_file" "$node_file" > "$temp_merge"
+            else
+                # Fallback: Python-based merge
+                python3 <<EOF
+import json
+with open("$temp_file") as f:
+    base = json.load(f)
+with open("$node_file") as f:
+    overlay = json.load(f)
+
+def deep_merge(base, overlay):
+    for key, value in overlay.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            deep_merge(base[key], value)
+        elif key in base and isinstance(base[key], list) and isinstance(value, list):
+            base[key].extend(value)
+        else:
+            base[key] = value
+    return base
+
+result = deep_merge(base, overlay)
+with open("$temp_merge", "w") as f:
+    json.dump(result, f, indent=2)
+EOF
+            fi
+            mv "$temp_merge" "$temp_file"
+        fi
+    fi
+
+    # Merge hooks.json if hooks are enabled
+    if [[ ${#CLAUDE_HOOKS_ENABLED_ARRAY[@]} -gt 0 ]]; then
+        local hooks_file="$templates_dir/hooks.json"
+        if [[ -f "$hooks_file" ]]; then
+            local temp_merge=$(mktemp)
+            if command -v jq &> /dev/null; then
+                jq -s '.[0] * .[1]' "$temp_file" "$hooks_file" > "$temp_merge"
+            else
+                # Fallback: Python-based merge
+                python3 <<EOF
+import json
+with open("$temp_file") as f:
+    base = json.load(f)
+with open("$hooks_file") as f:
+    overlay = json.load(f)
+
+def deep_merge(base, overlay):
+    for key, value in overlay.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            deep_merge(base[key], value)
+        elif key in base and isinstance(base[key], list) and isinstance(value, list):
+            base[key].extend(value)
+        else:
+            base[key] = value
+    return base
+
+result = deep_merge(base, overlay)
+with open("$temp_merge", "w") as f:
+    json.dump(result, f, indent=2)
+EOF
+            fi
+            mv "$temp_merge" "$temp_file"
+        fi
+    fi
+
+    # Move assembled result to output
+    mv "$temp_file" "$output_file"
+    return 0
+}
+
+# Internal: Apply CLAUDE.md exclusion to .git/info/exclude
+# Args: repo_path
+_claude_apply_md_exclusion() {
+    local repo_path="$1"
+    local exclude_file="$repo_path/.git/info/exclude"
+
+    # Check if CLAUDE.md exclusion is enabled globally
+    if [[ "${CLAUDE_MD_EXCLUDE_GLOBAL:-false}" != "true" ]]; then
+        return 0
+    fi
+
+    # Get exclusion pattern (default: CLAUDE.md)
+    local pattern="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Applying CLAUDE.md exclusion..."
+        if [[ ! -f "$exclude_file" ]] || ! grep -q "^${pattern}$" "$exclude_file" 2>/dev/null; then
+            echo "  Would add: $pattern"
+        else
+            echo "  Already excluded: $pattern"
+        fi
+        if [[ ! -f "$exclude_file" ]] || ! grep -q "^\.claude/$" "$exclude_file" 2>/dev/null; then
+            echo "  Would add: .claude/"
+        else
+            echo "  Already excluded: .claude/"
+        fi
+        return 0
+    fi
+
+    # Create .git/info/exclude if it doesn't exist
+    if [[ ! -f "$exclude_file" ]]; then
+        mkdir -p "$(dirname "$exclude_file")"
+        touch "$exclude_file"
+    fi
+
+    echo "Applying CLAUDE.md exclusion..."
+
+    # Add pattern if not present
+    if ! grep -q "^${pattern}$" "$exclude_file" 2>/dev/null; then
+        echo "$pattern" >> "$exclude_file"
+        echo "  ✓ Added $pattern to .git/info/exclude"
+    else
+        echo "  Already excluded: $pattern"
+    fi
+
+    # Add .claude/ if not present
+    if ! grep -q "^\.claude/$" "$exclude_file" 2>/dev/null; then
+        echo ".claude/" >> "$exclude_file"
+        echo "  ✓ Added .claude/ to .git/info/exclude"
+    else
+        echo "  Already excluded: .claude/"
+    fi
+}
+
 # Internal: Build CLAUDE.md from enabled template sections
 # Args: plugin_dir, deploy_target, enabled_sections...
 _claude_build_md() {
@@ -246,10 +428,24 @@ plugin_claude_deploy() {
         fi
     fi
 
-    # 1. Symlink settings.json (from repo root, not plugin dir)
+    # 1. Build and symlink settings.json
     if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
+        echo "Building settings.json..."
+
+        # Assemble settings.json from templates
+        local settings_source="$DOTCONFIGS_ROOT/settings.json"
+        if [[ "$dry_run" != "true" ]]; then
+            _claude_assemble_settings "$PLUGIN_DIR" "$settings_source"
+            echo "  ✓ Assembled settings.json from templates"
+        else
+            echo "  Would assemble: base"
+            [[ "${CLAUDE_SETTINGS_PYTHON:-false}" == "true" ]] && echo "  Would assemble: + python"
+            [[ "${CLAUDE_SETTINGS_NODE:-false}" == "true" ]] && echo "  Would assemble: + node"
+            [[ ${#CLAUDE_HOOKS_ENABLED_ARRAY[@]} -gt 0 ]] && echo "  Would assemble: + hooks"
+        fi
+
         echo "Deploying settings.json..."
-        local state=$(check_file_state "$CLAUDE_DEPLOY_TARGET/settings.json" "$DOTCONFIGS_ROOT/settings.json" "$DOTCONFIGS_ROOT")
+        local state=$(check_file_state "$CLAUDE_DEPLOY_TARGET/settings.json" "$settings_source" "$DOTCONFIGS_ROOT")
 
         if [[ "$dry_run" == "true" ]]; then
             case "$state" in
@@ -436,20 +632,8 @@ plugin_claude_deploy() {
         fi
     fi
 
-    # 6. Handle .git/info/exclude for dotconfigs repo
-    if [[ "$dry_run" != "true" ]]; then
-        local dotconfigs_exclude="$DOTCONFIGS_ROOT/.git/info/exclude"
-        if [[ -f "$dotconfigs_exclude" ]]; then
-            if ! grep -q "^CLAUDE.md$" "$dotconfigs_exclude" 2>/dev/null; then
-                echo "CLAUDE.md" >> "$dotconfigs_exclude"
-                echo "  ✓ Added CLAUDE.md to .git/info/exclude"
-            fi
-            if ! grep -q "^\.claude/$" "$dotconfigs_exclude" 2>/dev/null; then
-                echo ".claude/" >> "$dotconfigs_exclude"
-                echo "  ✓ Added .claude/ to .git/info/exclude"
-            fi
-        fi
-    fi
+    # 6. Apply CLAUDE.md exclusion
+    _claude_apply_md_exclusion "$DOTCONFIGS_ROOT"
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
