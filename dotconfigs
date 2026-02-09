@@ -291,60 +291,55 @@ _create_path_symlink() {
 
     # Dry-run mode
     if [[ "$dry_run" == "true" ]]; then
-        echo "Would create symlink: $target -> $SCRIPT_DIR/dotconfigs"
-        return 0
-    fi
-
-    # Check if symlink already exists and is correct
-    if [[ -L "$target" ]]; then
-        local current_target=$(readlink "$target")
-        if [[ "$current_target" == "$SCRIPT_DIR/dotconfigs" ]]; then
-            echo "dotconfigs already on PATH (symlink correct)"
-            return 0
-        else
-            # Symlink exists but points elsewhere
-            if [[ "$force_mode" != "true" ]]; then
-                echo "Warning: Symlink exists but points to: $current_target" >&2
-                wizard_yesno "Overwrite with dotconfigs symlink?" "n" || return 0
+        if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$SCRIPT_DIR/dotconfigs" ]]; then
+            echo "CLI availability:"
+            echo "  Unchanged: $target → $SCRIPT_DIR/dotconfigs"
+            local dots_target="$(dirname "$target")/dots"
+            if [[ -L "$dots_target" ]] && [[ "$(readlink "$dots_target")" == "$SCRIPT_DIR/dotconfigs" ]]; then
+                echo "  Unchanged: $dots_target → $SCRIPT_DIR/dotconfigs"
+            else
+                echo "  Would create: $dots_target → $SCRIPT_DIR/dotconfigs"
             fi
+        else
+            echo "CLI availability:"
+            echo "  Would create: $target → $SCRIPT_DIR/dotconfigs"
+            echo "  Would create: $(dirname "$target")/dots → $SCRIPT_DIR/dotconfigs"
         fi
-    elif [[ -e "$target" ]]; then
-        # Regular file exists
-        echo "Warning: File exists at $target (not a symlink)" >&2
-        echo "Manual action required: remove or rename the file, then re-run deploy" >&2
         return 0
     fi
 
-    # Create symlink
-    if ln -sf "$SCRIPT_DIR/dotconfigs" "$target" 2>/dev/null; then
-        # Verify it's on PATH
-        if command -v dotconfigs >/dev/null 2>&1; then
-            echo "dotconfigs added to PATH: $target"
-        else
-            echo "Symlink created: $target" >&2
-            echo "Note: $(dirname "$target") may not be on your PATH" >&2
-            echo "Add to shell profile if needed: export PATH=\"$(dirname "$target"):\$PATH\"" >&2
-        fi
-    else
-        echo "Warning: Failed to create symlink at $target (permission denied?)" >&2
-        echo "To make dotconfigs available on PATH, add to your shell profile:" >&2
-        echo "  export PATH=\"$SCRIPT_DIR:\$PATH\"" >&2
-    fi
+    # Create or verify both symlinks (dotconfigs + dots)
+    local symlinks_to_check=("$target" "$(dirname "$target")/dots")
+    local symlink_names=("dotconfigs" "dots")
 
-    # Also create/verify dots alias symlink
-    local dots_target="$(dirname "$target")/dots"
-    if [[ -L "$dots_target" ]]; then
-        local dots_current=$(readlink "$dots_target")
-        if [[ "$dots_current" == "$SCRIPT_DIR/dotconfigs" ]]; then
-            echo "dots already on PATH (symlink correct)"
-        else
-            ln -sf "$SCRIPT_DIR/dotconfigs" "$dots_target" 2>/dev/null && \
-                echo "dots alias updated on PATH: $dots_target" || true
+    for i in 0 1; do
+        local sym="${symlinks_to_check[$i]}"
+        local name="${symlink_names[$i]}"
+
+        if [[ -L "$sym" ]]; then
+            local current=$(readlink "$sym")
+            if [[ "$current" == "$SCRIPT_DIR/dotconfigs" ]]; then
+                echo "$name already on PATH (symlink correct)"
+                continue
+            else
+                # Symlink exists but points elsewhere
+                if [[ "$force_mode" != "true" ]]; then
+                    echo "Warning: $name symlink exists but points to: $current" >&2
+                    wizard_yesno "Overwrite with dotconfigs symlink?" "n" || continue
+                fi
+            fi
+        elif [[ -e "$sym" ]]; then
+            echo "Warning: File exists at $sym (not a symlink)" >&2
+            continue
         fi
-    elif [[ ! -e "$dots_target" ]]; then
-        ln -sf "$SCRIPT_DIR/dotconfigs" "$dots_target" 2>/dev/null && \
-            echo "dots alias added to PATH: $dots_target" || true
-    fi
+
+        # Create symlink
+        if ln -sf "$SCRIPT_DIR/dotconfigs" "$sym" 2>/dev/null; then
+            echo "$name added to PATH: $sym"
+        else
+            echo "Warning: Failed to create $name symlink at $sym" >&2
+        fi
+    done
 }
 
 cmd_deploy() {
@@ -391,7 +386,7 @@ cmd_deploy() {
         args+=("--force")
     fi
 
-    if [[ "$interactive_mode" == "true" ]]; then
+    if [[ "$interactive_mode" == "true" && "$force_mode" != "true" ]]; then
         args+=("--interactive")
     fi
 
@@ -441,7 +436,6 @@ cmd_deploy() {
 
     # Create PATH symlink (after all plugin deploys)
     echo ""
-    echo "CLI availability:"
     _create_path_symlink "$dry_run" "$force_mode"
 }
 

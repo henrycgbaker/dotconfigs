@@ -48,7 +48,8 @@ _claude_apply_md_exclusion() {
     local raw_pattern="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
     local patterns=()
     case "$raw_pattern" in
-        both)
+        both|*$'\n'*)
+            # "both" keyword or legacy multiline value
             patterns=("CLAUDE.md" "**/CLAUDE.md")
             ;;
         *)
@@ -88,22 +89,16 @@ _claude_apply_md_exclusion() {
     done
 }
 
-# Internal: Build CLAUDE.md from enabled template sections
-# Args: plugin_dir, deploy_target, enabled_sections...
+# Internal: Build CLAUDE.md from enabled template sections into plugin dir
+# Args: plugin_dir, enabled_sections...
+# Writes to: $plugin_dir/CLAUDE.md (gitignored assembled copy)
 _claude_build_md() {
     local plugin_dir="$1"
-    local deploy_target="$2"
-    shift 2
+    shift
     local enabled_sections=("$@")
 
     local templates_dir="$plugin_dir/templates/claude-md"
-    local output_file="$deploy_target/CLAUDE.md"
-
-    # Handle broken symlinks or missing parent directory
-    if [[ -L "$output_file" && ! -e "$output_file" ]]; then
-        rm -f "$output_file"
-    fi
-    mkdir -p "$(dirname "$output_file")"
+    local output_file="$plugin_dir/CLAUDE.md"
 
     # Clear output file
     > "$output_file"
@@ -208,9 +203,9 @@ plugin_claude_status() {
         files_to_check+=("$CLAUDE_DEPLOY_TARGET/settings.json|$PLUGIN_DIR/settings.json|settings.json")
     fi
 
-    # Add CLAUDE.md (special case: generated file, not symlink)
+    # Add CLAUDE.md (symlinked from assembled copy in plugin dir)
     if [[ ${#CLAUDE_MD_SECTIONS_ARRAY[@]} -gt 0 ]]; then
-        files_to_check+=("$CLAUDE_DEPLOY_TARGET/CLAUDE.md|generated|CLAUDE.md")
+        files_to_check+=("$CLAUDE_DEPLOY_TARGET/CLAUDE.md|$PLUGIN_DIR/CLAUDE.md|CLAUDE.md")
     fi
 
     # Add hooks
@@ -227,30 +222,18 @@ plugin_claude_status() {
     for file_spec in "${files_to_check[@]}"; do
         IFS='|' read -r target_path expected_source display_name <<< "$file_spec"
 
-        if [[ "$expected_source" == "generated" ]]; then
-            # Special case for CLAUDE.md (generated file)
-            if [[ -f "$target_path" ]]; then
-                state="deployed"
+        state=$(check_file_state "$target_path" "$expected_source" "$DOTCONFIGS_ROOT")
+        case "$state" in
+            deployed)
                 count_ok=$((count_ok + 1))
-            else
-                state="not-deployed"
+                ;;
+            drifted-*)
+                count_drift=$((count_drift + 1))
+                ;;
+            not-deployed)
                 count_missing=$((count_missing + 1))
-            fi
-        else
-            # Regular symlink check
-            state=$(check_file_state "$target_path" "$expected_source" "$DOTCONFIGS_ROOT")
-            case "$state" in
-                deployed)
-                    count_ok=$((count_ok + 1))
-                    ;;
-                drifted-*)
-                    count_drift=$((count_drift + 1))
-                    ;;
-                not-deployed)
-                    count_missing=$((count_missing + 1))
-                    ;;
-            esac
-        fi
+                ;;
+        esac
 
         file_states+=("$state")
         file_names+=("$display_name")
@@ -336,24 +319,19 @@ plugin_claude_deploy() {
 
     # 1. Build and symlink settings.json
     if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
-        echo "Building settings.json..."
-
-        # Assemble settings.json from template into plugin directory
         local settings_source="$PLUGIN_DIR/settings.json"
-        # Hash before assembly to detect content changes
-        local settings_old_hash=""
-        [[ -f "$settings_source" ]] && settings_old_hash=$(cksum "$settings_source" 2>/dev/null | cut -d' ' -f1)
 
-        if [[ "$dry_run" != "true" ]]; then
-            _claude_assemble_settings "$PLUGIN_DIR" "$settings_source"
-        else
-            echo "  Would copy: settings-template.json"
+        # Only create from template if assembled copy doesn't exist yet
+        # (preserves user's manual edits to their personal copy)
+        if [[ ! -f "$settings_source" ]]; then
+            echo "Creating settings.json from template..."
+            if [[ "$dry_run" != "true" ]]; then
+                _claude_assemble_settings "$PLUGIN_DIR" "$settings_source"
+                echo "  ✓ Created from settings-template.json"
+            else
+                echo "  Would create from: settings-template.json"
+            fi
         fi
-
-        local settings_new_hash=""
-        [[ -f "$settings_source" ]] && settings_new_hash=$(cksum "$settings_source" 2>/dev/null | cut -d' ' -f1)
-        local settings_content_changed=false
-        [[ "$settings_old_hash" != "$settings_new_hash" ]] && settings_content_changed=true
 
         echo "Deploying settings.json..."
         local state=$(check_file_state "$CLAUDE_DEPLOY_TARGET/settings.json" "$settings_source" "$DOTCONFIGS_ROOT")
@@ -361,11 +339,11 @@ plugin_claude_deploy() {
         if [[ "$dry_run" == "true" ]]; then
             case "$state" in
                 deployed)
-                    echo "  Unchanged: settings.json"
+                    echo "  Unchanged: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
                     files_unchanged=$((files_unchanged + 1))
                     ;;
                 not-deployed)
-                    echo "  Would link: settings.json"
+                    echo "  Would link: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
                     files_created=$((files_created + 1))
                     ;;
                 drifted-*)
@@ -381,13 +359,8 @@ plugin_claude_deploy() {
         else
             case "$state" in
                 deployed)
-                    if [[ "$settings_content_changed" == "true" ]]; then
-                        echo "  Updated: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
-                        files_updated=$((files_updated + 1))
-                    else
-                        echo "  Unchanged: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
-                        files_unchanged=$((files_unchanged + 1))
-                    fi
+                    echo "  Unchanged: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
+                    files_unchanged=$((files_unchanged + 1))
                     ;;
                 *)
                     if backup_and_link "$PLUGIN_DIR/settings.json" "$CLAUDE_DEPLOY_TARGET/settings.json" "settings.json" "$interactive_mode"; then
@@ -406,39 +379,71 @@ plugin_claude_deploy() {
 
     # 2. Build and write CLAUDE.md
     if [[ ${#CLAUDE_MD_SECTIONS_ARRAY[@]} -gt 0 ]]; then
-        echo "Building CLAUDE.md..."
-        local claude_md_target="$CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+        local claude_md_source="$PLUGIN_DIR/CLAUDE.md"
+
+        # Always rebuild assembled copy (generated from templates)
+        local md_old_hash=""
+        [[ -f "$claude_md_source" ]] && md_old_hash=$(cksum "$claude_md_source" 2>/dev/null | cut -d' ' -f1)
+
+        if [[ "$dry_run" != "true" ]]; then
+            _claude_build_md "$PLUGIN_DIR" "${CLAUDE_MD_SECTIONS_ARRAY[@]}"
+        fi
+
+        local md_new_hash=""
+        [[ -f "$claude_md_source" ]] && md_new_hash=$(cksum "$claude_md_source" 2>/dev/null | cut -d' ' -f1)
+        local md_content_changed=false
+        [[ "$md_old_hash" != "$md_new_hash" ]] && md_content_changed=true
+
+        echo "Deploying CLAUDE.md..."
+        local state=$(check_file_state "$CLAUDE_DEPLOY_TARGET/CLAUDE.md" "$claude_md_source" "$DOTCONFIGS_ROOT")
+
         if [[ "$dry_run" == "true" ]]; then
-            if [[ -f "$claude_md_target" ]]; then
-                echo "  Would update: CLAUDE.md → $claude_md_target"
-                files_updated=$((files_updated + 1))
-            else
-                echo "  Would create: CLAUDE.md → $claude_md_target"
-                files_created=$((files_created + 1))
-            fi
-        else
-            local existed=false
-            local md_old_hash=""
-            if [[ -f "$claude_md_target" ]]; then
-                existed=true
-                md_old_hash=$(cksum "$claude_md_target" 2>/dev/null | cut -d' ' -f1)
-            fi
-
-            _claude_build_md "$PLUGIN_DIR" "$CLAUDE_DEPLOY_TARGET" "${CLAUDE_MD_SECTIONS_ARRAY[@]}"
-
-            if [[ "$existed" == "true" ]]; then
-                local md_new_hash=$(cksum "$claude_md_target" 2>/dev/null | cut -d' ' -f1)
-                if [[ "$md_old_hash" != "$md_new_hash" ]]; then
-                    echo "  Updated: CLAUDE.md → $claude_md_target"
-                    files_updated=$((files_updated + 1))
-                else
-                    echo "  Unchanged: CLAUDE.md → $claude_md_target"
+            case "$state" in
+                deployed)
+                    echo "  Unchanged: CLAUDE.md → $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
                     files_unchanged=$((files_unchanged + 1))
-                fi
-            else
-                echo "  Created: CLAUDE.md → $claude_md_target"
-                files_created=$((files_created + 1))
-            fi
+                    ;;
+                not-deployed)
+                    echo "  Would link: CLAUDE.md → $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+                    files_created=$((files_created + 1))
+                    ;;
+                drifted-*)
+                    if [[ "$interactive_mode" == "force" ]]; then
+                        echo "  Would overwrite: CLAUDE.md (--force)"
+                        files_updated=$((files_updated + 1))
+                    else
+                        echo "  Would prompt: conflict at CLAUDE.md"
+                        files_skipped=$((files_skipped + 1))
+                    fi
+                    ;;
+            esac
+        else
+            case "$state" in
+                deployed)
+                    if [[ "$md_content_changed" == "true" ]]; then
+                        echo "  Updated: CLAUDE.md → $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+                        files_updated=$((files_updated + 1))
+                    else
+                        echo "  Unchanged: CLAUDE.md → $CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+                        files_unchanged=$((files_unchanged + 1))
+                    fi
+                    ;;
+                *)
+                    # Handle broken symlink at deploy target
+                    if [[ -L "$CLAUDE_DEPLOY_TARGET/CLAUDE.md" && ! -e "$CLAUDE_DEPLOY_TARGET/CLAUDE.md" ]]; then
+                        rm -f "$CLAUDE_DEPLOY_TARGET/CLAUDE.md"
+                    fi
+                    if backup_and_link "$claude_md_source" "$CLAUDE_DEPLOY_TARGET/CLAUDE.md" "CLAUDE.md" "$interactive_mode"; then
+                        if [[ "$state" == "not-deployed" ]]; then
+                            files_created=$((files_created + 1))
+                        else
+                            files_updated=$((files_updated + 1))
+                        fi
+                    else
+                        files_skipped=$((files_skipped + 1))
+                    fi
+                    ;;
+            esac
         fi
     fi
 

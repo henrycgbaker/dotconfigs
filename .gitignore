@@ -12,6 +12,7 @@
 # Environment configuration (machine-specific)
 .env
 
-# Personal Claude settings (generated from template, machine-specific)
+# Generated/assembled files (machine-specific, not tracked)
 settings.json
 plugins/claude/settings.json
+plugins/claude/CLAUDE.md
