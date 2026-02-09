@@ -14,6 +14,9 @@ fi
 plugin_git_project() {
     local project_path="$1"
 
+    # Initialize colours for G/L badges
+    init_colours
+
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Git Plugin: Project Setup"
@@ -29,6 +32,16 @@ plugin_git_project() {
     # Step 1: Deploy hooks to .git/hooks/
     echo "Step 1: Deploy hooks to .git/hooks/"
     echo "──────────────────────────────"
+
+    # Show globally enabled hooks as reference
+    printf "  Global hooks scope: "
+    colour_badge_global
+    if [[ "${GIT_HOOK_SCOPE:-project}" == "global" ]]; then
+        echo " global (core.hooksPath)"
+    else
+        echo " per-project (default)"
+    fi
+    echo ""
 
     local hooks_dir="$project_path/.git/hooks"
     local hook_file
@@ -70,22 +83,35 @@ plugin_git_project() {
     echo "Step 2: Project-specific git identity"
     echo "──────────────────────────────"
 
+    # Show global identity as reference
+    local global_name=$(git config --global --get user.name 2>/dev/null || echo "not set")
+    local global_email=$(git config --global --get user.email 2>/dev/null || echo "not set")
+    printf "  Global identity "
+    colour_badge_global
+    echo ": $global_name <$global_email>"
+
+    # Show local identity if set
+    local local_name=$(git -C "$project_path" config --local --get user.name 2>/dev/null || echo "")
+    local local_email=$(git -C "$project_path" config --local --get user.email 2>/dev/null || echo "")
+    if [[ -n "$local_name" || -n "$local_email" ]]; then
+        printf "  Local identity "
+        colour_badge_local
+        echo ": $local_name <$local_email>"
+    fi
+    echo ""
+
     if wizard_yesno "Configure project-specific git identity?" "n"; then
-        local current_name
-        local current_email
+        local current_name="$local_name"
+        local current_email="$local_email"
         local new_name
         local new_email
 
-        # Pre-fill from current repo config if set
-        current_name=$(git -C "$project_path" config --local --get user.name 2>/dev/null || echo "")
-        current_email=$(git -C "$project_path" config --local --get user.email 2>/dev/null || echo "")
-
-        # Get global as fallback default
+        # Fallback to global if local not set
         if [[ -z "$current_name" ]]; then
-            current_name=$(git config --global --get user.name 2>/dev/null || echo "")
+            current_name="$global_name"
         fi
         if [[ -z "$current_email" ]]; then
-            current_email=$(git config --global --get user.email 2>/dev/null || echo "")
+            current_email="$global_email"
         fi
 
         # Prompt for name and email
@@ -95,12 +121,16 @@ plugin_git_project() {
         # Apply local config
         if [[ -n "$new_name" ]]; then
             git -C "$project_path" config --local user.name "$new_name"
-            echo "  ✓ Set local user.name: $new_name"
+            printf "  ✓ Set local user.name "
+            colour_badge_local
+            echo ": $new_name"
         fi
 
         if [[ -n "$new_email" ]]; then
             git -C "$project_path" config --local user.email "$new_email"
-            echo "  ✓ Set local user.email: $new_email"
+            printf "  ✓ Set local user.email "
+            colour_badge_local
+            echo ": $new_email"
         fi
     else
         echo "  Skipped (global identity will be used)"
@@ -166,9 +196,32 @@ plugin_git_project() {
     echo "  Project setup complete!"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
-    echo "Deployed:"
-    echo "  - $deployed_count hook(s) to .git/hooks/"
-    echo "  - Hook configuration to $hook_config_path (if confirmed)"
+    echo "Configuration applied:"
+
+    # Hooks
+    if [[ $deployed_count -gt 0 ]]; then
+        printf "  "
+        colour_badge_local
+        echo " Hooks: $deployed_count deployed to .git/hooks/"
+    else
+        printf "  "
+        colour_badge_global
+        echo " Hooks: none deployed (using global)"
+    fi
+
+    # Identity
+    local_name=$(git -C "$project_path" config --local --get user.name 2>/dev/null || echo "")
+    local_email=$(git -C "$project_path" config --local --get user.email 2>/dev/null || echo "")
+    if [[ -n "$local_name" || -n "$local_email" ]]; then
+        printf "  "
+        colour_badge_local
+        echo " Identity: $local_name <$local_email> (project override)"
+    else
+        printf "  "
+        colour_badge_global
+        echo " Identity: using global ($global_name <$global_email>)"
+    fi
+
     echo ""
     echo "Hook roster (7 hooks available):"
     echo "  pre-commit, commit-msg, prepare-commit-msg, pre-push,"

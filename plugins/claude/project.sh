@@ -2,6 +2,13 @@
 # Sourced by dotconfigs entry point. Do not execute directly.
 
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTCONFIGS_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
+ENV_FILE="$DOTCONFIGS_ROOT/.env"
+
+# Load .env if it exists (for global config references)
+if [[ -f "$ENV_FILE" ]]; then
+    source "$ENV_FILE"
+fi
 
 # Internal: Detect project type from filesystem
 _claude_detect_project_type() {
@@ -142,6 +149,9 @@ EOF
 plugin_claude_project() {
     local project_path="$1"
 
+    # Initialize colours for G/L badges
+    init_colours
+
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Claude Plugin: Project Scaffolding"
@@ -181,6 +191,22 @@ plugin_claude_project() {
     echo "Step 1: Project settings.json"
     echo "──────────────────────────────"
 
+    # Show global settings as reference
+    if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
+        printf "  Global settings "
+        colour_badge_global
+        echo ": enabled"
+        [[ "${CLAUDE_SETTINGS_PYTHON:-false}" == "true" ]] && printf "    - Python rules "
+        [[ "${CLAUDE_SETTINGS_PYTHON:-false}" == "true" ]] && colour_badge_global && echo ""
+        [[ "${CLAUDE_SETTINGS_NODE:-false}" == "true" ]] && printf "    - Node rules "
+        [[ "${CLAUDE_SETTINGS_NODE:-false}" == "true" ]] && colour_badge_global && echo ""
+    else
+        printf "  Global settings "
+        colour_badge_global
+        echo ": disabled"
+    fi
+    echo ""
+
     local claude_dir="$project_path/.claude"
     mkdir -p "$claude_dir"
 
@@ -188,14 +214,23 @@ plugin_claude_project() {
     local base_settings="$PLUGIN_DIR/templates/settings/base.json"
     local type_settings="$PLUGIN_DIR/templates/settings/${project_type}.json"
     local settings_profile="base"
+    local is_local_override=false
 
     if [[ -f "$settings_target" ]]; then
         echo "  Existing settings.json found"
         if wizard_yesno "  Overwrite settings.json?" "n"; then
             # Continue to build
             settings_profile="base+${project_type}"
+            is_local_override=true
         else
             echo "  Skipped settings.json"
+            settings_target=""
+        fi
+    else
+        if wizard_yesno "  Create project-specific settings.json?" "y"; then
+            is_local_override=true
+        else
+            echo "  Skipped (will use global settings)"
             settings_target=""
         fi
     fi
@@ -204,12 +239,16 @@ plugin_claude_project() {
         if [[ -f "$type_settings" ]]; then
             # Merge base + type overlay
             _claude_merge_settings_json "$base_settings" "$type_settings" "$settings_target"
-            echo "  ✓ Built settings.json from base + $project_type overlay"
+            printf "  ✓ Built settings.json "
+            colour_badge_local
+            echo " from base + $project_type overlay"
             settings_profile="base+${project_type}"
         else
             # Copy base only
             cp "$base_settings" "$settings_target"
-            echo "  ✓ Copied base settings.json"
+            printf "  ✓ Copied base settings.json "
+            colour_badge_local
+            echo ""
             settings_profile="base"
         fi
     fi
@@ -219,6 +258,18 @@ plugin_claude_project() {
     # Step 2: Deploy Claude hooks
     echo "Step 2: Deploy Claude hooks"
     echo "──────────────────────────────"
+
+    # Show globally enabled hooks as reference
+    if [[ -n "${CLAUDE_HOOKS_ENABLED:-}" ]]; then
+        printf "  Global hooks "
+        colour_badge_global
+        echo ": $CLAUDE_HOOKS_ENABLED"
+    else
+        printf "  Global hooks "
+        colour_badge_global
+        echo ": none"
+    fi
+    echo ""
 
     # Ask about PreToolUse hook
     local enable_pretooluse="true"
@@ -234,7 +285,9 @@ plugin_claude_project() {
 
         cp "$hook_source" "$hook_target"
         chmod +x "$hook_target"
-        echo "  ✓ Deployed block-destructive.sh to .claude/hooks/"
+        printf "  ✓ Deployed block-destructive.sh "
+        colour_badge_local
+        echo " to .claude/hooks/"
 
         # Merge hooks.json template into settings.json
         local hooks_json_template="$PLUGIN_DIR/templates/settings/hooks.json"
@@ -292,15 +345,29 @@ plugin_claude_project() {
     echo "Step 3: Project CLAUDE.md"
     echo "──────────────────────────────"
 
+    # Show global CLAUDE.md sections as reference
+    if [[ -n "${CLAUDE_MD_SECTIONS:-}" ]]; then
+        printf "  Global CLAUDE.md "
+        colour_badge_global
+        echo ": $CLAUDE_MD_SECTIONS"
+    else
+        printf "  Global CLAUDE.md "
+        colour_badge_global
+        echo ": none"
+    fi
+    echo ""
+
     local claude_md_target="$project_path/CLAUDE.md"
 
     if [[ -f "$claude_md_target" ]]; then
-        echo "  Existing CLAUDE.md found"
-        echo "  Choose action:"
-        select action in "Append dotconfigs section" "Skip"; do
-            case $action in
-                "Append dotconfigs section")
-                    cat >> "$claude_md_target" <<EOF
+        echo "  Existing CLAUDE.md found. Choose action:"
+        echo "    1) Append dotconfigs section"
+        echo "    2) Skip"
+        echo ""
+        read -p "  Select [1-2]: " action
+        case "$action" in
+            1)
+                cat >> "$claude_md_target" <<EOF
 
 ## Project Configuration
 
@@ -309,18 +376,18 @@ Configuration managed by: dotconfigs
 
 For global Claude instructions, see: ~/.claude/CLAUDE.md
 EOF
-                    echo "  ✓ Appended dotconfigs section to CLAUDE.md"
-                    break
-                    ;;
-                Skip)
-                    echo "  Skipped CLAUDE.md"
-                    break
-                    ;;
-            esac
-        done
+                printf "  ✓ Appended dotconfigs section "
+                colour_badge_local
+                echo " to CLAUDE.md"
+                ;;
+            2|*)
+                echo "  Skipped CLAUDE.md"
+                ;;
+        esac
     else
-        # Create minimal project CLAUDE.md
-        cat > "$claude_md_target" <<EOF
+        if wizard_yesno "  Create minimal project CLAUDE.md?" "y"; then
+            # Create minimal project CLAUDE.md
+            cat > "$claude_md_target" <<EOF
 # $(basename "$project_path")
 
 Project type: $project_type
@@ -332,7 +399,53 @@ This project uses dotconfigs for Claude Code configuration.
 - Hooks: .claude/hooks.conf
 - Global instructions: ~/.claude/CLAUDE.md
 EOF
-        echo "  ✓ Created minimal CLAUDE.md"
+            printf "  ✓ Created minimal CLAUDE.md "
+            colour_badge_local
+            echo ""
+        else
+            echo "  Skipped CLAUDE.md"
+        fi
+    fi
+
+    echo ""
+
+    # Step 3.5: CLAUDE.md exclusion (per-project override)
+    echo "Step 3.5: CLAUDE.md exclusion"
+    echo "──────────────────────────────"
+
+    # Show global exclusion setting
+    if [[ "${CLAUDE_MD_EXCLUDE_GLOBAL:-false}" == "true" ]]; then
+        printf "  Global exclusion "
+        colour_badge_global
+        echo ": enabled (${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md})"
+    else
+        printf "  Global exclusion "
+        colour_badge_global
+        echo ": disabled"
+    fi
+    echo ""
+
+    if wizard_yesno "  Apply CLAUDE.md exclusion for this project?" "y"; then
+        local git_exclude="$project_path/.git/info/exclude"
+        local pattern="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
+
+        # Create exclude file if needed
+        if [[ ! -f "$git_exclude" ]]; then
+            mkdir -p "$(dirname "$git_exclude")"
+            touch "$git_exclude"
+        fi
+
+        # Add pattern if not present
+        if ! grep -q "^${pattern}$" "$git_exclude" 2>/dev/null; then
+            echo "$pattern" >> "$git_exclude"
+            printf "  ✓ Added $pattern "
+            colour_badge_local
+            echo " to .git/info/exclude"
+        else
+            echo "  Already excluded: $pattern"
+        fi
+    else
+        echo "  Skipped CLAUDE.md exclusion"
     fi
 
     echo ""
@@ -408,12 +521,48 @@ EOF
     echo "  Project scaffolding complete!"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
-    echo "Created/updated:"
-    echo "  - .claude/settings.json (merged from templates)"
-    [[ "$enable_pretooluse" == "true" ]] && echo "  - .claude/hooks/block-destructive.sh (PreToolUse hook)"
-    echo "  - .claude/claude-hooks.conf (hook configuration)"
-    echo "  - CLAUDE.md (project-specific)"
-    echo "  - .git/info/exclude (AI artefacts)"
-    echo "  - .dotconfigs.json (project configuration)"
+    echo "Configuration applied:"
+
+    # Settings.json
+    if [[ "$is_local_override" == "true" ]]; then
+        printf "  "
+        colour_badge_local
+        echo " Settings.json: $settings_profile (project override)"
+    else
+        printf "  "
+        colour_badge_global
+        echo " Settings.json: using global (no override)"
+    fi
+
+    # Hooks
+    if [[ "$enable_pretooluse" == "true" ]]; then
+        printf "  "
+        colour_badge_local
+        echo " Hooks: block-destructive.sh (project)"
+    else
+        printf "  "
+        colour_badge_global
+        echo " Hooks: none (using global)"
+    fi
+
+    # CLAUDE.md
+    if [[ -f "$claude_md_target" ]]; then
+        printf "  "
+        colour_badge_local
+        echo " CLAUDE.md: project-specific"
+    else
+        printf "  "
+        colour_badge_global
+        echo " CLAUDE.md: using global"
+    fi
+
+    echo ""
+    echo "Files created/updated:"
+    echo "  - .claude/settings.json"
+    [[ "$enable_pretooluse" == "true" ]] && echo "  - .claude/hooks/block-destructive.sh"
+    echo "  - .claude/claude-hooks.conf"
+    [[ -f "$claude_md_target" ]] && echo "  - CLAUDE.md"
+    echo "  - .git/info/exclude"
+    echo "  - .dotconfigs.json"
     echo ""
 }
