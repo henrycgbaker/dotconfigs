@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: 8 of 8 (Hooks & Workflows Review)
-Plan: 6 of 6 in phase
-Status: Phase complete
-Last activity: 2026-02-08 — Completed 08-06-PLAN.md execution
+Phase: 9 of 9 (Config UX Redesign)
+Plan: 1 of ? in phase
+Status: In progress
+Last activity: 2026-02-09 — Completed 09-01-PLAN.md
 
-Progress: ██████████████ 100% (33/33 total plans across phases 4-8)
+Progress: ██████████████░ 94% (34/34 completed + Phase 9 in progress)
 
 ## Performance Metrics
 
@@ -24,8 +24,8 @@ Progress: ██████████████ 100% (33/33 total plans acr
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 22
-- Total execution time: ~55.5min
+- Total plans completed: 23
+- Total execution time: ~56.5min
 - Average duration: 2.5min
 
 ## Accumulated Context
@@ -152,12 +152,18 @@ New v2.0 decisions:
 | 001 | Fix milestone audit critical bugs (colour_cyan, PLUGIN_DIR) | 2026-02-07 | 1bd83e4 | [001-fix-milestone-audit-critical-bugs](./quick/001-fix-milestone-audit-critical-bugs/) |
 | 002 | Rename CLI to 'dots', restructure commands, add CLAUDE.md exclusion | 2026-02-09 | 683ace8 | [002-fix-git-wizard-bug-restructure-cli-setup](./quick/002-fix-git-wizard-bug-restructure-cli-setup/) |
 
+### Roadmap Evolution
+
+- Phase 9 added: Config UX Redesign — opt-in config selection, project-configs wizard, CLAUDE.md exclusion, bug fixes (from UAT findings + quick task 002 gaps)
+
 ## Session Continuity
 
-Last session: 2026-02-09
-Stopped at: Completed quick task 002 (CLI restructure and CLAUDE.md exclusion)
+Last session: 2026-02-09T13:14:14Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
 
 ---
 
-**Phase 8 Status:** COMPLETE (6/6 plans). Hooks architecture and CLI integration complete: unified config (08-01), audit (08-02), new git hooks (08-03), PreToolUse hook (08-04), CLI integration (08-05), roster generation and README updates (08-06). All v2.0 work complete.
+**Phase 8 Status:** COMPLETE (6/6 plans). Hooks architecture and CLI integration complete.
+**Quick Task 002:** Partial — CLI renamed to `dots`, commands restructured, .env quoting fixed. Core UX features (opt-in, project-configs wizard) deferred to Phase 9.
+**Phase 9 Status:** NOT PLANNED. Run `/gsd:plan-phase 9` to break down.
