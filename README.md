@@ -41,7 +41,7 @@ deploy:                            deploy:
   CLAUDE.md → ~/.claude/             aliases → git config
   hooks/ → ~/.claude/hooks/          (optional) hooks/ → ~/.git/config/core.hooksPath
   commands/ → ~/.claude/commands/
-  GSD framework (optional)         project:
+                                   project:
                                      .git/hooks/ (per-repo hooks)
 project:                             .git/config (optional per-repo identity)
   .claude/settings.json
@@ -88,22 +88,26 @@ dotconfigs global-configs git       # Configure Git identity, workflow, aliases
 
 The wizard pre-fills values from existing `.env` and git config. Configuration is saved but not applied until you run `deploy`.
 
-### dotconfigs deploy [plugin] [--dry-run] [--force]
+### dotconfigs deploy [plugin] [--dry-run] [--force] [--regenerate]
 
 Deploys configuration to the filesystem. Without arguments, deploys all plugins.
 
 ```bash
-dotconfigs deploy          # Deploy all configured plugins
-dotconfigs deploy claude   # Deploy only Claude plugin
-dotconfigs deploy --dry-run # Show what would change without applying
-dotconfigs deploy --force  # Skip all conflict prompts (overwrite)
+dotconfigs deploy               # Deploy all configured plugins
+dotconfigs deploy claude        # Deploy only Claude plugin
+dotconfigs deploy --dry-run     # Show what would change without applying
+dotconfigs deploy --force       # Skip all conflict prompts (overwrite)
+dotconfigs deploy --regenerate  # Rebuild generated files from templates (with backup)
 ```
 
 **Flags:**
 - `--dry-run` — show planned changes without applying (takes precedence over `--force`)
 - `--force` — suppress drift warnings and conflict prompts, overwrite existing files
+- `--regenerate` — rebuild generated files (CLAUDE.md, settings.json) from templates, creating backups of existing files
 
-Deploy reads `.env` and applies configuration globally:
+**Generated files (CLAUDE.md, settings.json)** are only created from templates on the first deploy. After that, they are your files to edit directly. Use `--regenerate` to reset them from templates (creates timestamped backups).
+
+Deploy reads `.env` and applies configuration:
 - **Claude plugin:** Symlinks settings.json, CLAUDE.md, hooks, commands to `~/.claude/`
 - **Git plugin:** Writes to `git config --global`, creates aliases, optionally deploys hooks
 
@@ -155,7 +159,7 @@ dotconfigs help deploy  # Detailed help for deploy command
 
 ## GSD Framework
 
-dotconfigs supports the [Get Shit Done (GSD)](https://github.com/henrycgbaker/get-shit-done) planning and execution framework for Claude Code. GSD provides structured phase planning, task breakdown, and execution workflows.
+dotconfigs works well with the [Get Shit Done (GSD)](https://github.com/henrycgbaker/get-shit-done) planning and execution framework for Claude Code. GSD is installed separately — see its own documentation for setup.
 
 ## Plugins
 
@@ -163,14 +167,15 @@ dotconfigs supports the [Get Shit Done (GSD)](https://github.com/henrycgbaker/ge
 
 Manages Claude Code configuration: CLAUDE.md, settings.json, hooks, and skills.
 
-**What it deploys:**
-- `settings.json` — permission rules, environment variables, hooks config (symlinked from repo)
+**What it deploys (all via symlinks):**
+- `settings.json` — permission rules, environment variables, hooks config
 - `CLAUDE.md` — global instructions built from toggleable section templates
-- Hooks — Python scripts triggered by Claude events (PostToolUse for Ruff formatting)
-- Commands — Custom skills like `/commit`, `/squash-merge`, `/simplicity-check`
-- GSD framework — Optional installation of Get Shit Done planning agents
+- Hooks — scripts triggered by Claude events (PreToolUse guard, PostToolUse Ruff formatter)
+- Commands — skills like `/commit`, `/squash-merge`, `/pr-review`, `/simplicity-check`
 
-**Configuration:** Interactive wizard for deploy target, settings, CLAUDE.md sections, hooks, skills, and GSD installation.
+Generated files (settings.json, CLAUDE.md) are created from templates on first deploy, then treated as user-editable source files. Use `--regenerate` to rebuild from templates.
+
+**Configuration:** Interactive wizard for deploy target, settings, CLAUDE.md sections, hooks, and skills.
 
 ### git
 
@@ -240,7 +245,6 @@ dotconfigs/
 ├── dots                       # Convenience symlink → dotconfigs
 ├── .env                       # Configuration store (gitignored, wizard-managed)
 ├── .env.example               # Configuration reference (SSOT for available keys)
-├── settings.json              # Claude global settings (gitignored, assembled by deploy)
 ├── lib/                       # Shared bash libraries (sourced, no shebangs)
 │   ├── colours.sh             # TTY-aware colour output, G/L badge helpers
 │   ├── config.sh              # Configuration hierarchy and variable reference
@@ -254,6 +258,8 @@ dotconfigs/
 │   │   ├── deploy.sh          # Claude deployment logic (symlinks, assembly)
 │   │   ├── project.sh         # Per-repo scaffolding with G/L indicators
 │   │   ├── DESCRIPTION        # Plugin metadata
+│   │   ├── settings.json      # Assembled settings (generated, gitignored)
+│   │   ├── CLAUDE.md          # Assembled CLAUDE.md (generated, gitignored)
 │   │   ├── hooks/             # Claude Code hooks
 │   │   │   ├── block-destructive.sh   # PreToolUse guard
 │   │   │   └── post-tool-format.py    # PostToolUse Ruff formatter
