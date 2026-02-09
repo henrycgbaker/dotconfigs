@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 9 of 9 (Config UX Redesign)
-Plan: 7 of 9 gap closure
-Status: Gap closure in progress
-Last activity: 2026-02-09 — Completed 09-07-PLAN.md
+Plan: 9 of 9 gap closure
+Status: Phase complete
+Last activity: 2026-02-09 — Completed 09-09-PLAN.md
 
-Progress: ███████████████ 100% (42/44 completed)
+Progress: ███████████████ 100% (43/44 completed)
 
 ## Performance Metrics
 
@@ -177,12 +177,12 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T14:00:56Z
-Stopped at: Completed 09-07-PLAN.md
+Last session: 2026-02-09T14:01:04Z
+Stopped at: Completed 09-09-PLAN.md
 Resume file: None
 
 ---
 
 **Phase 8 Status:** COMPLETE (6/6 plans). Hooks architecture and CLI integration complete.
 **Quick Task 002:** COMPLETE. CLI renamed to `dots`, commands restructured, .env quoting fixed.
-**Phase 9 Status:** Gap closure in progress (7/9 plans). Config UX redesign core complete, cleanup and docs remaining.
+**Phase 9 Status:** COMPLETE (9/9 plans). Config UX redesign with opt-in wizards, G/L provenance, CLAUDE.md exclusion, and gap closure complete.

@@ -4,22 +4,22 @@ Single source of truth for dev configuration — one repo, one CLI, one `.env`, 
 
 **dotconfigs** is an extensible, plugin-based configuration manager for developer tools. Clone onto any machine (local Mac, remote servers, Docker, CI/CD) to get a consistent development environment. Currently manages Claude Code and Git configuration, with a plugin architecture that supports adding new config domains (shell, editors, etc.) without restructuring.
 
-**Note:** The CLI command is `dots` (shorter, more ergonomic). The `dotconfigs` command still works for backwards compatibility.
+**Note:** `dots` is available as a convenience symlink to `dotconfigs`.
 
 ## Architecture
 
-The system follows a three-command model: **setup** (wizard), **deploy** (apply config), and **project** (per-repo scaffolding).
+The system follows a three-command model: **global-configs** (wizard), **deploy** (apply config), and **project-configs** (per-repo overrides).
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                            dots CLI                             │
+│                        dotconfigs CLI                           │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                  ┌───────────────┼───────────────┐
                  ▼               ▼               ▼
-          ┌──────────┐    ┌──────────┐    ┌──────────┐
-          │  setup   │    │  deploy  │    │ project  │
-          └──────────┘    └──────────┘    └──────────┘
+          ┌──────────────┐  ┌──────────┐  ┌──────────────┐
+          │global-configs│  │  deploy  │  │project-configs│
+          └──────────────┘  └──────────┘  └──────────────┘
                  │               │               │
                  │               │               │
          Wizard prompts    Reads .env      Scaffolds per-repo
@@ -49,18 +49,18 @@ project:                             .git/config (optional per-repo identity)
 ```
 
 **Data flow:**
-1. `dots setup <plugin>` runs interactive wizard, saves configuration to `.env`
-2. `dots deploy [plugin]` reads `.env` and applies globally (symlinks, git config)
-3. `dots project [plugin]` sets up per-repository files (`.claude/`, `.git/hooks/`)
+1. `dotconfigs global-configs <plugin>` runs interactive wizard, saves configuration to `.env`
+2. `dotconfigs deploy [plugin]` reads `.env` and applies globally (symlinks, git config)
+3. `dotconfigs project-configs [plugin]` sets up per-repository files (`.claude/`, `.git/hooks/`)
 
 ## Installation
 
-Clone the repository and run deploy to add `dots` to your PATH:
+Clone the repository and run deploy to add `dotconfigs` to your PATH:
 
 ```bash
 git clone git@github.com:henrycgbaker/dotconfigs.git ~/dotconfigs
 cd ~/dotconfigs
-./dots deploy
+./dotconfigs deploy
 ```
 
 **Requirements:** bash 3.2+ (macOS and Linux supported)
@@ -70,33 +70,33 @@ cd ~/dotconfigs
 Three steps to configure your environment:
 
 ```bash
-dots setup claude    # Interactive wizard for Claude Code
-dots deploy claude   # Apply configuration globally
-dots status          # Verify deployment
+dotconfigs global-configs claude    # Interactive wizard for Claude Code
+dotconfigs deploy claude            # Apply configuration globally
+dotconfigs status                   # Verify deployment
 ```
 
 ## Usage
 
-### dots setup \<plugin\>
+### dotconfigs global-configs \<plugin\>
 
 Runs an interactive wizard to configure a plugin. Saves configuration to `.env`.
 
 ```bash
-dots setup claude    # Configure Claude Code settings
-dots setup git       # Configure Git identity, workflow, aliases
+dotconfigs global-configs claude    # Configure Claude Code settings
+dotconfigs global-configs git       # Configure Git identity, workflow, aliases
 ```
 
 The wizard pre-fills values from existing `.env` and git config. Configuration is saved but not applied until you run `deploy`.
 
-### dots deploy [plugin] [--dry-run] [--force]
+### dotconfigs deploy [plugin] [--dry-run] [--force]
 
 Deploys configuration to the filesystem. Without arguments, deploys all plugins.
 
 ```bash
-dots deploy          # Deploy all configured plugins
-dots deploy claude   # Deploy only Claude plugin
-dots deploy --dry-run # Show what would change without applying
-dots deploy --force  # Skip all conflict prompts (overwrite)
+dotconfigs deploy          # Deploy all configured plugins
+dotconfigs deploy claude   # Deploy only Claude plugin
+dotconfigs deploy --dry-run # Show what would change without applying
+dotconfigs deploy --force  # Skip all conflict prompts (overwrite)
 ```
 
 **Flags:**
@@ -107,26 +107,26 @@ Deploy reads `.env` and applies configuration globally:
 - **Claude plugin:** Symlinks settings.json, CLAUDE.md, hooks, commands to `~/.claude/`
 - **Git plugin:** Writes to `git config --global`, creates aliases, optionally deploys hooks
 
-### dots project [plugin] [path]
+### dotconfigs project-configs [plugin] [path]
 
 Scaffolds per-repository configuration files. Can be run from within a project (auto-detects) or with an explicit path.
 
 ```bash
-dots project claude              # Set up .claude/ in current directory
-dots project git /path/to/repo   # Set up git hooks in specific repo
-dots project claude .            # Explicit current directory
+dotconfigs project-configs claude              # Set up .claude/ in current directory
+dotconfigs project-configs git /path/to/repo   # Set up git hooks in specific repo
+dotconfigs project-configs claude .            # Explicit current directory
 ```
 
 **Claude plugin:** Creates `.claude/settings.json` (per-repo overrides), optionally CLAUDE.md
 **Git plugin:** Copies hooks to `.git/hooks/`, optionally configures per-repo identity
 
-### dots status [plugin]
+### dotconfigs status [plugin]
 
 Shows deployment state with drift detection. Reports per-file status for symlinks and per-setting status for git config.
 
 ```bash
-dots status          # Status for all plugins
-dots status claude   # Status for Claude plugin only
+dotconfigs status          # Status for all plugins
+dotconfigs status claude   # Status for Claude plugin only
 ```
 
 **States:**
@@ -136,21 +136,21 @@ dots status claude   # Status for Claude plugin only
 - ⚠ **drifted-foreign** — file exists but isn't a symlink (foreign content)
 - ⚠ **drifted-wrong-target** — git config value doesn't match .env
 
-### dots list
+### dotconfigs list
 
 Shows available plugins and their installation status.
 
 ```bash
-dots list
+dotconfigs list
 ```
 
-### dots help [command]
+### dotconfigs help [command]
 
 Displays contextual help. Without arguments, shows command overview.
 
 ```bash
-dots help         # Overview of all commands
-dots help deploy  # Detailed help for deploy command
+dotconfigs help         # Overview of all commands
+dotconfigs help deploy  # Detailed help for deploy command
 ```
 
 ## GSD Framework
@@ -170,7 +170,7 @@ Manages Claude Code configuration: CLAUDE.md, settings.json, hooks, and skills.
 - Commands — Custom skills like `/commit`, `/squash-merge`, `/simplicity-check`
 - GSD framework — Optional installation of Get Shit Done planning agents
 
-**Configuration:** Interactive wizard for deploy target, settings, CLAUDE.md sections, hooks, skills, GSD installation, and git identity.
+**Configuration:** Interactive wizard for deploy target, settings, CLAUDE.md sections, hooks, skills, and GSD installation.
 
 ### git
 
@@ -208,19 +208,19 @@ dotconfigs uses a three-tier configuration hierarchy for maximum flexibility:
 | Tier | Scope | Use Case | Example |
 |------|-------|----------|---------|
 | **Hardcoded defaults** | All projects | Sensible defaults for most users | `GIT_HOOK_BLOCK_AI_ATTRIBUTION=true` |
-| **Global .env** | All projects on this machine | Personal preferences, machine-specific settings | Set via `dotconfigs setup` wizard |
+| **Global .env** | All projects on this machine | Personal preferences, machine-specific settings | Set via `dotconfigs global-configs` wizard |
 | **Project config files** | Single repository | Project-specific overrides | `.claude/git-hooks.conf` in repo |
 
 **Precedence:** Project config > Global .env > Hardcoded defaults (higher tiers override lower).
 
 **When to use each tier:**
 - **Hardcoded defaults:** Built into hook code — no action needed, just works
-- **Global .env:** Personal preferences that apply across all your projects (set once via setup wizard)
-- **Project config files:** Per-repository overrides for team workflows or project-specific requirements (deployed by `dotconfigs project`)
+- **Global .env:** Personal preferences that apply across all your projects (set once via global-configs wizard)
+- **Project config files:** Per-repository overrides for team workflows or project-specific requirements (deployed by `dotconfigs project-configs`)
 
 **Plugin configuration ownership:**
-- Git plugin owns `git-hooks.conf` — deployed by `dotconfigs project git`
-- Claude plugin owns `claude-hooks.conf` — deployed by `dotconfigs project claude`
+- Git plugin owns `git-hooks.conf` — deployed by `dotconfigs project-configs git`
+- Claude plugin owns `claude-hooks.conf` — deployed by `dotconfigs project-configs claude`
 
 **Git hook config discovery paths** (first found wins):
 1. `.githooks/config`
@@ -230,40 +230,50 @@ dotconfigs uses a three-tier configuration hierarchy for maximum flexibility:
 
 For a complete list of all hooks, commands, and configuration options, see [docs/ROSTER.md](docs/ROSTER.md).
 
+For detailed documentation on Claude Code configuration types (agents, skills, hooks, settings), see [docs/usage-guide.md](docs/usage-guide.md).
+
 ## Directory Structure
 
 ```
 dotconfigs/
-├── dotconfigs              # Main CLI entry point
-├── .env                    # Configuration (gitignored, wizard-managed)
-├── .env.example            # Configuration reference
-├── settings.json           # Claude global settings (source of truth)
-├── CLAUDE.md               # Repository CLAUDE.md
-├── lib/                    # Shared bash libraries
-│   ├── cli.sh              # CLI framework (subcommands, error handling)
-│   ├── config.sh           # Configuration hierarchy and variable reference
-│   ├── wizard.sh           # Wizard helpers (prompts, y/n, save)
-│   ├── discovery.sh        # Asset discovery (sections, hooks, skills)
-│   ├── deployment.sh       # Deployment helpers (symlinks, backups)
-│   └── output.sh           # Output formatting (colours, TTY detection)
+├── dotconfigs                 # CLI entry point (primary)
+├── dots                       # Convenience symlink → dotconfigs
+├── .env                       # Configuration store (gitignored, wizard-managed)
+├── .env.example               # Configuration reference (SSOT for available keys)
+├── settings.json              # Claude global settings (gitignored, assembled by deploy)
+├── lib/                       # Shared bash libraries (sourced, no shebangs)
+│   ├── colours.sh             # TTY-aware colour output, G/L badge helpers
+│   ├── config.sh              # Configuration hierarchy and variable reference
+│   ├── discovery.sh           # Asset discovery (sections, hooks, skills)
+│   ├── symlinks.sh            # Symlink management, backup, conflict resolution
+│   ├── validation.sh          # Common validation helpers (is_git_repo, path_exists)
+│   └── wizard.sh              # Wizard helpers (prompts, y/n, save, toggle, edit mode)
 ├── plugins/
 │   ├── claude/
-│   │   ├── setup.sh        # Claude setup wizard
-│   │   ├── deploy.sh       # Claude deployment logic
-│   │   ├── project.sh      # Per-repo scaffolding
-│   │   ├── hooks/          # Claude Code hooks (block-destructive.sh, post-tool-format.py)
-│   │   ├── commands/       # Skills (/commit, /squash-merge, /pr-review, /simplicity-check)
+│   │   ├── setup.sh           # Claude global-configs wizard
+│   │   ├── deploy.sh          # Claude deployment logic (symlinks, assembly)
+│   │   ├── project.sh         # Per-repo scaffolding with G/L indicators
+│   │   ├── DESCRIPTION        # Plugin metadata
+│   │   ├── hooks/             # Claude Code hooks
+│   │   │   ├── block-destructive.sh   # PreToolUse guard
+│   │   │   └── post-tool-format.py    # PostToolUse Ruff formatter
+│   │   ├── commands/          # Skills (/commit, /squash-merge, /pr-review, /simplicity-check)
 │   │   └── templates/
-│   │       ├── claude-md/  # CLAUDE.md section templates
-│   │       ├── settings/   # Project settings.json templates
-│   │       └── hooks-conf/ # Hook config templates
+│   │       ├── claude-md/     # CLAUDE.md section templates
+│   │       ├── settings/      # settings.json base + language rule templates
+│   │       └── claude-hooks.conf  # Hook config template
 │   └── git/
-│       ├── setup.sh        # Git setup wizard
-│       ├── deploy.sh       # Git deployment logic
-│       ├── project.sh      # Per-repo git setup
-│       └── hooks/          # Git hooks (7 hooks for commit validation & workflow)
-├── scripts/                # Utility scripts
-│   └── generate-roster.sh  # Auto-generates docs/ROSTER.md from metadata
-└── docs/                   # Additional documentation
-    └── ROSTER.md           # Complete hook/command/config reference
+│       ├── setup.sh           # Git global-configs wizard
+│       ├── deploy.sh          # Git deployment logic (git config, aliases)
+│       ├── project.sh         # Per-repo hooks + optional identity
+│       ├── DESCRIPTION        # Plugin metadata
+│       ├── hooks/             # Git hooks (7: commit-msg, pre-commit, pre-push, etc.)
+│       └── templates/
+│           └── git-hooks.conf # Per-project hook config template
+├── scripts/                   # Utility scripts
+│   ├── generate-roster.sh     # Auto-generates docs/ROSTER.md from hook metadata
+│   └── registry-scan.sh       # Registry scanning utility
+└── docs/                      # Additional documentation
+    ├── ROSTER.md              # Complete hook/command/config reference (generated)
+    └── usage-guide.md         # Claude Code configuration guide
 ```
