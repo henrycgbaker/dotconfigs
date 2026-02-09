@@ -150,11 +150,12 @@ New v2.0 decisions:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 001 | Fix milestone audit critical bugs (colour_cyan, PLUGIN_DIR) | 2026-02-07 | 1bd83e4 | [001-fix-milestone-audit-critical-bugs](./quick/001-fix-milestone-audit-critical-bugs/) |
+| 002 | Rename CLI to 'dots', restructure commands, add CLAUDE.md exclusion | 2026-02-09 | 683ace8 | [002-fix-git-wizard-bug-restructure-cli-setup](./quick/002-fix-git-wizard-bug-restructure-cli-setup/) |
 
 ## Session Continuity
 
-Last session: 2026-02-08
-Stopped at: Completed 08-06-PLAN.md execution (Phase 8 COMPLETE)
+Last session: 2026-02-09
+Stopped at: Completed quick task 002 (CLI restructure and CLAUDE.md exclusion)
 Resume file: None
 
 ---
