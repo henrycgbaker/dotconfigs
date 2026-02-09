@@ -173,6 +173,7 @@ New v2.0 decisions:
 |---|-------------|------|--------|-----------|
 | 001 | Fix milestone audit critical bugs (colour_cyan, PLUGIN_DIR) | 2026-02-07 | 1bd83e4 | [001-fix-milestone-audit-critical-bugs](./quick/001-fix-milestone-audit-critical-bugs/) |
 | 002 | Rename CLI to 'dots', restructure commands, add CLAUDE.md exclusion | 2026-02-09 | 683ace8 | [002-fix-git-wizard-bug-restructure-cli-setup](./quick/002-fix-git-wizard-bug-restructure-cli-setup/) |
+| 003-02 | Fix Git wizard UX issues (prompt format, config path labels) | 2026-02-09 | 46d9d79 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
 
 ### Roadmap Evolution
 
@@ -180,8 +181,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T15:10:00Z
-Stopped at: Phase 9 verified — all gap closure complete
+Last session: 2026-02-09T16:47:58Z
+Stopped at: Completed quick task 003-02 — Git wizard UX fixes
 Resume file: None
 
 ---

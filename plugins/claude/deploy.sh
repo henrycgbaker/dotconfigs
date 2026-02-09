@@ -6,131 +6,19 @@ PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTCONFIGS_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
 ENV_FILE="$DOTCONFIGS_ROOT/.env"
 
-# Internal: Assemble settings.json from templates
+# Internal: Assemble settings.json from template
 # Args: plugin_dir, output_file
 _claude_assemble_settings() {
     local plugin_dir="$1"
     local output_file="$2"
-    local templates_dir="$plugin_dir/templates/settings"
+    local template="$plugin_dir/templates/settings/settings-template.json"
 
-    # Start with base.json
-    local base_file="$templates_dir/base.json"
-    if [[ ! -f "$base_file" ]]; then
-        echo "Error: base.json template not found" >&2
+    if [[ ! -f "$template" ]]; then
+        echo "Error: settings-template.json not found" >&2
         return 1
     fi
 
-    # Create temp file for assembly
-    local temp_file=$(mktemp)
-    cp "$base_file" "$temp_file"
-
-    # Merge Python rules if enabled
-    if [[ "${CLAUDE_SETTINGS_PYTHON:-false}" == "true" ]]; then
-        local python_file="$templates_dir/python.json"
-        if [[ -f "$python_file" ]]; then
-            local temp_merge=$(mktemp)
-            if command -v jq &> /dev/null; then
-                jq -s '.[0] * .[1]' "$temp_file" "$python_file" > "$temp_merge"
-            else
-                # Fallback: Python-based merge
-                python3 <<EOF
-import json
-with open("$temp_file") as f:
-    base = json.load(f)
-with open("$python_file") as f:
-    overlay = json.load(f)
-
-def deep_merge(base, overlay):
-    for key, value in overlay.items():
-        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-            deep_merge(base[key], value)
-        elif key in base and isinstance(base[key], list) and isinstance(value, list):
-            base[key].extend(value)
-        else:
-            base[key] = value
-    return base
-
-result = deep_merge(base, overlay)
-with open("$temp_merge", "w") as f:
-    json.dump(result, f, indent=2)
-EOF
-            fi
-            mv "$temp_merge" "$temp_file"
-        fi
-    fi
-
-    # Merge Node rules if enabled
-    if [[ "${CLAUDE_SETTINGS_NODE:-false}" == "true" ]]; then
-        local node_file="$templates_dir/node.json"
-        if [[ -f "$node_file" ]]; then
-            local temp_merge=$(mktemp)
-            if command -v jq &> /dev/null; then
-                jq -s '.[0] * .[1]' "$temp_file" "$node_file" > "$temp_merge"
-            else
-                # Fallback: Python-based merge
-                python3 <<EOF
-import json
-with open("$temp_file") as f:
-    base = json.load(f)
-with open("$node_file") as f:
-    overlay = json.load(f)
-
-def deep_merge(base, overlay):
-    for key, value in overlay.items():
-        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-            deep_merge(base[key], value)
-        elif key in base and isinstance(base[key], list) and isinstance(value, list):
-            base[key].extend(value)
-        else:
-            base[key] = value
-    return base
-
-result = deep_merge(base, overlay)
-with open("$temp_merge", "w") as f:
-    json.dump(result, f, indent=2)
-EOF
-            fi
-            mv "$temp_merge" "$temp_file"
-        fi
-    fi
-
-    # Merge hooks.json if hooks are enabled
-    if [[ ${#CLAUDE_HOOKS_ENABLED_ARRAY[@]} -gt 0 ]]; then
-        local hooks_file="$templates_dir/hooks.json"
-        if [[ -f "$hooks_file" ]]; then
-            local temp_merge=$(mktemp)
-            if command -v jq &> /dev/null; then
-                jq -s '.[0] * .[1]' "$temp_file" "$hooks_file" > "$temp_merge"
-            else
-                # Fallback: Python-based merge
-                python3 <<EOF
-import json
-with open("$temp_file") as f:
-    base = json.load(f)
-with open("$hooks_file") as f:
-    overlay = json.load(f)
-
-def deep_merge(base, overlay):
-    for key, value in overlay.items():
-        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-            deep_merge(base[key], value)
-        elif key in base and isinstance(base[key], list) and isinstance(value, list):
-            base[key].extend(value)
-        else:
-            base[key] = value
-    return base
-
-result = deep_merge(base, overlay)
-with open("$temp_merge", "w") as f:
-    json.dump(result, f, indent=2)
-EOF
-            fi
-            mv "$temp_merge" "$temp_file"
-        fi
-    fi
-
-    # Move assembled result to output
-    mv "$temp_file" "$output_file"
+    cp "$template" "$output_file"
     return 0
 }
 
@@ -442,12 +330,9 @@ plugin_claude_deploy() {
         local settings_source="$DOTCONFIGS_ROOT/settings.json"
         if [[ "$dry_run" != "true" ]]; then
             _claude_assemble_settings "$PLUGIN_DIR" "$settings_source"
-            echo "  ✓ Assembled settings.json from templates"
+            echo "  ✓ Copied settings-template.json"
         else
-            echo "  Would assemble: base"
-            [[ "${CLAUDE_SETTINGS_PYTHON:-false}" == "true" ]] && echo "  Would assemble: + python"
-            [[ "${CLAUDE_SETTINGS_NODE:-false}" == "true" ]] && echo "  Would assemble: + node"
-            [[ ${#CLAUDE_HOOKS_ENABLED_ARRAY[@]} -gt 0 ]] && echo "  Would assemble: + hooks"
+            echo "  Would copy: settings-template.json"
         fi
 
         echo "Deploying settings.json..."
@@ -627,18 +512,7 @@ plugin_claude_deploy() {
         done
     fi
 
-    # 5. Install GSD framework
-    if [[ "${CLAUDE_GSD_INSTALL:-false}" == "true" ]]; then
-        echo "Installing GSD framework..."
-        if [[ "$dry_run" == "true" ]]; then
-            echo "  Would run: npx get-shit-done-cc --claude --global"
-        else
-            npx get-shit-done-cc --claude --global
-            echo "  ✓ GSD framework installed"
-        fi
-    fi
-
-    # 6. Apply CLAUDE.md exclusion
+    # 5. Apply CLAUDE.md exclusion
     _claude_apply_md_exclusion "$DOTCONFIGS_ROOT"
 
     echo ""
