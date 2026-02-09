@@ -604,19 +604,23 @@ cmd_project_configs() {
         "plugin_${plugin_filter}_project" "$project_path"
     else
         # All plugins mode
-        local ran_any=false
+        # Collect plugins into array first to avoid stdin redirection
+        local project_plugins=()
         while IFS= read -r plugin; do
             if [[ -f "$PLUGINS_DIR/$plugin/project.sh" ]]; then
-                source "$PLUGINS_DIR/$plugin/project.sh"
-                "plugin_${plugin}_project" "$project_path"
-                ran_any=true
+                project_plugins+=("$plugin")
             fi
         done < <(discover_plugins "$PLUGINS_DIR")
 
-        if [[ "$ran_any" == "false" ]]; then
+        if [[ ${#project_plugins[@]} -eq 0 ]]; then
             echo "No plugins with project setup found" >&2
             exit 1
         fi
+
+        for plugin in "${project_plugins[@]}"; do
+            source "$PLUGINS_DIR/$plugin/project.sh"
+            "plugin_${plugin}_project" "$project_path"
+        done
     fi
 }
 
