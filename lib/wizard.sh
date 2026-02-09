@@ -174,3 +174,171 @@ wizard_checkbox_menu() {
         fi
     done
 }
+
+# Display a numbered category menu using read (not select)
+# Args: title, category_names (array name)
+# Returns: selected index (0-based) via exit code, prints category name to stdout
+wizard_category_menu() {
+    local title="$1"
+    local categories_var="$2"
+
+    # Get category array by name (bash 3.2 compatible)
+    eval "local cats_str=\"\${${categories_var}[*]}\""
+    local cats=($cats_str)
+
+    while true; do
+        echo "$title"
+        echo ""
+
+        local i=1
+        for cat in "${cats[@]}"; do
+            echo "  $i) $cat"
+            i=$((i + 1))
+        done
+        echo ""
+
+        read -p "Select category (1-${#cats[@]}): " choice
+
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le "${#cats[@]}" ]]; then
+            local idx=$((choice - 1))
+            echo "${cats[$idx]}"
+            return $idx
+        else
+            echo "Invalid selection. Try again." >&2
+        fi
+    done
+}
+
+# Display current configuration in edit mode format
+# Args: config_labels (array name), config_values (array name), config_managed (array name)
+# Prints numbered list with values or [not managed] for unmanaged items
+wizard_edit_mode_display() {
+    local labels_var="$1"
+    local values_var="$2"
+    local managed_var="$3"
+
+    # Get arrays by name (bash 3.2 compatible)
+    eval "local labels_str=\"\${${labels_var}[*]}\""
+    eval "local values_str=\"\${${values_var}[*]}\""
+    eval "local managed_str=\"\${${managed_var}[*]}\""
+
+    local labels=($labels_str)
+    local values=($values_str)
+    local managed=($managed_str)
+
+    local i=1
+    local j=0
+    for label in "${labels[@]}"; do
+        local value="${values[$j]}"
+        local is_managed="${managed[$j]}"
+
+        if [[ "$is_managed" == "true" ]]; then
+            echo "  $i) $label: $value"
+        else
+            printf "  %d) %s: " "$i" "$label"
+            colour_not_managed
+            echo ""
+        fi
+        i=$((i + 1))
+        j=$((j + 1))
+    done
+}
+
+# Parse comma-separated number input for edit mode
+# Args: input_string, max_index (0-based)
+# Prints space-separated list of valid 0-based indices to stdout
+wizard_parse_edit_selection() {
+    local input="$1"
+    local max_index="$2"
+
+    # Remove whitespace and split by comma
+    input=$(echo "$input" | tr -d ' ')
+    local IFS=','
+    local nums=($input)
+
+    local result=()
+    local seen=""
+
+    for num in "${nums[@]}"; do
+        if [[ "$num" =~ ^[0-9]+$ ]]; then
+            local idx=$((num - 1))
+            if [[ $idx -ge 0 ]] && [[ $idx -le $max_index ]]; then
+                # Deduplicate
+                if ! _is_in_list "$idx" "$seen"; then
+                    result+=("$idx")
+                    seen="$seen $idx"
+                fi
+            fi
+        fi
+    done
+
+    echo "${result[*]}"
+}
+
+# Display config toggle menu with checkboxes
+# Args: title, config_names (array name), selected (array name)
+# Updates selected array in-place with user choices
+wizard_config_toggle() {
+    local title="$1"
+    local options_var="$2"
+    local selected_var="$3"
+
+    # Get arrays by name (bash 3.2 compatible)
+    eval "local opts_str=\"\${${options_var}[*]}\""
+    eval "local sel_str=\"\${${selected_var}[*]}\""
+
+    local opts=($opts_str)
+    local sel=($sel_str)
+
+    while true; do
+        echo "$title"
+        echo "  (Enter number to toggle, 'all' to select all, 'none' to deselect all, 'done' to finish)"
+        echo ""
+
+        local i=1
+        for opt in "${opts[@]}"; do
+            local checked=" "
+            if _is_in_list "$opt" "$sel_str"; then
+                checked="x"
+            fi
+            echo "  [$checked] $i) $opt"
+            i=$((i + 1))
+        done
+        echo ""
+
+        read -p "Choice: " choice
+
+        if [[ "$choice" == "done" ]] || [[ -z "$choice" ]]; then
+            # Update the selected array by reference
+            eval "${selected_var}=(\${sel[@]})"
+            return 0
+        elif [[ "$choice" == "all" ]]; then
+            sel=("${opts[@]}")
+            sel_str="${sel[*]}"
+            continue
+        elif [[ "$choice" == "none" ]]; then
+            sel=()
+            sel_str=""
+            continue
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le "${#opts[@]}" ]]; then
+            local idx=$((choice - 1))
+            local item="${opts[$idx]}"
+
+            # Toggle: remove if present, add if absent
+            if _is_in_list "$item" "$sel_str"; then
+                # Remove from selected
+                local new_sel=()
+                for s in "${sel[@]}"; do
+                    [[ "$s" != "$item" ]] && new_sel+=("$s")
+                done
+                sel=("${new_sel[@]}")
+            else
+                # Add to selected
+                sel+=("$item")
+            fi
+            sel_str="${sel[*]}"
+        else
+            echo "Invalid choice, try again"
+        fi
+    done
+}
