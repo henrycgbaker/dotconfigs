@@ -202,33 +202,18 @@ cmd_help() {
 }
 
 cmd_setup_legacy() {
-    echo "Warning: 'dotconfigs setup <plugin>' is deprecated" >&2
-    echo "Use: 'dotconfigs global-configs <plugin>' to configure .env" >&2
-    echo "" >&2
-
-    local plugin=$1
-
-    if [[ -z "$plugin" ]]; then
-        echo "Error: Plugin name required" >&2
-        show_usage
-        exit 1
-    fi
-
-    shift
-
-    if ! plugin_exists "$plugin"; then
-        echo "Error: Plugin '$plugin' not found" >&2
-        echo "" >&2
-        list_available_plugins
-        exit 1
-    fi
-
-    source "$PLUGINS_DIR/$plugin/setup.sh"
-    "plugin_${plugin}_setup" "$@"
+    echo "Warning: 'dotconfigs setup <plugin>' is deprecated." >&2
+    echo "Use: 'dotconfigs global-configs $1' instead." >&2
+    return 1
 }
 
 cmd_setup() {
-    echo "dotconfigs — Tool Setup"
+    init_colours
+
+    echo ""
+    echo "========================================================="
+    echo "  dotconfigs - First Time Setup"
+    echo "========================================================="
     echo ""
 
     # Deploy target
@@ -238,6 +223,7 @@ cmd_setup() {
 
     # Save to .env
     wizard_save_env "$ENV_FILE" "DOTCONFIGS_DEPLOY_TARGET" "$DOTCONFIGS_DEPLOY_TARGET"
+    wizard_save_env "$ENV_FILE" "DOTCONFIGS_VERSION" "2.0"
 
     # Create PATH symlinks
     echo ""
