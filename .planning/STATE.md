@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 9 of 9 (Config UX Redesign)
-Plan: 4 of 5 in phase
-Status: In progress
-Last activity: 2026-02-09 — Completed 09-04-PLAN.md
+Plan: 5 of 5 in phase
+Status: Phase complete
+Last activity: 2026-02-09 — Completed 09-05-PLAN.md
 
-Progress: ██████████████░ 94% (35/35 completed + Phase 9 in progress)
+Progress: ███████████████ 100% (40/40 completed)
 
 ## Performance Metrics
 
@@ -24,9 +24,9 @@ Progress: ██████████████░ 94% (35/35 completed + P
 - Average duration: 2.0min
 
 **v2.0 (current):**
-- Total plans completed: 24
-- Total execution time: ~58.5min
-- Average duration: 2.4min
+- Total plans completed: 25
+- Total execution time: ~61.5min
+- Average duration: 2.5min
 
 ## Accumulated Context
 
@@ -142,6 +142,10 @@ New v2.0 decisions:
 - [09-04]: All select loops replaced with read-based numbered prompts (UX consistency)
 - [09-04]: Edit mode detection via presence of GIT_* keys in .env
 - [09-04]: Summary shows [not managed] for unselected configs (opt-in transparency)
+- [09-05]: Project-configs wizards show G/L provenance indicators (cyan [G] for global, green [L] for local)
+- [09-05]: CLAUDE.md exclusion applied during deploy (reads from .env, writes to .git/info/exclude)
+- [09-05]: Settings.json assembled from templates during deploy with language rule selection (Python/Node)
+- [09-05]: Select loop eliminated from claude project.sh (replaced with read prompt)
 
 ### Pending Todos
 
@@ -170,12 +174,12 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T13:21:42Z
-Stopped at: Completed 09-04-PLAN.md
+Last session: 2026-02-09T13:28:21Z
+Stopped at: Completed 09-05-PLAN.md
 Resume file: None
 
 ---
 
 **Phase 8 Status:** COMPLETE (6/6 plans). Hooks architecture and CLI integration complete.
-**Quick Task 002:** Partial — CLI renamed to `dots`, commands restructured, .env quoting fixed. Core UX features (opt-in, project-configs wizard) deferred to Phase 9.
-**Phase 9 Status:** NOT PLANNED. Run `/gsd:plan-phase 9` to break down.
+**Quick Task 002:** COMPLETE. CLI renamed to `dots`, commands restructured, .env quoting fixed.
+**Phase 9 Status:** COMPLETE (5/5 plans). Config UX redesign with opt-in wizards, G/L provenance, and CLAUDE.md exclusion complete.
