@@ -270,12 +270,14 @@ wizard_parse_edit_selection() {
 }
 
 # Display config toggle menu with checkboxes
-# Args: title, config_names (array name), selected (array name)
+# Args: title, config_names (array name), selected (array name), [preview_fn]
+# If preview_fn is provided, '? N' shows full content for item N via preview_fn(item_name)
 # Updates selected array in-place with user choices
 wizard_config_toggle() {
     local title="$1"
     local options_var="$2"
     local selected_var="$3"
+    local preview_fn="${4:-}"
 
     # Get arrays by name (bash 3.2 compatible)
     eval "local opts_str=\"\${${options_var}[*]}\""
@@ -284,9 +286,14 @@ wizard_config_toggle() {
     local opts=($opts_str)
     local sel=($sel_str)
 
+    local help_hint=""
+    if [[ -n "$preview_fn" ]]; then
+        help_hint=", '? N' to preview"
+    fi
+
     while true; do
         echo "$title"
-        echo "  (Enter number to toggle, 'all' to select all, 'none' to deselect all, 'done' to finish)"
+        echo "  (Enter number to toggle, 'all' to select all, 'none' to deselect all${help_hint}, 'done' to finish)"
         echo ""
 
         local i=1
@@ -314,6 +321,16 @@ wizard_config_toggle() {
             sel=()
             sel_str=""
             continue
+        elif [[ -n "$preview_fn" ]] && [[ "$choice" =~ ^\?[[:space:]]*([0-9]+)$ ]]; then
+            local pnum="${BASH_REMATCH[1]}"
+            if [[ "$pnum" -ge 1 ]] && [[ "$pnum" -le "${#opts[@]}" ]]; then
+                local pidx=$((pnum - 1))
+                echo ""
+                $preview_fn "${opts[$pidx]}"
+                echo ""
+            else
+                echo "Invalid preview number"
+            fi
         elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le "${#opts[@]}" ]]; then
             local idx=$((choice - 1))
             local item="${opts[$idx]}"

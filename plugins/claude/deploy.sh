@@ -22,58 +22,70 @@ _claude_assemble_settings() {
     return 0
 }
 
-# Internal: Apply CLAUDE.md exclusion to .git/info/exclude
+# Internal: Apply CLAUDE.md exclusion
 # Args: repo_path
+# Respects CLAUDE_MD_EXCLUDE_DEST: "exclude" (.git/info/exclude) or "gitignore" (.gitignore)
 _claude_apply_md_exclusion() {
     local repo_path="$1"
-    local exclude_file="$repo_path/.git/info/exclude"
+    local dest="${CLAUDE_MD_EXCLUDE_DEST:-exclude}"
+    local exclude_file
+    local dest_label
+
+    if [[ "$dest" == "gitignore" ]]; then
+        exclude_file="$repo_path/.gitignore"
+        dest_label=".gitignore"
+    else
+        exclude_file="$repo_path/.git/info/exclude"
+        dest_label=".git/info/exclude"
+    fi
 
     # Check if CLAUDE.md exclusion is enabled globally
     if [[ "${CLAUDE_MD_EXCLUDE_GLOBAL:-false}" != "true" ]]; then
         return 0
     fi
 
-    # Get exclusion pattern (default: CLAUDE.md)
-    local pattern="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
+    # Build list of patterns to exclude
+    local raw_pattern="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
+    local patterns=()
+    case "$raw_pattern" in
+        both)
+            patterns=("CLAUDE.md" "**/CLAUDE.md")
+            ;;
+        *)
+            patterns=("$raw_pattern")
+            ;;
+    esac
+    # Always include .claude/
+    patterns+=(".claude/")
 
     if [[ "$dry_run" == "true" ]]; then
-        echo "Applying CLAUDE.md exclusion..."
-        if [[ ! -f "$exclude_file" ]] || ! grep -q "^${pattern}$" "$exclude_file" 2>/dev/null; then
-            echo "  Would add: $pattern"
-        else
-            echo "  Already excluded: $pattern"
-        fi
-        if [[ ! -f "$exclude_file" ]] || ! grep -q "^\.claude/$" "$exclude_file" 2>/dev/null; then
-            echo "  Would add: .claude/"
-        else
-            echo "  Already excluded: .claude/"
-        fi
+        echo "Applying CLAUDE.md exclusion to $dest_label..."
+        for p in "${patterns[@]}"; do
+            if [[ ! -f "$exclude_file" ]] || ! grep -qF "$p" "$exclude_file" 2>/dev/null; then
+                echo "  Would add: $p"
+            else
+                echo "  Already excluded: $p"
+            fi
+        done
         return 0
     fi
 
-    # Create .git/info/exclude if it doesn't exist
+    # Create exclude file if it doesn't exist
     if [[ ! -f "$exclude_file" ]]; then
         mkdir -p "$(dirname "$exclude_file")"
         touch "$exclude_file"
     fi
 
-    echo "Applying CLAUDE.md exclusion..."
+    echo "Applying CLAUDE.md exclusion to $dest_label..."
 
-    # Add pattern if not present
-    if ! grep -q "^${pattern}$" "$exclude_file" 2>/dev/null; then
-        echo "$pattern" >> "$exclude_file"
-        echo "  ✓ Added $pattern to .git/info/exclude"
-    else
-        echo "  Already excluded: $pattern"
-    fi
-
-    # Add .claude/ if not present
-    if ! grep -q "^\.claude/$" "$exclude_file" 2>/dev/null; then
-        echo ".claude/" >> "$exclude_file"
-        echo "  ✓ Added .claude/ to .git/info/exclude"
-    else
-        echo "  Already excluded: .claude/"
-    fi
+    for p in "${patterns[@]}"; do
+        if ! grep -qF "$p" "$exclude_file" 2>/dev/null; then
+            echo "$p" >> "$exclude_file"
+            echo "  ✓ Added $p to $dest_label"
+        else
+            echo "  Already excluded: $p"
+        fi
+    done
 }
 
 # Internal: Build CLAUDE.md from enabled template sections
@@ -193,7 +205,7 @@ plugin_claude_status() {
 
     # Add settings.json if enabled
     if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
-        files_to_check+=("$CLAUDE_DEPLOY_TARGET/settings.json|$DOTCONFIGS_ROOT/settings.json|settings.json")
+        files_to_check+=("$CLAUDE_DEPLOY_TARGET/settings.json|$PLUGIN_DIR/settings.json|settings.json")
     fi
 
     # Add CLAUDE.md (special case: generated file, not symlink)
@@ -326,14 +338,22 @@ plugin_claude_deploy() {
     if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
         echo "Building settings.json..."
 
-        # Assemble settings.json from templates
-        local settings_source="$DOTCONFIGS_ROOT/settings.json"
+        # Assemble settings.json from template into plugin directory
+        local settings_source="$PLUGIN_DIR/settings.json"
+        # Hash before assembly to detect content changes
+        local settings_old_hash=""
+        [[ -f "$settings_source" ]] && settings_old_hash=$(cksum "$settings_source" 2>/dev/null | cut -d' ' -f1)
+
         if [[ "$dry_run" != "true" ]]; then
             _claude_assemble_settings "$PLUGIN_DIR" "$settings_source"
-            echo "  ✓ Copied settings-template.json"
         else
             echo "  Would copy: settings-template.json"
         fi
+
+        local settings_new_hash=""
+        [[ -f "$settings_source" ]] && settings_new_hash=$(cksum "$settings_source" 2>/dev/null | cut -d' ' -f1)
+        local settings_content_changed=false
+        [[ "$settings_old_hash" != "$settings_new_hash" ]] && settings_content_changed=true
 
         echo "Deploying settings.json..."
         local state=$(check_file_state "$CLAUDE_DEPLOY_TARGET/settings.json" "$settings_source" "$DOTCONFIGS_ROOT")
@@ -361,11 +381,16 @@ plugin_claude_deploy() {
         else
             case "$state" in
                 deployed)
-                    echo "  Unchanged: settings.json"
-                    files_unchanged=$((files_unchanged + 1))
+                    if [[ "$settings_content_changed" == "true" ]]; then
+                        echo "  Updated: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
+                        files_updated=$((files_updated + 1))
+                    else
+                        echo "  Unchanged: settings.json → $CLAUDE_DEPLOY_TARGET/settings.json"
+                        files_unchanged=$((files_unchanged + 1))
+                    fi
                     ;;
                 *)
-                    if backup_and_link "$DOTCONFIGS_ROOT/settings.json" "$CLAUDE_DEPLOY_TARGET/settings.json" "settings.json" "$interactive_mode"; then
+                    if backup_and_link "$PLUGIN_DIR/settings.json" "$CLAUDE_DEPLOY_TARGET/settings.json" "settings.json" "$interactive_mode"; then
                         if [[ "$state" == "not-deployed" ]]; then
                             files_created=$((files_created + 1))
                         else
@@ -382,23 +407,36 @@ plugin_claude_deploy() {
     # 2. Build and write CLAUDE.md
     if [[ ${#CLAUDE_MD_SECTIONS_ARRAY[@]} -gt 0 ]]; then
         echo "Building CLAUDE.md..."
+        local claude_md_target="$CLAUDE_DEPLOY_TARGET/CLAUDE.md"
         if [[ "$dry_run" == "true" ]]; then
-            if [[ -f "$CLAUDE_DEPLOY_TARGET/CLAUDE.md" ]]; then
-                echo "  Would update: CLAUDE.md"
+            if [[ -f "$claude_md_target" ]]; then
+                echo "  Would update: CLAUDE.md → $claude_md_target"
                 files_updated=$((files_updated + 1))
             else
-                echo "  Would create: CLAUDE.md"
+                echo "  Would create: CLAUDE.md → $claude_md_target"
                 files_created=$((files_created + 1))
             fi
         else
             local existed=false
-            if [[ -f "$CLAUDE_DEPLOY_TARGET/CLAUDE.md" ]]; then
+            local md_old_hash=""
+            if [[ -f "$claude_md_target" ]]; then
                 existed=true
+                md_old_hash=$(cksum "$claude_md_target" 2>/dev/null | cut -d' ' -f1)
             fi
+
             _claude_build_md "$PLUGIN_DIR" "$CLAUDE_DEPLOY_TARGET" "${CLAUDE_MD_SECTIONS_ARRAY[@]}"
+
             if [[ "$existed" == "true" ]]; then
-                files_updated=$((files_updated + 1))
+                local md_new_hash=$(cksum "$claude_md_target" 2>/dev/null | cut -d' ' -f1)
+                if [[ "$md_old_hash" != "$md_new_hash" ]]; then
+                    echo "  Updated: CLAUDE.md → $claude_md_target"
+                    files_updated=$((files_updated + 1))
+                else
+                    echo "  Unchanged: CLAUDE.md → $claude_md_target"
+                    files_unchanged=$((files_unchanged + 1))
+                fi
             else
+                echo "  Created: CLAUDE.md → $claude_md_target"
                 files_created=$((files_created + 1))
             fi
         fi
@@ -439,7 +477,7 @@ plugin_claude_deploy() {
             else
                 case "$state" in
                     deployed)
-                        echo "  Unchanged: hooks/$hook"
+                        echo "  Unchanged: hooks/$hook → $target"
                         files_unchanged=$((files_unchanged + 1))
                         ;;
                     *)
@@ -493,7 +531,7 @@ plugin_claude_deploy() {
             else
                 case "$state" in
                     deployed)
-                        echo "  Unchanged: commands/${skill}.md"
+                        echo "  Unchanged: commands/${skill}.md → $target"
                         files_unchanged=$((files_unchanged + 1))
                         ;;
                     *)

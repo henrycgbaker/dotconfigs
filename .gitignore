@@ -12,5 +12,6 @@
 # Environment configuration (machine-specific)
 .env
 
-# Personal Claude settings (machine-specific)
+# Personal Claude settings (generated from template, machine-specific)
 settings.json
+plugins/claude/settings.json

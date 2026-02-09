@@ -98,8 +98,12 @@ backup_and_link() {
     local interactive_mode="$4"
     local dotconfigs_root
 
-    # Extract dotconfigs root from src path (everything before /commands, /hooks, etc)
-    dotconfigs_root=$(echo "$src" | sed -E 's|(.*)/[^/]+/[^/]+$|\1|')
+    # Find dotconfigs root by walking up from src until we find the entry point
+    dotconfigs_root="$(dirname "$src")"
+    while [[ "$dotconfigs_root" != "/" ]]; do
+        [[ -f "$dotconfigs_root/dotconfigs" ]] && break
+        dotconfigs_root="$(dirname "$dotconfigs_root")"
+    done
 
     # If dest doesn't exist, create symlink
     if [[ ! -e "$dest" && ! -L "$dest" ]]; then
@@ -163,7 +167,7 @@ backup_and_link() {
         done
     else
         # Non-interactive mode: skip conflicts
-        echo "  - Skipped $name (already exists, not managed)"
+        echo "  - Skipped $name (exists, not managed by dotconfigs)"
         return 1
     fi
 }

@@ -31,6 +31,9 @@ EOF
     if [[ -n "$CLAUDE_MD_EXCLUDE_PATTERN" ]]; then
         wizard_save_env "$env_file" "CLAUDE_MD_EXCLUDE_PATTERN" "$CLAUDE_MD_EXCLUDE_PATTERN"
     fi
+    if [[ -n "$CLAUDE_MD_EXCLUDE_DEST" ]]; then
+        wizard_save_env "$env_file" "CLAUDE_MD_EXCLUDE_DEST" "$CLAUDE_MD_EXCLUDE_DEST"
+    fi
 
     # CLAUDE.md sections as space-separated list
     if [[ ${#CLAUDE_MD_SECTIONS_ENABLED[@]} -gt 0 ]]; then
@@ -106,9 +109,54 @@ _claude_configure_deploy_targets() {
     CLAUDE_DEPLOY_TARGET="${CLAUDE_DEPLOY_TARGET/#\~/$HOME}"  # Expand tilde
 }
 
+# Preview callback for CLAUDE.md sections
+_claude_preview_section() {
+    local section="$1"
+    local template_file=$(find "$_CLAUDE_PLUGIN_DIR/templates/claude-md" -name "*-${section}.md" 2>/dev/null | head -1)
+    if [[ -f "$template_file" ]]; then
+        echo "  ─── ${section} ───"
+        sed '1d' "$template_file" | sed 's/^/  /'
+        echo "  ───────────────"
+    else
+        echo "  No preview available for $section"
+    fi
+}
+
+# Preview callback for hooks
+_claude_preview_hook() {
+    local hook="$1"
+    local hook_file="$_CLAUDE_PLUGIN_DIR/hooks/$hook"
+    if [[ -f "$hook_file" ]]; then
+        echo "  ─── ${hook} ───"
+        # Show METADATA block if present, otherwise first 15 lines
+        if grep -q '# === METADATA ===' "$hook_file"; then
+            sed -n '/# === METADATA ===/,/# ================/p' "$hook_file" | sed 's/^/  /'
+        else
+            head -15 "$hook_file" | sed 's/^/  /'
+        fi
+        echo "  ───────────────"
+    else
+        echo "  No preview available for $hook"
+    fi
+}
+
+# Preview callback for skills
+_claude_preview_skill() {
+    local skill="$1"
+    local skill_file="$_CLAUDE_PLUGIN_DIR/commands/${skill}.md"
+    if [[ -f "$skill_file" ]]; then
+        echo "  ─── ${skill} ───"
+        head -20 "$skill_file" | sed 's/^/  /'
+        echo "  ───────────────"
+    else
+        echo "  No preview available for $skill"
+    fi
+}
+
 # Internal: configure Content category
 _claude_configure_content() {
     local PLUGIN_DIR="$1"
+    _CLAUDE_PLUGIN_DIR="$PLUGIN_DIR"  # For preview callbacks
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
@@ -156,7 +204,7 @@ _claude_configure_content() {
             selected_sections=()
         fi
 
-        wizard_config_toggle "Select CLAUDE.md sections:" available_sections selected_sections
+        wizard_config_toggle "Select CLAUDE.md sections:" available_sections selected_sections _claude_preview_section
         CLAUDE_MD_SECTIONS_ENABLED=("${selected_sections[@]}")
     fi
 
@@ -198,7 +246,7 @@ _claude_configure_content() {
             selected_skills=()
         fi
 
-        wizard_config_toggle "Select skills:" available_skills selected_skills
+        wizard_config_toggle "Select skills:" available_skills selected_skills _claude_preview_skill
         CLAUDE_SKILLS_ENABLED=("${selected_skills[@]}")
     fi
 }
@@ -214,13 +262,20 @@ _claude_configure_behaviour() {
     echo ""
 
     # Settings.json
-    echo "Claude Code permission rules control which files Claude can read and which"
-    echo "commands it can run. This includes denying access to secrets (*.pem, credentials)"
-    echo "and auto-formatting Python files with Ruff."
+    echo "settings.json defines Claude Code's permission rules:"
+    echo "  - Which files Claude can read/write"
+    echo "  - Which commands are allowed or blocked"
+    echo "  - Auto-formatting hooks (e.g. Ruff for Python)"
     echo ""
-    local settings_default="n"
-    [[ "$CLAUDE_SETTINGS_ENABLED" == "true" ]] && settings_default="y"
-    if wizard_yesno "Deploy settings.json to $CLAUDE_DEPLOY_TARGET? (symlinks from dotconfigs repo)" "$settings_default"; then
+    echo "A personal copy is created from the template. It's not git-tracked,"
+    echo "so you can edit it anytime. Since it's symlinked, changes take effect"
+    echo "immediately — no redeploy needed."
+    echo "  Template: plugins/claude/templates/settings/settings-template.json"
+    echo "  Personal: plugins/claude/settings.json (your copy, gitignored)"
+    echo ""
+    local settings_default="y"
+    [[ "$CLAUDE_SETTINGS_ENABLED" == "false" ]] && settings_default="n"
+    if wizard_yesno "Deploy settings.json to $CLAUDE_DEPLOY_TARGET?" "$settings_default"; then
         CLAUDE_SETTINGS_ENABLED="true"
     else
         unset CLAUDE_SETTINGS_ENABLED
@@ -228,13 +283,13 @@ _claude_configure_behaviour() {
 
     # CLAUDE.md Exclusion
     echo ""
-    echo "CLAUDE.md files contain project instructions for Claude Code."
-    echo "You can exclude them from git repositories to prevent committing"
-    echo "project instructions to source control."
+    echo "───────────────────────────────────────────────────────────"
+    echo ""
+    echo "Exclude CLAUDE.md and .claude/ from git."
     echo ""
 
-    local exclude_default="n"
-    [[ "$CLAUDE_MD_EXCLUDE_GLOBAL" == "true" ]] && exclude_default="y"
+    local exclude_default="y"
+    [[ "$CLAUDE_MD_EXCLUDE_GLOBAL" == "false" ]] && exclude_default="n"
 
     if wizard_yesno "Exclude CLAUDE.md from git globally?" "$exclude_default"; then
         CLAUDE_MD_EXCLUDE_GLOBAL="true"
@@ -246,28 +301,59 @@ _claude_configure_behaviour() {
         echo "  3) Both (root + all directories)"
         echo ""
 
-        local pattern_default="${CLAUDE_MD_EXCLUDE_PATTERN:-CLAUDE.md}"
-        read -p "Choice [1-3, default: ${pattern_default}]: " pattern_choice
+        local pattern_choice_default="3"
+        if [[ "$CLAUDE_MD_EXCLUDE_PATTERN" == "CLAUDE.md" ]]; then
+            pattern_choice_default="1"
+        elif [[ "$CLAUDE_MD_EXCLUDE_PATTERN" == "**/CLAUDE.md" ]]; then
+            pattern_choice_default="2"
+        fi
+        read -p "Choice [1-3, default: $pattern_choice_default]: " pattern_choice
+        pattern_choice="${pattern_choice:-$pattern_choice_default}"
 
         case "$pattern_choice" in
+            1)
+                CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md"
+                ;;
             2)
                 CLAUDE_MD_EXCLUDE_PATTERN="**/CLAUDE.md"
                 ;;
-            3)
-                CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md\n**/CLAUDE.md"
-                ;;
             *)
-                CLAUDE_MD_EXCLUDE_PATTERN="CLAUDE.md"
+                CLAUDE_MD_EXCLUDE_PATTERN="both"
                 ;;
         esac
 
-        echo "  → Will exclude: $CLAUDE_MD_EXCLUDE_PATTERN"
+        echo ""
+        echo "Where to write the exclusion:"
+        echo "  1) .git/info/exclude (per-machine, not tracked — recommended)"
+        echo "  2) .gitignore (tracked, shared with team)"
+        echo ""
+
+        local dest_choice_default="1"
+        [[ "$CLAUDE_MD_EXCLUDE_DEST" == "gitignore" ]] && dest_choice_default="2"
+        read -p "Choice [1-2, default: $dest_choice_default]: " dest_choice
+        dest_choice="${dest_choice:-$dest_choice_default}"
+
+        case "$dest_choice" in
+            2)
+                CLAUDE_MD_EXCLUDE_DEST="gitignore"
+                ;;
+            *)
+                CLAUDE_MD_EXCLUDE_DEST="exclude"
+                ;;
+        esac
+
+        local pattern_display="$CLAUDE_MD_EXCLUDE_PATTERN"
+        [[ "$pattern_display" == "both" ]] && pattern_display="CLAUDE.md + **/CLAUDE.md"
+        echo "  → Will exclude: $pattern_display → $([ "$CLAUDE_MD_EXCLUDE_DEST" = "gitignore" ] && echo ".gitignore" || echo ".git/info/exclude")"
     else
         unset CLAUDE_MD_EXCLUDE_GLOBAL
         unset CLAUDE_MD_EXCLUDE_PATTERN
+        unset CLAUDE_MD_EXCLUDE_DEST
     fi
 
     # Claude Code Hooks
+    echo ""
+    echo "───────────────────────────────────────────────────────────"
     echo ""
     echo "Select which Claude Code hooks to enable:"
     echo ""
@@ -294,7 +380,7 @@ _claude_configure_behaviour() {
             selected_hooks=("${available_hooks[@]}")
         fi
 
-        wizard_config_toggle "Select Claude Code hooks:" available_hooks selected_hooks
+        wizard_config_toggle "Select Claude Code hooks:" available_hooks selected_hooks _claude_preview_hook
         CLAUDE_HOOKS_ENABLED=("${selected_hooks[@]}")
     fi
 }
@@ -321,7 +407,8 @@ _claude_show_summary() {
 
     # CLAUDE.md exclusion
     if [[ -n "$CLAUDE_MD_EXCLUDE_GLOBAL" ]]; then
-        echo "CLAUDE.md exclusion: $CLAUDE_MD_EXCLUDE_GLOBAL ($CLAUDE_MD_EXCLUDE_PATTERN)"
+        local dest_display="$( [ "${CLAUDE_MD_EXCLUDE_DEST:-exclude}" = "gitignore" ] && echo ".gitignore" || echo ".git/info/exclude" )"
+        echo "CLAUDE.md exclusion: $CLAUDE_MD_EXCLUDE_GLOBAL ($CLAUDE_MD_EXCLUDE_PATTERN → $dest_display)"
     else
         printf "CLAUDE.md exclusion: "
         colour_not_managed
@@ -392,7 +479,8 @@ _claude_edit_mode() {
         # 2. CLAUDE.md exclusion
         labels+=("CLAUDE.md exclusion")
         if [[ -n "$CLAUDE_MD_EXCLUDE_GLOBAL" ]]; then
-            values+=("$CLAUDE_MD_EXCLUDE_GLOBAL ($CLAUDE_MD_EXCLUDE_PATTERN)")
+            local edit_dest_display="$( [ "${CLAUDE_MD_EXCLUDE_DEST:-exclude}" = "gitignore" ] && echo ".gitignore" || echo ".git/info/exclude" )"
+            values+=("$CLAUDE_MD_EXCLUDE_GLOBAL ($CLAUDE_MD_EXCLUDE_PATTERN → $edit_dest_display)")
             managed+=("true")
         else
             values+=("")
@@ -510,7 +598,7 @@ _claude_edit_mode() {
                         if [[ ${#CLAUDE_MD_SECTIONS_ENABLED[@]} -gt 0 ]]; then
                             selected_sections=("${CLAUDE_MD_SECTIONS_ENABLED[@]}")
                         fi
-                        wizard_config_toggle "Select CLAUDE.md sections:" available_sections selected_sections
+                        wizard_config_toggle "Select CLAUDE.md sections:" available_sections selected_sections _claude_preview_section
                         CLAUDE_MD_SECTIONS_ENABLED=("${selected_sections[@]}")
                     fi
                     ;;
@@ -527,7 +615,7 @@ _claude_edit_mode() {
                         if [[ ${#CLAUDE_HOOKS_ENABLED[@]} -gt 0 ]]; then
                             selected_hooks=("${CLAUDE_HOOKS_ENABLED[@]}")
                         fi
-                        wizard_config_toggle "Select Claude Code hooks:" available_hooks selected_hooks
+                        wizard_config_toggle "Select Claude Code hooks:" available_hooks selected_hooks _claude_preview_hook
                         CLAUDE_HOOKS_ENABLED=("${selected_hooks[@]}")
                     fi
                     ;;
@@ -544,7 +632,7 @@ _claude_edit_mode() {
                         if [[ ${#CLAUDE_SKILLS_ENABLED[@]} -gt 0 ]]; then
                             selected_skills=("${CLAUDE_SKILLS_ENABLED[@]}")
                         fi
-                        wizard_config_toggle "Select skills:" available_skills selected_skills
+                        wizard_config_toggle "Select skills:" available_skills selected_skills _claude_preview_skill
                         CLAUDE_SKILLS_ENABLED=("${selected_skills[@]}")
                     fi
                     ;;
@@ -596,7 +684,7 @@ plugin_claude_setup() {
         if [[ "$mode_choice" == "2" ]]; then
             # Unset all CLAUDE_* variables to start fresh
             unset CLAUDE_DEPLOY_TARGET CLAUDE_SETTINGS_ENABLED CLAUDE_MD_EXCLUDE_GLOBAL
-            unset CLAUDE_MD_EXCLUDE_PATTERN
+            unset CLAUDE_MD_EXCLUDE_PATTERN CLAUDE_MD_EXCLUDE_DEST
             CLAUDE_MD_SECTIONS_ENABLED=()
             CLAUDE_HOOKS_ENABLED=()
             CLAUDE_SKILLS_ENABLED=()
@@ -674,7 +762,7 @@ plugin_claude_setup() {
     _claude_migrate_old_keys "$ENV_FILE"
 
     echo ""
-    echo "Configuration saved to $ENV_FILE"
+    printf "  %b✓ Configuration saved to %s%b\n" "$COLOUR_DIM" "$ENV_FILE" "$COLOUR_RESET"
     echo ""
     echo "Next steps:"
     echo "  1. Run 'dotconfigs deploy claude' to deploy to filesystem"

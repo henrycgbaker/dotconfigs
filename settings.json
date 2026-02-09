@@ -1,68 +1,53 @@
 {
-  "alwaysThinkingEnabled": true,
-  "includeCoAuthoredBy": false,
-  "gitAttribution": false,
-
   "permissions": {
-    "allow": [
-      "Bash(nvidia-smi:*)",
-      "Bash(docker:*)",
-      "Bash(docker-compose:*)",
-      "Bash(git:*)",
-      "Bash(ruff:*)",
-      "Bash(pytest:*)",
-      "Bash(pip:*)",
-      "Bash(python:*)",
-      "Bash(npm:*)",
-      "Bash(npx:*)",
-      "Bash(node:*)",
-      "Read(/proc/meminfo)",
-      "Read(/proc/cpuinfo)"
-    ],
+    "allow": [],
     "deny": [
       "Read(*.pem)",
       "Read(*credentials*)",
-      "Read(*secret*)",
-      "Read(**/*_key)",
-      "Read(**/*_secret)",
-      "Read(**/.ssh/**)",
-      "Bash(rm -rf /)",
-      "Bash(mkfs:*)",
-      "Bash(dd if=:*)"
+      "Read(*secret*)"
     ],
     "ask": [
       "Read(.env)",
-      "Read(.env.*)",
-      "Bash(systemctl:*)",
-      "Bash(kill:*)",
-      "Bash(pkill:*)",
-      "Bash(reboot:*)",
-      "Bash(shutdown:*)"
+      "Read(.env.*)"
     ]
   },
-
-  "env": {
-    "PYTHONDONTWRITEBYTECODE": "1",
-    "PYTHONUNBUFFERED": "1"
-  },
-
-  "sandbox": {
-    "enabled": true,
-    "excludedCommands": ["docker", "docker-compose", "nvidia-smi", "git"]
-  },
-
   "hooks": {
-    "PostToolUse": [
+    "PreToolUse": [
       {
-        "matcher": "Write|Edit",
-        "hooks": [
+        "matchers": [
           {
-            "type": "command",
-            "command": "python ~/.claude/hooks/post-tool-format.py"
+            "tool_name": "Bash"
           }
-        ]
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "timeout": 10000
+      },
+      {
+        "matchers": [
+          {
+            "tool_name": "Write"
+          },
+          {
+            "tool_name": "Edit"
+          }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh",
+        "timeout": 10000
       }
     ],
-    "PreToolUse": []
+    "PostToolUse": [
+      {
+        "matchers": [
+          {
+            "tool_name": "Write"
+          },
+          {
+            "tool_name": "Edit"
+          }
+        ],
+        "command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/post-tool-format.py",
+        "timeout": 30000
+      }
+    ]
   }
 }

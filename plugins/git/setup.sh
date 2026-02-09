@@ -226,12 +226,12 @@ _git_wizard_hooks() {
         echo "  5) Custom path"
         echo ""
 
-        local config_default="${GIT_HOOK_CONFIG_PATH:-.githooks/config}"
+        local config_default="${GIT_HOOK_CONFIG_PATH:-.git/hooks/hooks.conf}"
         local config_choice=""
-        read -p "Select [1-5, default: 1]: " config_choice
+        read -p "Select [1-5, default: 4]: " config_choice
 
-        case "$config_choice" in
-            1|"")
+        case "${config_choice:-4}" in
+            1)
                 GIT_HOOK_CONFIG_PATH=".githooks/config"
                 ;;
             2)
@@ -248,8 +248,8 @@ _git_wizard_hooks() {
                 [[ -z "$GIT_HOOK_CONFIG_PATH" ]] && GIT_HOOK_CONFIG_PATH="$config_default"
                 ;;
             *)
-                echo "Invalid choice, using default: .githooks/config"
-                GIT_HOOK_CONFIG_PATH=".githooks/config"
+                echo "Invalid choice, using default: .git/hooks/hooks.conf"
+                GIT_HOOK_CONFIG_PATH=".git/hooks/hooks.conf"
                 ;;
         esac
     fi
@@ -526,50 +526,51 @@ EOF
     fi
 
     # Save identity (only if set)
-    [[ -n "${GIT_USER_NAME:-}" ]] && wizard_save_env "$env_file" "GIT_USER_NAME" "$GIT_USER_NAME"
-    [[ -n "${GIT_USER_EMAIL:-}" ]] && wizard_save_env "$env_file" "GIT_USER_EMAIL" "$GIT_USER_EMAIL"
+    # Note: || true on each line prevents set -e crash when variable is empty
+    [[ -n "${GIT_USER_NAME:-}" ]] && wizard_save_env "$env_file" "GIT_USER_NAME" "$GIT_USER_NAME" || true
+    [[ -n "${GIT_USER_EMAIL:-}" ]] && wizard_save_env "$env_file" "GIT_USER_EMAIL" "$GIT_USER_EMAIL" || true
 
     # Save workflow settings (only if set)
-    [[ -n "${GIT_PULL_REBASE:-}" ]] && wizard_save_env "$env_file" "GIT_PULL_REBASE" "$GIT_PULL_REBASE"
-    [[ -n "${GIT_PUSH_DEFAULT:-}" ]] && wizard_save_env "$env_file" "GIT_PUSH_DEFAULT" "$GIT_PUSH_DEFAULT"
-    [[ -n "${GIT_FETCH_PRUNE:-}" ]] && wizard_save_env "$env_file" "GIT_FETCH_PRUNE" "$GIT_FETCH_PRUNE"
-    [[ -n "${GIT_INIT_DEFAULT_BRANCH:-}" ]] && wizard_save_env "$env_file" "GIT_INIT_DEFAULT_BRANCH" "$GIT_INIT_DEFAULT_BRANCH"
-    [[ -n "${GIT_RERERE_ENABLED:-}" ]] && wizard_save_env "$env_file" "GIT_RERERE_ENABLED" "$GIT_RERERE_ENABLED"
-    [[ -n "${GIT_DIFF_ALGORITHM:-}" ]] && wizard_save_env "$env_file" "GIT_DIFF_ALGORITHM" "$GIT_DIFF_ALGORITHM"
-    [[ -n "${GIT_HELP_AUTOCORRECT:-}" ]] && wizard_save_env "$env_file" "GIT_HELP_AUTOCORRECT" "$GIT_HELP_AUTOCORRECT"
+    [[ -n "${GIT_PULL_REBASE:-}" ]] && wizard_save_env "$env_file" "GIT_PULL_REBASE" "$GIT_PULL_REBASE" || true
+    [[ -n "${GIT_PUSH_DEFAULT:-}" ]] && wizard_save_env "$env_file" "GIT_PUSH_DEFAULT" "$GIT_PUSH_DEFAULT" || true
+    [[ -n "${GIT_FETCH_PRUNE:-}" ]] && wizard_save_env "$env_file" "GIT_FETCH_PRUNE" "$GIT_FETCH_PRUNE" || true
+    [[ -n "${GIT_INIT_DEFAULT_BRANCH:-}" ]] && wizard_save_env "$env_file" "GIT_INIT_DEFAULT_BRANCH" "$GIT_INIT_DEFAULT_BRANCH" || true
+    [[ -n "${GIT_RERERE_ENABLED:-}" ]] && wizard_save_env "$env_file" "GIT_RERERE_ENABLED" "$GIT_RERERE_ENABLED" || true
+    [[ -n "${GIT_DIFF_ALGORITHM:-}" ]] && wizard_save_env "$env_file" "GIT_DIFF_ALGORITHM" "$GIT_DIFF_ALGORITHM" || true
+    [[ -n "${GIT_HELP_AUTOCORRECT:-}" ]] && wizard_save_env "$env_file" "GIT_HELP_AUTOCORRECT" "$GIT_HELP_AUTOCORRECT" || true
 
     # Save aliases enabled list (only if set)
-    [[ -n "${GIT_ALIASES_ENABLED:-}" ]] && wizard_save_env "$env_file" "GIT_ALIASES_ENABLED" "$GIT_ALIASES_ENABLED"
+    [[ -n "${GIT_ALIASES_ENABLED:-}" ]] && wizard_save_env "$env_file" "GIT_ALIASES_ENABLED" "$GIT_ALIASES_ENABLED" || true
 
     # Save individual alias definitions
     for alias_name in ${GIT_ALIASES_ENABLED:-}; do
         local alias_key="GIT_ALIAS_$(echo "$alias_name" | tr '[:lower:]' '[:upper:]')"
         local alias_value="${!alias_key}"
-        [[ -n "$alias_value" ]] && wizard_save_env "$env_file" "$alias_key" "$alias_value"
+        [[ -n "$alias_value" ]] && wizard_save_env "$env_file" "$alias_key" "$alias_value" || true
     done
 
     # Save hooks settings (only if set)
-    [[ -n "${GIT_HOOKS_SCOPE:-}" ]] && wizard_save_env "$env_file" "GIT_HOOKS_SCOPE" "$GIT_HOOKS_SCOPE"
-    [[ -n "${GIT_HOOK_CONFIG_PATH:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONFIG_PATH" "$GIT_HOOK_CONFIG_PATH"
+    [[ -n "${GIT_HOOKS_SCOPE:-}" ]] && wizard_save_env "$env_file" "GIT_HOOKS_SCOPE" "$GIT_HOOKS_SCOPE" || true
+    [[ -n "${GIT_HOOK_CONFIG_PATH:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONFIG_PATH" "$GIT_HOOK_CONFIG_PATH" || true
 
     # Save hook toggles (only if set)
-    [[ -n "${GIT_HOOK_SECRETS_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_SECRETS_CHECK" "$GIT_HOOK_SECRETS_CHECK"
-    [[ -n "${GIT_HOOK_LARGE_FILE_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_CHECK" "$GIT_HOOK_LARGE_FILE_CHECK"
-    [[ -n "${GIT_HOOK_DEBUG_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK" "$GIT_HOOK_DEBUG_CHECK"
-    [[ -n "${GIT_HOOK_BLOCK_AI_ATTRIBUTION:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BLOCK_AI_ATTRIBUTION" "$GIT_HOOK_BLOCK_AI_ATTRIBUTION"
-    [[ -n "${GIT_HOOK_WIP_BLOCK_ON_MAIN:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_WIP_BLOCK_ON_MAIN" "$GIT_HOOK_WIP_BLOCK_ON_MAIN"
-    [[ -n "${GIT_HOOK_CONVENTIONAL_COMMITS:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS" "$GIT_HOOK_CONVENTIONAL_COMMITS"
-    [[ -n "${GIT_HOOK_BRANCH_PROTECTION:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PROTECTION" "$GIT_HOOK_BRANCH_PROTECTION"
-    [[ -n "${GIT_HOOK_BRANCH_PREFIX:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PREFIX" "$GIT_HOOK_BRANCH_PREFIX"
-    [[ -n "${GIT_HOOK_DEPENDENCY_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEPENDENCY_CHECK" "$GIT_HOOK_DEPENDENCY_CHECK"
-    [[ -n "${GIT_HOOK_MIGRATION_REMINDER:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_MIGRATION_REMINDER" "$GIT_HOOK_MIGRATION_REMINDER"
-    [[ -n "${GIT_HOOK_BRANCH_INFO:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_INFO" "$GIT_HOOK_BRANCH_INFO"
+    [[ -n "${GIT_HOOK_SECRETS_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_SECRETS_CHECK" "$GIT_HOOK_SECRETS_CHECK" || true
+    [[ -n "${GIT_HOOK_LARGE_FILE_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_CHECK" "$GIT_HOOK_LARGE_FILE_CHECK" || true
+    [[ -n "${GIT_HOOK_DEBUG_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK" "$GIT_HOOK_DEBUG_CHECK" || true
+    [[ -n "${GIT_HOOK_BLOCK_AI_ATTRIBUTION:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BLOCK_AI_ATTRIBUTION" "$GIT_HOOK_BLOCK_AI_ATTRIBUTION" || true
+    [[ -n "${GIT_HOOK_WIP_BLOCK_ON_MAIN:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_WIP_BLOCK_ON_MAIN" "$GIT_HOOK_WIP_BLOCK_ON_MAIN" || true
+    [[ -n "${GIT_HOOK_CONVENTIONAL_COMMITS:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS" "$GIT_HOOK_CONVENTIONAL_COMMITS" || true
+    [[ -n "${GIT_HOOK_BRANCH_PROTECTION:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PROTECTION" "$GIT_HOOK_BRANCH_PROTECTION" || true
+    [[ -n "${GIT_HOOK_BRANCH_PREFIX:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_PREFIX" "$GIT_HOOK_BRANCH_PREFIX" || true
+    [[ -n "${GIT_HOOK_DEPENDENCY_CHECK:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEPENDENCY_CHECK" "$GIT_HOOK_DEPENDENCY_CHECK" || true
+    [[ -n "${GIT_HOOK_MIGRATION_REMINDER:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_MIGRATION_REMINDER" "$GIT_HOOK_MIGRATION_REMINDER" || true
+    [[ -n "${GIT_HOOK_BRANCH_INFO:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_BRANCH_INFO" "$GIT_HOOK_BRANCH_INFO" || true
 
     # Save advanced settings if configured
-    [[ -n "${GIT_HOOK_CONVENTIONAL_COMMITS_STRICT:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS_STRICT" "$GIT_HOOK_CONVENTIONAL_COMMITS_STRICT"
-    [[ -n "${GIT_HOOK_DEBUG_CHECK_STRICT:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK_STRICT" "$GIT_HOOK_DEBUG_CHECK_STRICT"
-    [[ -n "${GIT_HOOK_LARGE_FILE_THRESHOLD:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_THRESHOLD" "$GIT_HOOK_LARGE_FILE_THRESHOLD"
-    [[ -n "${GIT_HOOK_MAX_SUBJECT_LENGTH:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_MAX_SUBJECT_LENGTH" "$GIT_HOOK_MAX_SUBJECT_LENGTH"
+    [[ -n "${GIT_HOOK_CONVENTIONAL_COMMITS_STRICT:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_CONVENTIONAL_COMMITS_STRICT" "$GIT_HOOK_CONVENTIONAL_COMMITS_STRICT" || true
+    [[ -n "${GIT_HOOK_DEBUG_CHECK_STRICT:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_DEBUG_CHECK_STRICT" "$GIT_HOOK_DEBUG_CHECK_STRICT" || true
+    [[ -n "${GIT_HOOK_LARGE_FILE_THRESHOLD:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_LARGE_FILE_THRESHOLD" "$GIT_HOOK_LARGE_FILE_THRESHOLD" || true
+    [[ -n "${GIT_HOOK_MAX_SUBJECT_LENGTH:-}" ]] && wizard_save_env "$env_file" "GIT_HOOK_MAX_SUBJECT_LENGTH" "$GIT_HOOK_MAX_SUBJECT_LENGTH" || true
 }
 
 # Main entry point — called by dotconfigs CLI
@@ -700,7 +701,7 @@ plugin_git_setup() {
     _git_save_config "$ENV_FILE"
 
     echo ""
-    echo "Configuration saved to $ENV_FILE"
+    printf "  %b✓ Configuration saved to %s%b\n" "$COLOUR_DIM" "$ENV_FILE" "$COLOUR_RESET"
     echo ""
     echo "Next steps:"
     echo "  1. Run 'dotconfigs deploy git' to apply settings"

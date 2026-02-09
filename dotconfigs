@@ -3,7 +3,15 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve symlinks to find real script location (bash 3.2 compatible)
+_source="${BASH_SOURCE[0]}"
+while [[ -L "$_source" ]]; do
+    _dir="$(cd "$(dirname "$_source")" && pwd)"
+    _source="$(readlink "$_source")"
+    [[ "$_source" != /* ]] && _source="$_dir/$_source"
+done
+SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
+unset _source _dir
 PLUGINS_DIR="$SCRIPT_DIR/plugins"
 ENV_FILE="$SCRIPT_DIR/.env"
 
@@ -20,7 +28,7 @@ show_usage() {
 dotconfigs — Unified configuration management
 
 Usage:
-  dotconfigs setup                              Initialize tool (deploy target, PATH)
+  dotconfigs setup                              Initialize tool (PATH symlinks)
   dotconfigs global-configs <plugin>            Configure plugin defaults (.env)
   dotconfigs project-configs [plugin] <path>    Configure per-project overrides
   dotconfigs deploy [plugin] [options]          Deploy configuration to filesystem
@@ -34,7 +42,7 @@ Commands:
   global-configs  Interactive wizard to configure plugin defaults (.env)
   project-configs Scaffold per-project configuration overrides
   deploy          Deploy configuration from .env to filesystem
-                  Options: --interactive, --force, --dry-run
+                  Options: --force, --dry-run
                   Without plugin: deploys all configured plugins
   status          Check deployment status and drift detection
   list            List all available plugins
@@ -137,14 +145,16 @@ Description:
   Without a plugin name, deploys all configured plugins.
 
 Options:
-  --interactive    Prompt for conflict resolution (overwrite/skip/backup)
-  --force          Overwrite files without prompting
+  --force          Overwrite all conflicts without prompting
   --dry-run        Preview changes without deploying
 
+Conflicts (files not managed by dotconfigs) prompt for resolution:
+overwrite, skip, backup, or diff. Use --force to skip prompts.
+
 Examples:
-  dotconfigs deploy                      Deploy all configured plugins
+  dotconfigs deploy                      Deploy all (prompts on conflicts)
   dotconfigs deploy claude               Deploy Claude configuration only
-  dotconfigs deploy git --interactive    Deploy git with conflict prompts
+  dotconfigs deploy --force              Deploy all, overwrite conflicts
   dotconfigs deploy --dry-run            Preview all deployments
 EOF
             ;;
@@ -216,46 +226,22 @@ cmd_setup() {
     echo "========================================================="
     echo ""
 
-    # Deploy target
-    local default_target="$HOME/.claude"
-    wizard_prompt "Deploy target directory" "$default_target" DOTCONFIGS_DEPLOY_TARGET
-    DOTCONFIGS_DEPLOY_TARGET="${DOTCONFIGS_DEPLOY_TARGET/#\~/$HOME}"
-
-    # Save to .env
-    wizard_save_env "$ENV_FILE" "DOTCONFIGS_DEPLOY_TARGET" "$DOTCONFIGS_DEPLOY_TARGET"
+    # Save version marker
     wizard_save_env "$ENV_FILE" "DOTCONFIGS_VERSION" "2.0"
 
-    # Create PATH symlinks
-    echo ""
+    # Create PATH symlinks (dotconfigs + dots)
     echo "Setting up PATH availability..."
     _create_path_symlink "false" "false"
 
-    # Also create dots symlink on PATH if dotconfigs was created
-    local dotconfigs_symlink=""
-    if [[ -d "$HOME/.local/bin" ]]; then
-        dotconfigs_symlink="$HOME/.local/bin/dotconfigs"
-    elif [[ -d "/usr/local/bin" ]]; then
-        dotconfigs_symlink="/usr/local/bin/dotconfigs"
-    fi
-    if [[ -n "$dotconfigs_symlink" ]]; then
-        local dots_symlink="$(dirname "$dotconfigs_symlink")/dots"
-        if [[ ! -e "$dots_symlink" ]] || [[ -L "$dots_symlink" ]]; then
-            ln -sf "$SCRIPT_DIR/dotconfigs" "$dots_symlink" 2>/dev/null && \
-                echo "dots alias added to PATH: $dots_symlink" || true
-        fi
-    fi
-
     echo ""
-    echo "Setup complete. Configuration saved to .env"
+    echo "Setup complete."
     echo ""
-    echo "Next steps:"
-    echo "  1. Run 'dotconfigs global-configs <plugin>' to configure plugins"
-    echo "     Available plugins:"
+    echo "Next steps — configure your plugins:"
     while IFS= read -r p; do
-        echo "       dotconfigs global-configs $p"
+        echo "  dotconfigs global-configs $p"
     done < <(discover_plugins "$PLUGINS_DIR")
-    echo "  2. Run 'dotconfigs deploy' to deploy configurations"
-    echo "  3. Use 'dotconfigs --help' for all commands"
+    echo ""
+    echo "Then deploy with: dotconfigs deploy"
     echo ""
 }
 
@@ -344,13 +330,28 @@ _create_path_symlink() {
         echo "To make dotconfigs available on PATH, add to your shell profile:" >&2
         echo "  export PATH=\"$SCRIPT_DIR:\$PATH\"" >&2
     fi
+
+    # Also create/verify dots alias symlink
+    local dots_target="$(dirname "$target")/dots"
+    if [[ -L "$dots_target" ]]; then
+        local dots_current=$(readlink "$dots_target")
+        if [[ "$dots_current" == "$SCRIPT_DIR/dotconfigs" ]]; then
+            echo "dots already on PATH (symlink correct)"
+        else
+            ln -sf "$SCRIPT_DIR/dotconfigs" "$dots_target" 2>/dev/null && \
+                echo "dots alias updated on PATH: $dots_target" || true
+        fi
+    elif [[ ! -e "$dots_target" ]]; then
+        ln -sf "$SCRIPT_DIR/dotconfigs" "$dots_target" 2>/dev/null && \
+            echo "dots alias added to PATH: $dots_target" || true
+    fi
 }
 
 cmd_deploy() {
     local plugin=""
     local dry_run=false
     local force_mode=false
-    local interactive_mode=false
+    local interactive_mode=true
     local args=()
 
     # Parse arguments: extract plugin name and flags
@@ -362,10 +363,6 @@ cmd_deploy() {
                 ;;
             --force)
                 force_mode=true
-                shift
-                ;;
-            --interactive)
-                interactive_mode=true
                 shift
                 ;;
             -*)
