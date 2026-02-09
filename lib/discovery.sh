@@ -51,22 +51,6 @@ discover_hooks() {
     done | sort
 }
 
-# Find available git hooks in githooks/ directory
-# Args: dotconfigs_root
-# Returns: List of hook filenames (one per line)
-discover_githooks() {
-    local dotconfigs_root="$1"
-    local githooks_dir="$dotconfigs_root/githooks"
-
-    if [[ ! -d "$githooks_dir" ]]; then
-        return 0
-    fi
-
-    find "$githooks_dir" -type f ! -name "*.md" ! -name ".*" | while read -r hook_path; do
-        basename "$hook_path"
-    done | sort
-}
-
 # Find available skills in commands/ directory
 # Args: plugin_dir
 # Returns: List of skill names without .md extension (one per line)
@@ -105,38 +89,3 @@ discover_claude_sections() {
     done | sort
 }
 
-# Find available settings templates
-# Args: plugin_dir
-# Returns: List of template names (one per line)
-discover_settings_templates() {
-    local plugin_dir="$1"
-    local templates_dir="$plugin_dir/templates/settings"
-
-    if [[ ! -d "$templates_dir" ]]; then
-        return 0
-    fi
-
-    find "$templates_dir" -type f -name "*.json" | while read -r template_path; do
-        local filename
-        filename=$(basename "$template_path")
-        echo "${filename%.json}"
-    done | sort
-}
-
-# Find available hooks.conf profiles
-# Args: plugin_dir
-# Returns: List of profile names without .conf extension (one per line)
-discover_hooks_conf_profiles() {
-    local plugin_dir="$1"
-    local templates_dir="$plugin_dir/templates/hooks-conf"
-
-    if [[ ! -d "$templates_dir" ]]; then
-        return 0
-    fi
-
-    find "$templates_dir" -type f -name "*.conf" | while read -r template_path; do
-        local filename
-        filename=$(basename "$template_path")
-        echo "${filename%.conf}"
-    done | sort
-}
