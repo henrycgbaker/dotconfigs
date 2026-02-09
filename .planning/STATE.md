@@ -162,13 +162,14 @@ New v2.0 decisions:
 - [004-02]: Array-based plugin collection in cmd_project_configs to preserve stdin for interactive prompts
 - [004-02]: Separate discovery (stdin-consuming) from execution (interactive) phases
 
-### Pending Todos (2 in .planning/todos/pending/)
+### Pending Todos (3 in .planning/todos/pending/)
 
 - [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo)
 - [x] **README**: Add brief mention of GSD framework — DONE in 08-06
 - [ ] **Wizard UX**: Unify rerun/edit-mode logic between Claude and Git wizards (currently different flows)
 - [ ] **Wizard UX**: Improve toggle menu previews (inline first-line for hooks, richer formatting)
 - [ ] **Architecture**: Rethink global vs project-level interaction model (see todos/pending/)
+- [ ] **Testing**: Test project-init on brownfield project and ds01 server
 
 ### Blockers/Concerns
 
