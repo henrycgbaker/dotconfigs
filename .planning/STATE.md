@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 9 of 9 (Config UX Redesign)
-Plan: 3 of 5 in phase
+Plan: 4 of 5 in phase
 Status: In progress
-Last activity: 2026-02-09 — Completed 09-03-PLAN.md
+Last activity: 2026-02-09 — Completed 09-04-PLAN.md
 
 Progress: ██████████████░ 94% (35/35 completed + Phase 9 in progress)
 
@@ -138,6 +138,10 @@ New v2.0 decisions:
 - [09-03]: Edit mode on re-run with numbered config list and [not managed] indicators
 - [09-03]: Git identity removed from Claude wizard (responsibility moved to git plugin)
 - [09-03]: Opt-in save logic — only writes non-empty config values to .env
+- [09-04]: Git wizard rewritten with 4-category opt-in model (Identity, Workflow, Aliases, Hooks)
+- [09-04]: All select loops replaced with read-based numbered prompts (UX consistency)
+- [09-04]: Edit mode detection via presence of GIT_* keys in .env
+- [09-04]: Summary shows [not managed] for unselected configs (opt-in transparency)
 
 ### Pending Todos
 
@@ -166,8 +170,8 @@ New v2.0 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-09T13:20:45Z
-Stopped at: Completed 09-03-PLAN.md
+Last session: 2026-02-09T13:21:42Z
+Stopped at: Completed 09-04-PLAN.md
 Resume file: None
 
 ---
