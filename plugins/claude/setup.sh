@@ -155,8 +155,8 @@ _claude_configure_content() {
                 selected_sections+=("$section")
             done
         else
-            # First run: default to all sections
-            selected_sections=("${available_sections[@]}")
+            # First run: start empty (opt-in model)
+            selected_sections=()
         fi
 
         wizard_config_toggle "Select CLAUDE.md sections:" available_sections selected_sections
@@ -186,8 +186,8 @@ _claude_configure_content() {
                 selected_skills+=("$skill")
             done
         else
-            # First run: default to all skills
-            selected_skills=("${available_skills[@]}")
+            # First run: start empty (opt-in model)
+            selected_skills=()
         fi
 
         wizard_config_toggle "Select skills:" available_skills selected_skills
