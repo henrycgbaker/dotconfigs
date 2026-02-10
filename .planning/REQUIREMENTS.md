@@ -172,35 +172,35 @@ All 32 v2.0 requirements delivered across phases 4-9. See MILESTONES.md for summ
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PATH-01 | TBD | Pending |
-| PATH-02 | TBD | Pending |
-| PATH-03 | TBD | Pending |
-| CONF-05 | TBD | Pending |
-| CONF-06 | TBD | Pending |
-| CONF-07 | TBD | Pending |
-| CONF-08 | TBD | Pending |
-| CONF-09 | TBD | Pending |
-| CONF-10 | TBD | Pending |
-| PROJ-01 | TBD | Pending |
-| PROJ-02 | TBD | Pending |
-| PROJ-03 | TBD | Pending |
-| CLI-08 | TBD | Pending |
-| CLI-09 | TBD | Pending |
-| CLI-10 | TBD | Pending |
-| CLI-11 | TBD | Pending |
-| CLI-12 | TBD | Pending |
-| WIZD-01 | TBD | Pending |
-| WIZD-02 | TBD | Pending |
-| WIZD-03 | TBD | Pending |
-| SCOP-01 | TBD | Pending |
-| SCOP-02 | TBD | Pending |
-| SCOP-03 | TBD | Pending |
-| DOC-01 | TBD | Pending |
-| DOC-02 | TBD | Pending |
+| PATH-01 | Phase 10 | Pending |
+| PATH-02 | Phase 10 | Pending |
+| PATH-03 | Phase 10 | Pending |
+| CONF-05 | Phase 11 | Pending |
+| CONF-06 | Phase 11 | Pending |
+| CONF-07 | Phase 11 | Pending |
+| CONF-08 | Phase 11 | Pending |
+| CONF-09 | Phase 14 | Pending |
+| CONF-10 | Phase 11 | Pending |
+| PROJ-01 | Phase 11 | Pending |
+| PROJ-02 | Phase 11 | Pending |
+| PROJ-03 | Phase 11 | Pending |
+| CLI-08 | Phase 13 | Pending |
+| CLI-09 | Phase 13 | Pending |
+| CLI-10 | Phase 13 | Pending |
+| CLI-11 | Phase 13 | Pending |
+| CLI-12 | Phase 13 | Pending |
+| WIZD-01 | Phase 12 | Pending |
+| WIZD-02 | Phase 12 | Pending |
+| WIZD-03 | Phase 12 | Pending |
+| SCOP-01 | Phase 13 | Pending |
+| SCOP-02 | Phase 13 | Pending |
+| SCOP-03 | Phase 13 | Pending |
+| DOC-01 | Phase 14 | Pending |
+| DOC-02 | Phase 14 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 32/32 complete
-- v3.0 requirements: 25 total, 0 mapped (awaiting roadmap)
+- v3.0 requirements: 25/25 mapped
 
 ---
 *Requirements defined: 2026-02-06 (v1), 2026-02-07 (v2), 2026-02-10 (v3)*
