@@ -29,10 +29,10 @@ Phase numbering continues from v2.0 (phases 4-9 complete).
   2. Project-level hooks use relative `.claude/hooks/` paths that resolve correctly within the project
   3. No `$CLAUDE_PROJECT_DIR` variables appear in any deployed settings.json or hook references -- all paths are baked at deploy time
   4. Existing hook functionality (block-destructive, post-tool-format, PreToolUse guard) is preserved
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md -- Fix template paths, deploy-time resolution, regenerate settings, update tests
 
 ### Phase 11: JSON Config Foundation
 **Goal**: Both global and project configuration stored as JSON with a versioned schema, replacing .env as the primary config format
@@ -106,7 +106,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Hook Path Resolution | 0/0 | Not started | - |
+| 10. Hook Path Resolution | 0/1 | Planned | - |
 | 11. JSON Config Foundation | 0/0 | Not started | - |
 | 12. Wizard Refactor | 0/0 | Not started | - |
 | 13. CLI Restructure + Per-Module Scope | 0/0 | Not started | - |
