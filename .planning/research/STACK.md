@@ -1,543 +1,446 @@
-# Technology Stack: dotconfigs v2.0 Plugin Architecture
+# Global vs Local Configuration Patterns: dotconfigs v3.0
 
-**Project:** dotconfigs v2.0 (bash plugin architecture + git config management)
-**Researched:** 2026-02-07
-**Constraint:** Bash 3.2 compatibility (macOS default), no external dependencies
+**Project:** dotconfigs v3.0 (rethink global-vs-project deployment model)
+**Researched:** 2026-02-10
+**Scope:** How Git, Claude Code, GSD, and dotfile managers handle global vs local configuration layering
+**Overall confidence:** HIGH (primary sources: official Git docs, official Claude Code docs, verified GitHub issues)
 
 ## Executive Summary
 
-The v2.0 plugin architecture requires NO new external dependencies. All patterns leverage bash 3.2 features already in use (function-based routing, directory discovery, sourcing). The git plugin uses standard `git config` commands. This research identifies specific patterns and anti-patterns for bash 3.2 plugin systems based on existing frameworks (Bash-it, oh-my-bash) and current CLI design best practices.
+The v2.0 hook path problem (`$CLAUDE_PROJECT_DIR` pointing to dotconfigs repo, not the active project) is solved natively by Claude Code. `$CLAUDE_PROJECT_DIR` in `~/.claude/settings.json` hooks resolves to the **current project's root at runtime**, not the directory where the file lives. The current hooks.json template uses `.claude/hooks/block-destructive.sh` (relative path), which only works if hooks are copied per-project. The fix: global hooks should use absolute paths to the dotconfigs repo (e.g., `~/Repositories/dotconfigs/plugins/claude/hooks/block-destructive.sh`), baked at deploy time.
 
-## Core Stack (No Changes)
+Git already has a clean global/local model: `~/.gitconfig` (global) overridden by `.git/config` (local), with `includeIf` for conditional config and `core.hooksPath` for centralised hooks. dotconfigs v2.0 already uses this correctly.
 
-| Technology | Version | Purpose | Notes |
-|------------|---------|---------|-------|
-| Bash | 3.2+ | Core runtime | macOS ships 3.2.57, must avoid bash 4+ features |
-| Git | 2.9+ | Git operations & config | core.hooksPath requires Git 2.9+ |
-| coreutils | Any | File operations | Standard UNIX utilities (find, sed, ln) |
-
-**Rationale:** Existing deploy.sh already demonstrates all needed capabilities. No new tools required.
-
-## Plugin Architecture Patterns
-
-### Pattern 1: Function-Based Subcommand Routing
-
-**What:** Entry point dispatches to `cmd_<subcommand>` functions, which then dispatch to `plugin_<name>_<action>` functions.
-
-**Why:** Already proven in deploy.sh (lines 627-1084). Bash 3.2 compatible. Exit code 127 detects missing functions naturally.
-
-**Implementation:**
-```bash
-# Entry point: dotconfigs
-subcommand=$1
-shift
-
-case "$subcommand" in
-    setup|deploy)
-        plugin=$1
-        shift
-        "cmd_${subcommand}" "$plugin" "$@"
-        ;;
-    *)
-        show_usage
-        exit 1
-        ;;
-esac
-
-# Commands dispatch to plugin functions
-cmd_setup() {
-    local plugin=$1
-    shift
-
-    # Load plugin
-    source "$PLUGINS_DIR/$plugin/setup.sh"
-
-    # Call plugin's setup function
-    "plugin_${plugin}_setup" "$@"
-}
-```
-
-**Bash 3.2 Notes:**
-- Use `"${var}"` not `${var,,}` (lowercase expansion not available)
-- Use `tr '[:upper:]' '[:lower:]'` for case conversion
-- No associative arrays — use simple variables or indexed arrays
-
-**Source:** [Simple bash subcommands gist](https://gist.github.com/waylan/4080362)
-
-### Pattern 2: Directory-Based Plugin Discovery
-
-**What:** Plugins live in `plugins/<name>/` directories. Entry point discovers by listing directories.
-
-**Why:** Already implemented in scripts/lib/discovery.sh. No registration file needed — filesystem IS the registry.
-
-**Implementation:**
-```bash
-# Discovery (similar to existing discover_* functions)
-discover_plugins() {
-    local plugins_dir="$1"
-
-    find "$plugins_dir" -mindepth 1 -maxdepth 1 -type d | while read -r plugin_path; do
-        basename "$plugin_path"
-    done | sort
-}
-
-# Validation
-plugin_exists() {
-    local plugin=$1
-    [[ -d "$PLUGINS_DIR/$plugin" ]] && [[ -f "$PLUGINS_DIR/$plugin/setup.sh" ]]
-}
-```
-
-**Rationale:** Avoids configuration files. Self-documenting. Same pattern as existing hooks/skills discovery.
-
-**Source:** Existing scripts/lib/discovery.sh (lines 8-92)
-
-### Pattern 3: Lazy Plugin Loading
-
-**What:** Plugins are sourced only when invoked, not at script startup.
-
-**Why:** Faster startup. Only load claude plugin if `dotconfigs deploy claude` called.
-
-**Implementation:**
-```bash
-# Load plugin on-demand
-load_plugin() {
-    local plugin=$1
-    local action=$2  # setup or deploy
-
-    local plugin_script="$PLUGINS_DIR/$plugin/${action}.sh"
-
-    if [[ ! -f "$plugin_script" ]]; then
-        echo "Error: Plugin '$plugin' does not support '$action'" >&2
-        return 1
-    fi
-
-    source "$plugin_script"
-}
-```
-
-**Anti-pattern:** Loading all plugins at startup (slow, wasteful).
-
-**Source:** Plugin architecture best practices — [Plugin Architecture Guide](https://www.devleader.ca/2023/09/07/plugin-architecture-design-pattern-a-beginners-guide-to-modularity/)
-
-### Pattern 4: Shared Library Layer
-
-**What:** Common utilities in `lib/*.sh` sourced by plugins and entry point.
-
-**Why:** Avoid duplication between claude and git plugins. Already exists (wizard.sh, symlinks.sh, discovery.sh).
-
-**Structure:**
-```
-lib/
-  wizard.sh        # Interactive prompts (existing)
-  symlinks.sh      # Link management (existing)
-  discovery.sh     # Directory scanning (existing)
-  validation.sh    # NEW: Common validation (git repo check, path validation)
-```
-
-**Implementation:**
-```bash
-# Entry point sources lib files
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib/wizard.sh"
-source "$SCRIPT_DIR/lib/symlinks.sh"
-source "$SCRIPT_DIR/lib/discovery.sh"
-source "$SCRIPT_DIR/lib/validation.sh"
-
-# Plugins assume lib functions available
-plugin_claude_setup() {
-    wizard_header 1 "Claude Configuration"
-    wizard_yesno "Enable settings.json?" "y"
-    # ...
-}
-```
-
-**Rationale:** Plugins stay focused on domain logic. Shared code stays DRY.
-
-### Pattern 5: Plugin Interface Contract
-
-**What:** Each plugin provides `setup.sh` and `deploy.sh` with standard function signatures.
-
-**Why:** Predictable interface. Entry point can call any plugin the same way.
-
-**Contract:**
-```bash
-# plugins/<name>/setup.sh
-plugin_<name>_setup() {
-    # Interactive wizard
-    # Writes to .env
-}
-
-# plugins/<name>/deploy.sh
-plugin_<name>_deploy() {
-    # Reads from .env
-    # Performs deployment
-    # Returns 0 on success
-}
-```
-
-**Enforcement:** Entry point validates presence of required functions before calling.
-
-**Source:** [Plugin architecture contracts](https://arjancodes.com/blog/best-practices-for-decoupling-software-using-plugins/)
-
-## Git Config Management Patterns
-
-### Pattern 6: Git Config Commands (Not Config Files)
-
-**What:** Use `git config` commands, not direct editing of .gitconfig files.
-
-**Why:** Atomic operations. Git handles locking and formatting. Cross-platform safe.
-
-**Implementation:**
-```bash
-# Global config
-git config --global user.name "Name"
-git config --global user.email "email@example.com"
-git config --global core.hooksPath "$HOOKS_DIR"
-
-# Project-local config
-git config --local --add include.path "$CONFIG_FILE"
-```
-
-**Anti-pattern:** sed/awk editing of .gitconfig (fragile, breaks on format changes).
-
-**Source:** [Git Configuration Guide](https://git-scm.com/book/en/v2/Customizing-Git-Git-Configuration)
-
-### Pattern 7: Git Config Include Files
-
-**What:** Modular config files included via `[include]` and `[includeIf]` directives.
-
-**Why:** Separation of concerns. Can conditionally apply config based on directory.
-
-**Implementation:**
-```bash
-# Global ~/.gitconfig
-[include]
-    path = ~/.config/git/dotconfigs-workflow.conf
-
-# Conditional by directory (work vs personal)
-[includeIf "gitdir:~/work/"]
-    path = ~/.config/git/work.conf
-[includeIf "gitdir:~/personal/"]
-    path = ~/.config/git/personal.conf
-```
-
-**Use Cases:**
-- Workflow settings (rebase.autosquash, diff.algorithm) in dotconfigs-workflow.conf
-- Identity switching by directory (work vs personal email)
-- Project-specific hooks path overrides
-
-**Source:** [Git includeIf patterns](https://utf9k.net/blog/conditional-gitconfig/)
-
-### Pattern 8: Global Hooks via core.hooksPath
-
-**What:** Set `core.hooksPath` to shared hooks directory. All repos use same hooks.
-
-**Why:** Single source of truth. Already implemented in deploy.sh (lines 491-492).
-
-**Existing Implementation:**
-```bash
-git config --global core.hooksPath "$DEPLOY_TARGET/git-hooks"
-```
-
-**Consideration:** Projects can override locally with:
-```bash
-git config --local core.hooksPath ".git/hooks"  # Use local hooks
-```
-
-**Source:** Already implemented; validated by [Git hooks management](https://jpearson.blog/2022/09/07/tip-share-a-git-hooks-directory-across-your-repositories/)
-
-## CLI Entry Point Design
-
-### Pattern 9: Single Entry Point with Subcommands
-
-**What:** `dotconfigs` script routes to `setup <plugin>` and `deploy <plugin>` subcommands.
-
-**Why:** Matches existing deploy.sh pattern. Familiar to users (git-style).
-
-**Structure:**
-```bash
-#!/bin/bash
-# dotconfigs — Entry point
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGINS_DIR="$SCRIPT_DIR/plugins"
-
-source "$SCRIPT_DIR/lib/wizard.sh"
-source "$SCRIPT_DIR/lib/symlinks.sh"
-source "$SCRIPT_DIR/lib/discovery.sh"
-
-# Route to command
-main() {
-    case "$1" in
-        setup|deploy)
-            cmd_$1 "${@:2}"
-            ;;
-        list)
-            cmd_list
-            ;;
-        --help|-h)
-            show_usage
-            ;;
-        *)
-            echo "Unknown command: $1" >&2
-            show_usage
-            exit 1
-            ;;
-    esac
-}
-
-main "$@"
-```
-
-**Bash 3.2 Note:** `"${@:2}"` (slice array from index 2) works in bash 3.2+.
-
-**Source:** [CLI Design Best Practices](https://clig.dev/)
-
-### Pattern 10: Argument Forwarding to Plugins
-
-**What:** Entry point validates subcommand/plugin, then forwards remaining args to plugin function.
-
-**Why:** Plugins control their own argument parsing. Entry point stays thin.
-
-**Implementation:**
-```bash
-cmd_setup() {
-    local plugin=$1
-    shift
-
-    # Validate
-    if [[ -z "$plugin" ]]; then
-        echo "Error: No plugin specified" >&2
-        echo "Usage: dotconfigs setup <plugin>" >&2
-        exit 1
-    fi
-
-    if ! plugin_exists "$plugin"; then
-        echo "Error: Plugin '$plugin' not found" >&2
-        exit 1
-    fi
-
-    # Load and execute
-    source "$PLUGINS_DIR/$plugin/setup.sh"
-    "plugin_${plugin}_setup" "$@"
-}
-```
-
-**Rationale:** Separation of concerns. Entry point = routing. Plugin = logic.
-
-## Migration from deploy.sh
-
-### What Moves Where
-
-| Current (deploy.sh) | Future Location | Reason |
-|---------------------|-----------------|--------|
-| cmd_global() | plugins/claude/deploy.sh → plugin_claude_deploy() | Claude-specific |
-| cmd_project() | plugins/claude/deploy.sh → plugin_claude_project() | Claude-specific |
-| run_wizard() | plugins/claude/setup.sh → plugin_claude_setup() | Claude-specific wizard |
-| build_claude_md() | plugins/claude/deploy.sh (internal) | Claude-specific |
-| Git identity config | plugins/git/deploy.sh → plugin_git_deploy() | Git-specific |
-| Git hooks copy | plugins/git/deploy.sh | Git-specific |
-| Shell aliases setup | plugins/claude/deploy.sh | Claude-specific (aliases deploy command) |
-| scripts/lib/*.sh | lib/*.sh (unchanged) | Shared library |
-| Entry routing | dotconfigs (new) | Entry point |
-
-### What Stays in Shared Lib
-
-| Function | Location | Reason |
-|----------|----------|--------|
-| wizard_prompt() | lib/wizard.sh | Used by all plugins |
-| wizard_yesno() | lib/wizard.sh | Used by all plugins |
-| wizard_save_env() | lib/wizard.sh | Used by all plugins |
-| backup_and_link() | lib/symlinks.sh | Used by claude + future plugins |
-| is_dotclaude_owned() | lib/symlinks.sh | Used by claude + future plugins |
-| discover_* functions | lib/discovery.sh | Used by multiple plugins |
-
-## Bash 3.2 Compatibility Checklist
-
-### Available Features (Safe to Use)
-
-- [x] Functions
-- [x] Indexed arrays (`arr=("a" "b" "c")`)
-- [x] Case statements
-- [x] Here-docs
-- [x] Process substitution (`while read -r line; do ... done < <(command)`)
-- [x] Subshells
-- [x] `source` command
-- [x] Exit code checking (`$?`)
-- [x] String manipulation (`${var#prefix}`, `${var%suffix}`)
-
-### Unavailable Features (Must Avoid)
-
-- [ ] Namerefs (`local -n`)
-- [ ] Associative arrays (`declare -A`)
-- [ ] Lowercase expansion (`${var,,}`)
-- [ ] Uppercase expansion (`${var^^}`)
-- [ ] `readarray` / `mapfile`
-- [ ] `;&` and `;;&` case terminators
-
-### Workarounds
-
-| Bash 4+ Feature | Bash 3.2 Workaround |
-|-----------------|---------------------|
-| `${var,,}` | `tr '[:upper:]' '[:lower:]'` or `echo "$var" \| tr ...` |
-| `local -n ref=var` | Use `eval` cautiously or restructure to avoid indirection |
-| `declare -A map` | Use indexed arrays with key encoding or avoid (restructure) |
-| `readarray -t arr < file` | `while IFS= read -r line; do arr+=("$line"); done < file` |
-
-**Source:** [Bash 3.2 compatibility notes](https://scriptingosx.com/2020/06/about-bash-zsh-sh-and-dash-in-macos-catalina-and-beyond/)
-
-## What NOT to Add
-
-### Anti-Pattern 1: Plugin Registry File
-
-**Don't:** Create plugins.conf listing enabled plugins
-**Why:** Filesystem already tells us what's available. Discovery function handles it.
-**Existing proof:** scripts/lib/discovery.sh scans directories, no registry needed
-
-### Anti-Pattern 2: Plugin Dependencies
-
-**Don't:** Allow plugins to import from each other (`source ../git/config.sh`)
-**Why:** Creates coupling. Use shared lib instead.
-**Rule:** Plugins can only source from `lib/`, never from other plugins
-
-### Anti-Pattern 3: Complex Configuration Language
-
-**Don't:** Invent DSL or YAML for plugin config
-**Why:** .env already works. Bash reads it natively. Additional format = additional parser.
-**Keep:** Space-separated strings in .env (existing pattern for CLAUDE_SECTIONS, HOOKS_ENABLED)
-
-### Anti-Pattern 4: Plugin Versioning
-
-**Don't:** Add version fields to plugins or compatibility checking
-**Why:** All plugins ship together in repo. No independent versioning needed.
-**Scope:** Future problem if plugins become external repos (not v2.0 goal)
-
-### Anti-Pattern 5: External Dependencies
-
-**Don't:** Add jq, yq, or other tools for config parsing
-**Why:** Breaks "bash + git + coreutils only" constraint
-**Exception:** Python3 already used in deploy.sh for JSON merging (line 742), acceptable fallback when jq unavailable
-
-### Anti-Pattern 6: Bash 4+ Features
-
-**Don't:** Use namerefs, associative arrays, or bash 4 string operations
-**Why:** Breaks macOS default bash 3.2
-**Validation:** Test on macOS before committing
-
-**Source:** Project constraints from PROJECT.md
-
-## Directory Structure
-
-```
-dotconfigs/
-├── dotconfigs              # New entry point
-├── lib/                    # Shared libraries
-│   ├── wizard.sh
-│   ├── symlinks.sh
-│   ├── discovery.sh
-│   └── validation.sh       # NEW
-├── plugins/
-│   ├── claude/
-│   │   ├── setup.sh        # Wizard → writes .env
-│   │   ├── deploy.sh       # Reads .env → performs deployment
-│   │   ├── hooks/          # Moved from top-level hooks/
-│   │   ├── commands/       # Moved from top-level commands/
-│   │   └── templates/      # Moved from top-level templates/
-│   └── git/
-│       ├── setup.sh        # Git identity, workflow prefs wizard
-│       ├── deploy.sh       # Apply git config, deploy hooks
-│       ├── hooks/          # Git hooks (commit-msg, pre-commit, etc)
-│       └── templates/      # Git config snippets
-├── .env                    # Unified config (all plugins)
-└── deploy.sh               # DEPRECATED in v2.0, kept for migration period
-```
-
-**Rationale:** Each plugin is self-contained. Shared code in lib/. Entry point is thin router.
-
-## Implementation Phases
-
-### Phase 1: Create Entry Point + Routing
-
-1. Create `dotconfigs` script with subcommand routing
-2. Add `lib/validation.sh` for common checks
-3. Test routing without plugins
-
-### Phase 2: Extract Claude Plugin
-
-1. Create `plugins/claude/` structure
-2. Move wizard code to `plugins/claude/setup.sh`
-3. Move deployment code to `plugins/claude/deploy.sh`
-4. Move assets (hooks, commands, templates) to plugins/claude/
-
-### Phase 3: Build Git Plugin
-
-1. Create `plugins/git/` structure
-2. Build git config wizard in `plugins/git/setup.sh`
-3. Build git deployment in `plugins/git/deploy.sh`
-4. Move githooks/ to plugins/git/hooks/
-
-### Phase 4: Unify Configuration
-
-1. Merge git identity vars into .env (already exists: GIT_USER_NAME, GIT_USER_EMAIL)
-2. Add git workflow vars to .env (GIT_WORKFLOW_ENABLED, GIT_WORKFLOW_PRESET)
-3. Update both plugins to read from .env
-
-### Phase 5: Testing & Migration
-
-1. Test on macOS (bash 3.2) and Linux (bash 4+)
-2. Update README with new CLI
-3. Mark deploy.sh as deprecated
-
-## Confidence Assessment
-
-| Pattern | Confidence | Source |
-|---------|------------|--------|
-| Function-based routing | HIGH | Existing deploy.sh, proven pattern |
-| Directory discovery | HIGH | Existing scripts/lib/discovery.sh |
-| Git config commands | HIGH | Official Git documentation |
-| Git includeIf | MEDIUM | Feature exists since Git 2.13, needs testing |
-| Bash 3.2 compat | HIGH | Existing deploy.sh works on macOS |
-| Plugin interface contract | HIGH | Standard plugin pattern |
-| Lazy loading | HIGH | Basic bash sourcing |
-| Shared lib pattern | HIGH | Already implemented |
-
-## Sources
-
-### Official Documentation
-- [Git Configuration](https://git-scm.com/book/en/v2/Customizing-Git-Git-Configuration)
-- [Git config command](https://git-scm.com/docs/git-config)
-- [Git hooks documentation](https://git-scm.com/docs/githooks)
-
-### Architecture Patterns
-- [Plugin Architecture Design Pattern](https://www.devleader.ca/2023/09/07/plugin-architecture-design-pattern-a-beginners-guide-to-modularity/)
-- [Best Practices for Decoupling Software Using Plugins](https://arjancodes.com/blog/best-practices-for-decoupling-software-using-plugins/)
-- [Plug-in Architecture Overview](https://medium.com/omarelgabrys-blog/plug-in-architecture-dec207291800)
-
-### Bash Implementation Examples
-- [Simple bash subcommands gist](https://gist.github.com/waylan/4080362)
-- [Bash-it framework](https://github.com/Bash-it/bash-it)
-- [Oh My Bash framework](https://github.com/ohmybash/oh-my-bash)
-
-### CLI Design
-- [Command Line Interface Guidelines](https://clig.dev/)
-- [Mastering CLI Design Best Practices](https://jsschools.com/programming/mastering-cli-design-best-practices-for-powerful-/)
-
-### Git Config Management
-- [Conditional Git configuration](https://utf9k.net/blog/conditional-gitconfig/)
-- [Modularizing git config with conditional includes](https://blog.thomasheartman.com/posts/modularizing-your-git-config-with-conditional-includes/)
-- [Using includeIf to manage git identities](https://medium.com/@mrjink/using-includeif-to-manage-your-git-identities-bcc99447b04b)
-- [Share Git Hooks Directory Across Repositories](https://jpearson.blog/2022/09/07/tip-share-a-git-hooks-directory-across-your-repositories/)
-
-### Bash 3.2 Compatibility
-- [About bash, zsh, sh, and dash in macOS](https://scriptingosx.com/2020/06/about-bash-zsh-sh-and-dash-in-macos-catalina-and-beyond/)
-- [How to Ensure Bash Scripts Work on macOS and Linux](https://yomotherboard.com/question/how-to-ensure-bash-scripts-work-on-both-macos-and-linux/)
-- [BashFAQ/006 - Arrays](https://mywiki.wooledge.org/BashFAQ/006)
-
-### Additional References
-- [Bash namerefs for dynamic variable referencing](https://rednafi.com/misc/bash-namerefs/) (Bash 4.3+ only - avoid)
-- [Include Files in Bash with source](https://www.baeldung.com/linux/source-include-files)
+The v3.0 model should leverage these native mechanisms tightly: deploy to `~/.claude/settings.json` for global Claude config, deploy to `~/.gitconfig` for global Git config, and provide `project-configs` as an optional overlay that writes to `.claude/settings.json` and `.git/config` for per-project overrides.
 
 ---
 
-**Research complete.** All patterns validated against bash 3.2 constraints. No external dependencies required. Ready for roadmap creation.
+## 1. Git: Global vs Local Configuration
+
+**Confidence: HIGH** (official Git documentation)
+
+### File Hierarchy (lowest to highest precedence)
+
+| Scope | File Path | Written by | Overrides |
+|-------|-----------|-----------|-----------|
+| System | `/etc/gitconfig` | Admin | -- |
+| Global | `~/.gitconfig` or `$XDG_CONFIG_HOME/git/config` | User | System |
+| Local | `.git/config` | Per-repo | Global |
+| Worktree | `.git/config.worktree` | Per-worktree | Local |
+| Command | `-c key=value` | CLI invocation | Everything |
+
+**Rule: Last value wins.** Git reads all scopes in order; the most specific scope's value takes effect.
+
+### `core.hooksPath` vs `.git/hooks/`
+
+**They are mutually exclusive.** When `core.hooksPath` is set globally, Git ignores `.git/hooks/` entirely in all repos. There is no "merge" or "both" behaviour.
+
+```bash
+# Global: all repos use these hooks
+git config --global core.hooksPath ~/.dotconfigs/git-hooks
+
+# Per-repo opt-out: revert to local hooks
+git config --local core.hooksPath .git/hooks
+```
+
+**dotconfigs v2.0 already handles this correctly** -- `_git_deploy_hooks_global()` sets `core.hooksPath` to `~/.dotconfigs/git-hooks` and warns that it overrides per-project hooks. The project-scope mode unsets any stale `core.hooksPath`.
+
+### `includeIf` Conditional Configuration
+
+Four condition types available (Git 2.13+):
+
+```ini
+# Directory-based (most useful for dotconfigs)
+[includeIf "gitdir:~/work/"]
+    path = ~/.config/git/work.conf
+
+# Case-insensitive variant
+[includeIf "gitdir/i:~/My Projects/"]
+    path = ~/.config/git/projects.conf
+
+# Branch-based
+[includeIf "onbranch:feature/*"]
+    path = ~/.config/git/feature.conf
+
+# Remote URL-based (Git 2.36+)
+[includeIf "hasconfig:remote.*.url:https://github.com/mycompany/**"]
+    path = ~/.config/git/company.conf
+```
+
+**Key detail:** Glob patterns auto-complete. `gitdir:~/work/` becomes `gitdir:~/work/**`. Patterns without a prefix get `**/` prepended.
+
+**Recommendation for v3.0:** Use `includeIf` for identity switching (work vs personal email). Don't use it for hooks -- `core.hooksPath` is cleaner for that.
+
+### How Git Aliases, Identity, and Workflow Settings Layer
+
+All follow the same last-value-wins rule:
+
+```ini
+# ~/.gitconfig (global)
+[user]
+    name = Henry Baker
+    email = henry@personal.com
+
+# .git/config (local, in a work repo)
+[user]
+    email = henry@company.com  # overrides global email only
+    # name inherits from global
+```
+
+**dotconfigs implication:** Global deploy writes to `~/.gitconfig` via `git config --global`. Project deploy writes to `.git/config` via `git config --local`. Git handles the merge natively. No custom layering needed.
+
+---
+
+## 2. Claude Code: Global vs Local Settings
+
+**Confidence: HIGH** (official Claude Code documentation, verified GitHub issues)
+
+### Settings Hierarchy (highest to lowest precedence)
+
+| Precedence | Location | Scope | Checked into git? |
+|------------|----------|-------|--------------------|
+| 1 (highest) | Managed: `/Library/Application Support/ClaudeCode/managed-settings.json` | Org-wide | N/A |
+| 2 | CLI arguments (`--model`, etc.) | Session | N/A |
+| 3 | `.claude/settings.local.json` | Project, personal | No (auto-gitignored) |
+| 4 | `.claude/settings.json` | Project, shared | Yes |
+| 5 (lowest) | `~/.claude/settings.json` | User, all projects | No |
+
+**Merging behaviour:** Settings merge hierarchically, not replace. Permission arrays combine across scopes. But: project `deny` blocks even if user `allow` permits.
+
+### How `$CLAUDE_PROJECT_DIR` Actually Works
+
+**This is the critical finding for v3.0.**
+
+`$CLAUDE_PROJECT_DIR` is an **environment variable set at runtime** by Claude Code to the project root directory (where Claude Code was started). It is available in:
+
+- Hook commands in `~/.claude/settings.json` (global) -- **resolves to current project**
+- Hook commands in `.claude/settings.json` (project) -- resolves to current project
+- Hook commands in `.claude/settings.local.json` (local) -- resolves to current project
+
+**This means:** A global hook in `~/.claude/settings.json` that references `$CLAUDE_PROJECT_DIR` will correctly resolve to whatever project the user is working in. The variable is NOT the path to where the settings file lives -- it's the path to the current Claude Code session's project.
+
+**Bug history:** There was a bug (issue #9447) where `$CLAUDE_PROJECT_DIR` was empty in **plugin** `hooks.json` files, but this was fixed in Claude Code v2.0.45. The variable has always worked correctly in settings files.
+
+### The v2.0 Problem Explained
+
+The current `settings-template.json` uses:
+
+```json
+"command": "$CLAUDE_PROJECT_DIR/plugins/claude/hooks/block-destructive.sh"
+```
+
+This path resolves to `<current_project>/plugins/claude/hooks/block-destructive.sh` -- which only exists when CWD is the dotconfigs repo itself. In any other project, the file doesn't exist.
+
+**The fix is simple:** Global hooks should use absolute paths to the dotconfigs repo, baked at deploy time:
+
+```json
+"command": "/Users/henrybaker/Repositories/dotconfigs/plugins/claude/hooks/block-destructive.sh"
+```
+
+Or better, for project-deployed hooks that reference local copies:
+
+```json
+"command": ".claude/hooks/block-destructive.sh"
+```
+
+Relative paths (no `$` prefix) resolve relative to the project root.
+
+### CLAUDE.md Hierarchy
+
+| Scope | Location | Loaded | Shared? |
+|-------|----------|--------|---------|
+| User | `~/.claude/CLAUDE.md` | All projects | No |
+| Project | `CLAUDE.md` or `.claude/CLAUDE.md` | Current project | Yes |
+| Local | `.claude/CLAUDE.local.md` | Current project | No (gitignored) |
+
+All three load and merge at session startup. No override -- they concatenate.
+
+### `settings.json` vs `settings.local.json`
+
+| Aspect | `settings.json` | `settings.local.json` |
+|--------|-----------------|----------------------|
+| Location | `.claude/settings.json` | `.claude/settings.local.json` |
+| Git | Checked in, shared | Auto-gitignored |
+| Use case | Team standards | Personal overrides |
+| Precedence | Lower | Higher (overrides project) |
+
+**Recommendation for v3.0 global deploy:** Write to `~/.claude/settings.json` (user scope). This is the correct location for machine-wide Claude Code settings. Do NOT write to `~/.claude/settings.local.json` -- that concept only exists at project level.
+
+---
+
+## 3. GSD Framework: Global vs Project
+
+**Confidence: MEDIUM** (community documentation, not official Anthropic)
+
+### How GSD Structures Files
+
+GSD is an orchestration layer that uses Claude Code's native file conventions:
+
+| Level | Location | Purpose |
+|-------|----------|---------|
+| Global agents | `~/.claude/agents/` | Available in all projects (gsd-executor.md, gsd-planner.md, etc.) |
+| Global commands | `~/.claude/commands/` | Slash commands available everywhere |
+| Project planning | `.planning/` | Project-specific roadmaps, phases, research |
+| Project agents | `.claude/agents/` | Project-specific agent overrides |
+
+**Key insight:** GSD uses Claude Code's native settings hierarchy. Global agents in `~/.claude/agents/` are available everywhere. Project agents in `.claude/agents/` are project-specific. No custom layering needed.
+
+### How This Relates to dotconfigs
+
+dotconfigs already deploys commands to `~/.claude/commands/` via symlinks. The pattern is identical to GSD's:
+
+- **Global deploy:** symlink `plugins/claude/commands/*.md` -> `~/.claude/commands/`
+- **Project deploy:** copy or symlink to `.claude/commands/` (if project needs custom commands)
+
+GSD doesn't do anything special for global-vs-local -- it simply uses the paths Claude Code already provides.
+
+---
+
+## 4. Dotfile Managers: chezmoi and GNU Stow
+
+**Confidence: MEDIUM** (official chezmoi docs, community comparisons)
+
+### chezmoi
+
+**Approach:** Template-based. Source files in `~/.local/share/chezmoi/`, rendered to target locations.
+
+Key patterns relevant to dotconfigs:
+
+| Pattern | How chezmoi Does It | Relevance to dotconfigs |
+|---------|--------------------|-----------------------|
+| Machine-specific config | Go templates with `.chezmoi.hostname`, `.chezmoi.os` | dotconfigs uses .env for machine config |
+| Secret management | Encrypted files, 1Password/Vault integration | Not needed for dotconfigs |
+| Scripts at apply-time | `run_onchange_` prefix for scripts that run when content changes | Similar to dotconfigs deploy |
+| Exact directories | `exact_` prefix removes extra files | dotconfigs doesn't clean up removed files |
+
+**Key design decision:** chezmoi generates regular files at target locations (not symlinks). This means changes to source require `chezmoi apply` to propagate. Symlinks propagate instantly.
+
+### GNU Stow
+
+**Approach:** Symlink farm. Source directory structure mirrors target. `stow package` creates symlinks.
+
+```bash
+# Structure
+~/.dotfiles/
+  git/
+    .gitconfig        # -> ~/.gitconfig
+    .config/git/
+      ignore          # -> ~/.config/git/ignore
+  claude/
+    .claude/
+      settings.json   # -> ~/.claude/settings.json
+```
+
+**Key insight for dotconfigs:** Stow's "package" concept maps neatly to dotconfigs "plugins". Each plugin is a package. Global deploy = stow the package. But Stow has no templating -- files are symlinked as-is.
+
+### What dotfile Managers Do for "Global Functionality That Works in Any Project"
+
+Three patterns emerge:
+
+**Pattern A: Central directory with absolute paths**
+- Set `core.hooksPath` to a central directory (chezmoi/stow manage the central dir)
+- Hooks use absolute paths back to the central dir
+- **Pro:** Single source of truth, instant updates
+- **Con:** Breaks per-project hooks
+
+**Pattern B: Copy files to each project**
+- dotconfigs v2.0's `project-configs` does this for Git hooks
+- **Pro:** Per-project customisation possible
+- **Con:** Stale copies, manual update needed
+
+**Pattern C: Symlinks from each project to central directory**
+- Stow model: `.claude/hooks/foo.sh` -> `~/.dotconfigs/hooks/foo.sh`
+- **Pro:** Single source of truth + per-project structure
+- **Con:** Requires setup per project
+
+**Recommendation for v3.0:** Use **Pattern A** (central directory) for global deploy, and **Pattern C** (symlinks) for project deploy. This matches how dotconfigs v2.0 already works for Claude files -- symlinks from `~/.claude/` to the dotconfigs repo.
+
+---
+
+## 5. Wizard Consideration
+
+**Confidence: MEDIUM** (community patterns, existing dotconfigs implementation)
+
+### Do Other Config Managers Use Wizards?
+
+| Tool | Interactive Setup? | Pattern |
+|------|-------------------|---------|
+| chezmoi | `chezmoi init` prompts for template values | One-time init, then file-based |
+| yadm | No wizard, file-based config | Manual editing |
+| GNU Stow | No wizard | Convention-based |
+| Homebrew | No wizard for dotfiles | Declarative Brewfile |
+| nix-darwin | No wizard | Declarative .nix files |
+| dotbot | No wizard | Declarative YAML |
+
+**Pattern:** Most tools are declarative (YAML/Nix/config files). Wizards are rare in dotfile managers. chezmoi's `init` is the closest -- it prompts for template values once, then config is file-driven.
+
+### Are dotconfigs Wizards Still Appropriate?
+
+**Yes, but they should be optional.** The wizards serve a real purpose: they make `.env` configuration accessible to users who don't want to hand-edit config. But the system should work without them.
+
+**Recommended v3.0 model:**
+
+1. **File-based config is primary.** Users can edit `.env` directly and run `dotconfigs deploy`.
+2. **Wizards are optional UX.** `dotconfigs global-configs <plugin>` runs the wizard, but it's just a nice way to edit `.env`.
+3. **No wizard required for deploy.** If `.env` exists with valid config, `dotconfigs deploy` works without ever running a wizard.
+
+This separates the "configuration gathering" concern (wizard) from the "configuration applying" concern (deploy), which is the v3.0 goal.
+
+---
+
+## 6. The Key Design Question: Global Hooks That Work Everywhere
+
+### The Problem
+
+v2.0 global Claude hooks don't work outside the dotconfigs repo because `$CLAUDE_PROJECT_DIR` in settings-template.json resolves to the active project, and the hooks live in the dotconfigs repo.
+
+### Solution Matrix
+
+| Approach | How | Pros | Cons | Verdict |
+|----------|-----|------|------|---------|
+| Absolute paths at deploy time | Template `{{DOTCONFIGS_ROOT}}/plugins/claude/hooks/foo.sh` | Works everywhere, single source | Path baked at deploy, breaks if repo moves | **Use this for global** |
+| `$CLAUDE_PROJECT_DIR` + project copy | Copy hooks to `.claude/hooks/`, reference as `.claude/hooks/foo.sh` | Per-project customisation | Stale copies, manual update | **Use this for project** |
+| Symlinks from `~/.claude/hooks/` | `~/.claude/hooks/foo.sh` -> `dotconfigs/plugins/claude/hooks/foo.sh` | Live updates, central source | Needs deploy step, symlink resolution | **Already used in v2.0** |
+| PATH-based resolution | Add hooks dir to PATH, reference by name only | Clean paths | PATH pollution, security concerns | **Don't use** |
+
+### Recommended Approach for v3.0
+
+**Global deploy:** Write `~/.claude/settings.json` with absolute paths to hooks in the dotconfigs repo. These are symlinks that already point to the real files.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/block-destructive.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Since `~/.claude/hooks/block-destructive.sh` is a symlink to `dotconfigs/plugins/claude/hooks/block-destructive.sh`, updates to the source propagate instantly. The path `~/.claude/hooks/` is stable (doesn't change if dotconfigs repo moves). The `~` resolves at shell execution time.
+
+**Project deploy:** Write `.claude/settings.json` with relative paths:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/block-destructive.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Hooks are symlinked from `.claude/hooks/` to the dotconfigs repo (or copied if user prefers).
+
+---
+
+## 7. Recommendations for dotconfigs v3.0
+
+### The Clean 3-Step Model
+
+```
+Setup (one-time)     Global Deploy (machine-wide)     Project Deploy (per-repo)
+-----------------    -------------------------        -----------------------
+dotconfigs setup     dotconfigs deploy                 dotconfigs project-configs <path>
+
+Writes:              Writes:                           Writes:
+- .env (config)      - ~/.claude/settings.json         - .claude/settings.json
+- PATH symlinks      - ~/.claude/CLAUDE.md              - .claude/settings.local.json
+                     - ~/.claude/hooks/*                - .claude/hooks/*
+                     - ~/.claude/commands/*             - .claude/CLAUDE.md
+                     - ~/.gitconfig (via git config)   - .git/config (via git config)
+                     - ~/.dotconfigs/git-hooks/*        - .git/hooks/*
+```
+
+### Key Architectural Decisions
+
+**1. Global Claude hooks use `~/.claude/hooks/` paths (not `$CLAUDE_PROJECT_DIR`)**
+
+The settings.json deployed to `~/.claude/settings.json` should reference hooks at `~/.claude/hooks/foo.sh`. These are symlinks to the dotconfigs repo. Stable path, live updates.
+
+**2. Project Claude hooks use relative `.claude/hooks/` paths**
+
+The settings.json deployed to `.claude/settings.json` should reference hooks at `.claude/hooks/foo.sh`. These resolve relative to project root.
+
+**3. Git global hooks use `core.hooksPath` (already implemented)**
+
+No changes needed. `~/.dotconfigs/git-hooks/` is already the central hooks directory.
+
+**4. Git project hooks use `.git/hooks/` copies (already implemented)**
+
+No changes needed. Project-configs copies hooks to `.git/hooks/`.
+
+**5. Settings templates should be resolved at deploy time, not left with variables**
+
+v2.0 embeds `$CLAUDE_PROJECT_DIR` in the template. v3.0 should resolve paths at deploy time:
+
+```bash
+# At deploy time, generate settings.json with resolved paths
+sed "s|\$DOTCONFIGS_ROOT|$DOTCONFIGS_ROOT|g" template > output
+```
+
+**6. Wizards remain but are decoupled from deploy**
+
+Wizards write to `.env`. Deploy reads from `.env`. They are independent steps. A user can skip the wizard entirely by editing `.env` manually.
+
+**7. Use `includeIf` for git identity switching (future enhancement)**
+
+Not needed in v3.0 MVP, but the architecture should not preclude it. Git's `includeIf "gitdir:"` is the right mechanism for work/personal identity switching.
+
+### What Stays, What Changes
+
+| Component | v2.0 | v3.0 | Change |
+|-----------|------|------|--------|
+| Claude global hooks | `$CLAUDE_PROJECT_DIR/plugins/...` paths | `~/.claude/hooks/...` paths (symlinks) | **Fix path resolution** |
+| Claude project hooks | Broken (wrong paths) | `.claude/hooks/...` relative paths | **Fix path resolution** |
+| Git global hooks | `core.hooksPath` + symlinks | Same | No change |
+| Git project hooks | Copy to `.git/hooks/` | Same | No change |
+| Claude global settings | Symlink to assembled file | Same | No change |
+| Claude project settings | Broken template | Generate with resolved paths | **Fix template** |
+| Wizards | Required before deploy | Optional (can edit .env directly) | **Decouple** |
+| `.env` | Central config store | Same | No change |
+
+---
+
+## Sources
+
+### Official Documentation (HIGH confidence)
+- [Git config documentation](https://git-scm.com/docs/git-config) -- precedence rules, includeIf, include
+- [Git hooks documentation](https://git-scm.com/docs/githooks) -- core.hooksPath behaviour
+- [Claude Code settings](https://code.claude.com/docs/en/settings) -- full hierarchy, merging, CLAUDE.md
+- [Claude Code hooks reference](https://code.claude.com/docs/en/hooks) -- hook resolution, CLAUDE_PROJECT_DIR, path handling
+
+### Verified Bug Reports (HIGH confidence)
+- [Issue #9447: CLAUDE_PROJECT_DIR not propagated in plugin hooks](https://github.com/anthropics/claude-code/issues/9447) -- confirms variable works in settings files, fixed for plugins in v2.0.45
+
+### Community Resources (MEDIUM confidence)
+- [chezmoi comparison table](https://www.chezmoi.io/comparison-table/)
+- [chezmoi machine-to-machine differences](https://www.chezmoi.io/user-guide/manage-machine-to-machine-differences/)
+- [Conditional Git configuration](https://utf9k.net/blog/conditional-gitconfig/)
+- [Share a Git Hooks Directory Across Repositories](https://jpearson.blog/2022/09/07/tip-share-a-git-hooks-directory-across-your-repositories/)
+- [GSD Framework for Claude Code](https://ccforeveryone.com/gsd)
+- [Git Hooks Complete Guide (DataCamp)](https://www.datacamp.com/tutorial/git-hooks-complete-guide)
+- [Git Conditional Includes (Edward Thomson)](https://www.edwardthomson.com/blog/git_conditional_includes)
+
+---
+
+**Research complete.** The v2.0 problem is a path resolution bug, not an architectural flaw. The existing symlink-based deployment model is sound. v3.0 needs to fix hook paths (absolute for global, relative for project), decouple wizards from deploy, and ensure each step is independently useful.

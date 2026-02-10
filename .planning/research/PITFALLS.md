@@ -1,832 +1,698 @@
-# Domain Pitfalls: CLI Restructure and Plugin Migration
+# v3.0 Research: .dotconfigs/ Directory Conventions and CLI Design
 
-**Domain:** Bash CLI tool restructuring (dotclaude → dotconfigs)
-**Researched:** 2026-02-07
-**Migration type:** Monolithic script → plugin architecture + repository rename
+**Domain:** Developer tool configuration management (dotconfigs v3.0)
+**Researched:** 2026-02-10
+**Mode:** Ecosystem + Feasibility
+**Overall confidence:** HIGH (based on direct inspection of tool directories, established conventions, and existing codebase analysis)
+
+---
 
 ## Executive Summary
 
-This document catalogues critical pitfalls when restructuring a working 1085-line bash script (`deploy.sh`) into a plugin-based architecture while simultaneously renaming the repository. Focus is on pitfalls specific to this migration's constraints: bash 3.2 compatibility (macOS), existing user installs with `.env` config, global git hooks via `core.hooksPath`, and symlink-based deployment.
+The v3.0 milestone moves project config from a single `.dotconfigs.json` file to a `.dotconfigs/` directory, and rethinks the CLI command surface. This research surveys how established developer tools structure their project directories, store config, handle gitignore strategies, and design CLI command surfaces. The findings strongly favour a **single `config.json` inside `.dotconfigs/`** (not per-plugin files), the **entire `.dotconfigs/` directory being git-ignored by default** (personal tool, not team config), and a **minimal 4-command CLI** that maps cleanly to the 3-step conceptual model.
 
-## Critical Pitfalls
+Key insight: dotconfigs is a personal configuration tool, not a team collaboration tool. This distinction drives nearly every design decision -- it means the config directory should be ignored, the CLI should be explicit, and the global config should live inside the dotconfigs repo itself (not `~/.config/`).
 
-Mistakes that cause rewrites, data loss, or break existing user installs.
+---
 
-### Pitfall 1: Breaking Existing User Configs During .env Migration
+## 1. Directory Conventions (What Other Tools Do)
 
-**What goes wrong:** Users upgrade, their `.env` files become invalid, wizard skips because `.env` exists, deployment silently uses stale/incompatible config.
+### .git/ -- The Reference Standard
 
-**Why it happens:**
-- Plugin restructure changes `.env` schema (e.g., `DEPLOY_TARGET` → plugin-specific paths)
-- Old `.env` lacks new required variables (e.g., plugin selection flags)
-- Migration script assumes `.env` presence = valid config
-- No version detection in `.env` files
+Structure observed directly on this machine:
+```
+.git/
+  config          -- single config file (INI format)
+  hooks/          -- executable scripts per lifecycle event
+  info/           -- metadata (exclude file)
+  objects/        -- content-addressed storage
+  refs/           -- branch/tag pointers
+  HEAD            -- current ref pointer
+  description     -- repo description
+```
+
+**Pattern:** Single config file + purpose-specific subdirectories. Config is flat (INI), not nested JSON. Everything is functional (no "settings" subdirectory with multiple files). The directory is never committed -- it is entirely local.
+
+### .claude/ -- The Most Relevant Precedent
+
+Structure observed from `~/.claude/` on this machine:
+```
+~/.claude/
+  settings.json       -- main config (symlink to dotconfigs in this case)
+  settings.local.json -- personal overrides (not shared)
+  CLAUDE.md           -- project instructions
+  commands/           -- slash command markdown files
+  agents/             -- subagent markdown files
+  hooks/              -- hook scripts
+```
+
+Project-level `.claude/` follows the same structure. **Pattern:** Single settings file + `*.local.*` for personal overrides + purpose-specific subdirectories for different asset types.
+
+**Key convention:** `settings.json` (shared/team) vs `settings.local.json` (personal, gitignored). This two-file pattern is the closest analogue to what dotconfigs needs.
+
+### .vscode/ -- Minimal Per-Concern Files
+
+```
+.vscode/
+  settings.json       -- workspace settings
+  extensions.json     -- recommended extensions
+  launch.json         -- debugger config
+  tasks.json          -- task runner config
+```
+
+**Pattern:** Multiple files, but each serves a distinct **tooling concern** (editor settings vs debugger vs tasks), not per-plugin. These are small, focused files. The directory is typically committed (team config).
+
+### .idea/ -- XML Explosion (Anti-Pattern)
+
+```
+.idea/
+  misc.xml
+  modules.xml
+  workspace.xml       -- personal, gitignored
+  vcs.xml
+  codeStyles/
+  inspectionProfiles/
+  ... (many more)
+```
+
+**Pattern:** Per-concern XML files + subdirectories. Partially committed, partially ignored. This is widely considered the most confusing gitignore story among developer tools. **Anti-pattern for dotconfigs:** too many files, unclear what to commit, merge conflicts in XML.
+
+### .husky/ -- Minimal Hook Directory
+
+```
+.husky/
+  pre-commit          -- hook script (executable)
+  commit-msg          -- hook script
+  _/                  -- internal husky runtime (gitignored)
+```
+
+**Pattern:** One file per hook, flat structure, almost no config. Husky sets `core.hooksPath` to `.husky/_/` internally. The hook files themselves are committed. Very minimal.
+
+### Summary of Directory Patterns
+
+| Tool | Config files | Committed? | Pattern |
+|------|-------------|------------|---------|
+| .git/ | 1 (config) | Never | Single config + functional subdirs |
+| .claude/ | 2 (settings.json + settings.local.json) | settings.json: yes, local: no | Main + local override |
+| .vscode/ | 3-4 (per concern) | Usually yes | Per-concern files |
+| .idea/ | 10+ (per concern) | Partially | Over-split, confusing |
+| .husky/ | 1 per hook | Yes | Minimal, functional |
+
+**Recommendation for `.dotconfigs/`:** Follow the `.claude/` pattern -- single `config.json` as the primary file. Do NOT split per-plugin. The `.claude/` precedent is the most relevant because (a) it is the tool dotconfigs primarily manages, and (b) the user is already familiar with its conventions.
+
+---
+
+## 2. Config File Structure Recommendation
+
+### Option A: Single Monolithic config.json (RECOMMENDED)
+
+```json
+{
+  "version": "3.0",
+  "modules": {
+    "claude": {
+      "enabled": true,
+      "deploy_target": "~/.claude",
+      "settings": true,
+      "hooks": ["block-destructive", "post-tool-format"],
+      "commands": ["commit", "pr-review", "squash-merge"],
+      "claude_md": {
+        "sections": ["communication", "simplicity", "documentation", "git", "code-style"],
+        "exclude_method": "git-info-exclude"
+      }
+    },
+    "git": {
+      "enabled": true,
+      "identity": {
+        "name": "Henry Baker",
+        "email": "henry@example.com"
+      },
+      "hooks": {
+        "pre-commit": { "enabled": true },
+        "commit-msg": { "enabled": true },
+        "pre-push": { "enabled": true, "branch_protection": "warn" }
+      }
+    }
+  }
+}
+```
+
+**Why this wins:**
+- **Atomic:** One file to read, one file to write. No partial-state issues.
+- **Precedent:** `package.json` stores config for npm, eslint, prettier, jest, etc. all in one file. Users understand this pattern.
+- **Discoverability:** Open one file, see everything. No hunting across subdirectories.
+- **Simplicity:** Fewer moving parts = fewer bugs. Critical for a bash tool parsing JSON.
+- **Diffability:** One file in `git diff` shows all project config changes.
+- **.env replacement:** The current flat `.env` maps directly to a single JSON. Less migration complexity.
+
+### Option B: Per-Plugin Files (NOT Recommended)
+
+```
+.dotconfigs/
+  claude.json
+  git.json
+```
+
+**Why this loses:**
+- **Two plugins do not justify per-plugin files.** This is premature abstraction for a tool with 2 plugins. At 5+ plugins, reconsider.
+- **Coordination problems:** If deploying requires reading multiple files, you need merge logic. One file avoids this.
+- **`jq` complexity:** Reading one JSON file with `jq` is straightforward. Reading N files and merging is significantly harder in bash.
+- **No user expectation:** Nobody expects to open `.dotconfigs/claude.json` separately. They expect one config file.
+
+### Option C: Hybrid (Not Recommended for Now)
+
+One `config.json` + optional per-plugin override files. This is `.claude/settings.json` + `.claude/settings.local.json` scaled up. Adds complexity without clear benefit at 2 plugins. Could be a v4.0 evolution if plugin count grows.
+
+### jq Dependency Consideration
+
+Moving from `.env` to JSON requires parsing JSON in bash. Options:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **`jq` (recommended)** | Standard tool, powerful, well-tested | External dependency (not on macOS by default) |
+| **Python json module** | Already available on macOS | Slower, heavier subprocess |
+| **Pure bash** | No deps | Fragile, limited, maintenance nightmare |
+
+**Recommendation:** Require `jq`. It is the standard JSON tool for shell scripts. Add a check in `dotconfigs setup` that validates `jq` is installed and provides install instructions (`brew install jq` / `apt install jq`). This is the only new dependency and it is worth it.
+
+**Confidence:** HIGH -- based on direct pattern analysis of established tools.
+
+---
+
+## 3. Gitignore Strategy Recommendation
+
+### The Core Question: Is `.dotconfigs/` Personal or Team Config?
+
+This is the most important design decision. Everything flows from it.
+
+**Answer: Personal.** dotconfigs is a personal configuration tool. Reasons:
+- It manages *your* Claude settings, *your* git hooks, *your* CLAUDE.md sections
+- Team members may use different tools entirely (not everyone uses Claude Code)
+- The config contains personal preferences (identity, hook strictness, deploy paths)
+- The user explicitly said "deploy adds `.dotconfigs/` to `.git/info/exclude` or `.gitignore` (configurable)"
+
+### Recommendation: Entire `.dotconfigs/` Ignored by Default
+
+```
+# Default: add to .git/info/exclude (personal, doesn't pollute .gitignore)
+.dotconfigs/
+```
+
+**Why `.git/info/exclude` is the right default:**
+- `.git/info/exclude` is for personal/machine-specific patterns that don't need sharing
+- `.gitignore` is for project-wide patterns all developers agree on
+- dotconfigs is personal tooling -- exactly what `info/exclude` is for
+- This matches the existing pattern: dotconfigs already adds `CLAUDE.md` and `.claude/` to `info/exclude`
+
+**Why NOT `.gitignore`:**
+- Adding `.dotconfigs/` to `.gitignore` implies the team uses dotconfigs
+- Other team members would see a gitignore entry for a tool they don't use
+- Creates noise in PRs that touch `.gitignore`
+
+**But make it configurable** (as the user stated): some users may want `.gitignore` for team-wide dotconfigs usage. Offer a wizard choice:
+1. `.git/info/exclude` (default -- personal, invisible to team)
+2. `.gitignore` (team -- visible to team, committed)
+
+**What about committed team config?** If a team wants to share dotconfigs config, that is a future v4.0 concern. For v3.0, the model is personal-only.
+
+**Confidence:** HIGH -- aligns with git documentation, existing dotconfigs patterns, and user's stated requirements.
+
+---
+
+## 4. CLI Command Design Recommendation
+
+### Research: How Established Tools Structure Commands
+
+**git:** `init`, `add`, `commit`, `push`, `pull`, `status`, `diff`, `config`, `log`
+- Two-level: `git remote add`, `git config --global`
+- `init` is the one-time setup verb
+- Day-to-day verbs are short and frequent
+
+**npm:** `init`, `install`, `run`, `test`, `publish`
+- Flat command surface
+- `init` creates `package.json`
+
+**chezmoi:** `init`, `add`, `edit`, `apply`, `diff`, `status`, `update`, `cd`
+- `init` sets up source directory
+- `apply` deploys dotfiles to home
+- `diff` shows pending changes
+- 60+ total commands (too many -- chezmoi is a cautionary tale)
+
+**Key principle from clig.dev:** "Where possible, a CLI should follow patterns that already exist. That's what makes CLIs intuitive and guessable."
+
+### The 3-Step Model Mapped to Commands
+
+The user's conceptual model:
+1. **Setup** -- builds manifest of available modules from plugin directories
+2. **Global** -- deploys selected modules machine-wide
+3. **Project** -- deploys selected modules per-repo
+
+This maps cleanly to 4 commands:
+
+```
+dotconfigs setup                    # One-time tool init (PATH, jq check)
+dotconfigs global [plugin]          # Configure + deploy global settings
+dotconfigs project [plugin] [path]  # Configure + deploy project settings
+dotconfigs status [plugin]          # Show what's deployed where
+```
+
+### Why Merge Configure + Deploy
+
+The current v2.0 has a split: `global-configs` (wizard) then `deploy` (apply). This two-step model creates friction:
+- Users forget to run `deploy` after `global-configs`
+- Config sits in `.env` without being applied -- confusing state
+- "I changed my settings but nothing happened" is a common complaint pattern
+
+**Recommendation:** Make deploy implicit. `dotconfigs global claude` runs the wizard AND deploys. If you only want to preview, use `--dry-run`.
+
+This follows the chezmoi pattern: `chezmoi edit --apply` is the recommended workflow (edit + apply in one step). It also follows `git commit` pattern (stages and commits aren't separate commands for most users thanks to `git commit -a`).
+
+**But keep `deploy` as an alias** for explicit re-deployment without re-running the wizard:
+```
+dotconfigs deploy [plugin]          # Re-deploy from existing config (no wizard)
+dotconfigs deploy --dry-run         # Preview deployment
+```
+
+### Minimal Command Surface (Recommended)
+
+| Command | Purpose | Notes |
+|---------|---------|-------|
+| `dotconfigs setup` | One-time init | PATH symlinks, jq check, version marker |
+| `dotconfigs global [plugin]` | Global config wizard + deploy | Replaces `global-configs` + `deploy` |
+| `dotconfigs project [plugin] [path]` | Project config wizard + deploy | Replaces `project-configs` + `project-init` |
+| `dotconfigs deploy [plugin]` | Re-deploy from existing config | No wizard, just apply. `--dry-run`, `--force` |
+| `dotconfigs status [plugin]` | Show deployment state | Drift detection, deployed vs pending |
+| `dotconfigs list` | Show available plugins | Keep from v2.0, simple and useful |
+| `dotconfigs help [command]` | Contextual help | Keep from v2.0 |
+
+That is **5 user-facing commands** (setup, global, project, status, list) plus 2 utility commands (deploy, help). `deploy` is the explicit "apply without wizard" escape hatch.
+
+### Commands to Drop or Merge
+
+| v2.0 Command | v3.0 Fate | Reason |
+|-------------|-----------|--------|
+| `global-configs` | Merged into `global` | Shorter, deploy is implicit |
+| `project-configs` / `project-init` | Merged into `project` | One command, no confusion over naming |
+| `deploy` (standalone) | Keep as explicit re-deploy | Useful for scripting and CI |
+
+### What About `dotconfigs init`?
+
+`git init` creates `.git/`. Should `dotconfigs init` create `.dotconfigs/`?
+
+**No -- `project` already does this.** Adding `init` creates naming confusion: "Do I run `init` or `project`?" The `project` command creates `.dotconfigs/config.json` as part of its workflow. No need for a separate `init`.
+
+If the user wants a non-interactive scaffolding command (create `.dotconfigs/` with defaults, no wizard), that could be `dotconfigs project --defaults`.
+
+**Confidence:** HIGH for the command structure. The merge of configure+deploy is a strong recommendation based on multiple tool precedents, but could be contentious -- flag for discussion.
+
+---
+
+## 5. Naming Recommendations
+
+### Command Names
+
+| v2.0 | v3.0 Recommendation | Rationale |
+|------|---------------------|-----------|
+| `global-configs` | `global` | Shorter. "dotconfigs global claude" reads naturally as "configure dotconfigs globally for claude" |
+| `project-configs` / `project-init` | `project` | Same pattern. "dotconfigs project claude ." reads naturally |
+| `deploy` | `deploy` | Keep. Clear verb, established meaning |
+| `setup` | `setup` | Keep. One-time init, established from v2.0 |
+| `status` | `status` | Keep. Matches `git status` convention |
+| `list` | `list` | Keep. Simple, clear |
+
+### Why `global` and `project` (Nouns) Not `configure` (Verb)
+
+The pattern `dotconfigs global claude` uses **scope as the command** (noun-first). This works because:
+- The tool name already contains the verb implication ("dotconfigs" = "configure dotconfigs")
+- `global` and `project` are scopes, not ambiguous nouns
+- It reads left-to-right: tool -> scope -> target
+- Shorter than `dotconfigs configure-global claude` or `dotconfigs global-deploy claude`
+
+Alternative considered: `dotconfigs deploy --global claude` / `dotconfigs deploy --project claude .`
+- Rejected: Makes `deploy` the primary verb, but the wizard (configure) is the primary action
+- `--global` vs `--project` as flags would prevent positional path argument for project
+
+### The `dots` Alias
+
+v2.0 already has `dots` as a symlink alias. Keep it. `dots global claude` is pleasingly brief.
+
+**Confidence:** MEDIUM -- naming is inherently subjective. The pattern is sound but the user may prefer different verbs. Flag for discussion.
+
+---
+
+## 6. Global Config Location Recommendation
+
+### Where Other Tools Store Global Config
+
+| Tool | Global config location | Pattern |
+|------|----------------------|---------|
+| git | `~/.gitconfig` | Home directory dotfile |
+| Claude Code | `~/.claude/settings.json` | Home directory dotdir |
+| npm | `~/.npmrc` | Home directory dotfile |
+| chezmoi | `~/.config/chezmoi/chezmoi.toml` | XDG compliant |
+| VS Code | `~/Library/Application Support/Code/` | OS-native app data |
+
+### Recommendation: Global Config Lives in the Dotconfigs Repo
+
+```
+~/Repositories/dotconfigs/config.json    # Global config
+```
+
+**Why the dotconfigs repo itself, not `~/.config/dotconfigs/`:**
+
+1. **It already works this way.** The current `.env` lives in the repo root. Users expect to find config next to the tool.
+2. **dotconfigs IS the config repo.** It is not a general-purpose tool installed via package manager -- it is a personal repository of configuration. The config belongs in the repo.
+3. **XDG is for installed software.** `~/.config/` is for tools installed system-wide that need user-specific config. dotconfigs is cloned, not installed.
+4. **Simplicity.** One location for everything: templates, plugins, config. No hunting across directories.
+5. **Backup via git.** The global `config.json` can optionally be committed to the dotconfigs repo (it is personal config, after all). This gives version history for free.
+
+**What about `.env` migration?** The existing `.env` becomes `config.json` in the repo root. Same location, different format.
+
+**What about the project-level config?** That goes in `.dotconfigs/config.json` inside each project repo.
+
+**Summary:**
+- Global: `<dotconfigs-repo>/config.json`
+- Project: `<project-repo>/.dotconfigs/config.json`
+
+**Confidence:** HIGH -- follows existing pattern, simplest approach, aligns with "lightweight as possible".
+
+---
+
+## 7. Pitfalls to Avoid
+
+### Critical Pitfalls
+
+#### Pitfall 1: Over-Engineering the Directory Structure
+
+**What goes wrong:** Creating `.dotconfigs/plugins/claude/settings.json` + `.dotconfigs/plugins/git/hooks.json` + `.dotconfigs/meta.json` when a single `config.json` would suffice.
+
+**Why it happens:** Developer instinct to "organise" and "prepare for scale". The plugin architecture in the tool itself (source code) does not need to be mirrored in the user-facing config directory.
 
 **Consequences:**
-- Silent breakage — users don't realize config is stale
-- Deployment succeeds but with wrong plugin selection
-- Partial deployments (some plugins installed, others skipped)
-- User frustration: "worked before upgrade, broken now"
+- More files to parse in bash (harder, slower, more bugs)
+- Users confused about which file to edit
+- Merge/coordination logic needed across files
+- Violates "lightweight as possible" principle
 
-**Prevention:**
-1. **Version `.env` files from v2 onwards:**
-   ```bash
-   # Add to .env in v2.0
-   DOTCONFIGS_VERSION=2.0
-   ```
+**Prevention:** Start with one `config.json`. Only add files when there is a concrete, demonstrated need (rule of three). The `.dotconfigs/` directory should have exactly one file (`config.json`) at v3.0 launch.
 
-2. **Add migration checker in load_config():**
-   ```bash
-   load_config() {
-       if [[ ! -f "$ENV_FILE" ]]; then
-           return 1
-       fi
-       source "$ENV_FILE"
-
-       # Version detection
-       local config_version="${DOTCONFIGS_VERSION:-1.0}"
-       if [[ "$config_version" != "2.0" ]]; then
-           echo "⚠️  Config file is v${config_version}, needs migration to v2.0"
-           migrate_env_v1_to_v2
-       fi
-   }
-   ```
-
-3. **Provide backwards compatibility grace period:**
-   - Keep v1 `.env` keys working in v2.0 (deprecate, don't delete)
-   - Warn users: "DEPLOY_TARGET is deprecated, migrating to CLAUDE_DEPLOY_TARGET"
-   - Auto-migrate on first run, save updated `.env`
-
-4. **Document migration in CHANGELOG:**
-   - Breaking changes section
-   - Migration steps for manual .env editing
-   - What happens on upgrade
-
-**Detection:**
-- Warning signs: Users report "wizard skipped but deployment wrong"
-- Test: Fresh v1 install → upgrade to v2 → verify auto-migration
-
-**Phase assignment:** Phase 1 (Setup: Migration framework)
-
-**Sources:**
-- [Versioning Your Design System Without Breaking Client Sites](https://www.designsystemscollective.com/versioning-your-design-system-without-breaking-client-sites-93b7c652f960)
+**Detection:** If you find yourself writing file-merging logic, you have too many files.
 
 ---
 
-### Pitfall 2: Breaking Shell Aliases Due to Path Changes
+#### Pitfall 2: Making the Config Directory Committable by Default
 
-**What goes wrong:** Repository rename (dotclaude → dotconfigs) + entry point rename (deploy.sh → dotconfigs) breaks all shell aliases pointing to old paths.
+**What goes wrong:** Users accidentally commit `.dotconfigs/` because it was not auto-ignored. Team members see personal config in PRs. Merge conflicts ensue.
 
-**Why it happens:**
-- Current v1 deploys: `alias deploy='bash /path/to/dotclaude/deploy.sh'`
-- After rename: `/path/to/dotclaude` doesn't exist (user moves/reclones as dotconfigs)
-- Aliases in `~/.zshrc` / `~/.bashrc` are hardcoded absolute paths
+**Why it happens:** Forgetting to add the ignore rule during `dotconfigs project`, or assuming users will manually add it.
 
 **Consequences:**
-- `deploy` alias breaks silently
-- Users don't notice until they try to use it
-- Confusion: "command not found: /path/to/dotclaude/deploy.sh"
-- Must manually edit RC files (error-prone)
+- Personal preferences leaked to team (deploy paths, identity info)
+- Merge conflicts on config files
+- Team members confused by unfamiliar tool config in repo
 
 **Prevention:**
-1. **In v2 setup wizard, detect and update old aliases:**
-   ```bash
-   setup_shell_aliases() {
-       local rc_file="$HOME/.zshrc"  # or detect
-       local old_marker="# dotclaude aliases"
-       local new_marker="# dotconfigs aliases"
-
-       # Check for old dotclaude alias block
-       if grep -q "^${old_marker}$" "$rc_file" 2>/dev/null; then
-           echo "⚠️  Found old dotclaude aliases, migrating..."
-           # Remove old block
-           sed -i.bak "/^${old_marker}$/,/^# end dotclaude aliases$/d" "$rc_file"
-           echo "  ✓ Removed old aliases"
-       fi
-
-       # Install new aliases
-       # ... (existing logic)
-   }
-   ```
-
-2. **Provide transition script for manual migration:**
-   ```bash
-   # scripts/migrate-aliases.sh
-   # Scans all RC files, updates dotclaude → dotconfigs paths
-   ```
-
-3. **Warn during setup if old aliases detected:**
-   ```
-   ⚠️  Old 'deploy' alias detected pointing to old location
-       Current: alias deploy='bash /old/path/dotclaude/deploy.sh'
-       Will update to: alias dotconfigs='bash /new/path/dotconfigs'
-
-       Proceed with migration? [Y/n]
-   ```
-
-4. **Document in README:**
-   - "Upgrading from v1? Your shell aliases need updating."
-   - Link to migration guide
-
-**Detection:**
-- Warning signs: Post-upgrade, `deploy` command not found
-- Test: v1 install with aliases → rename repo → v2 setup → verify aliases updated
-
-**Phase assignment:** Phase 2 (Setup: Wizard for git plugin)
-
-**Sources:**
-- [Consequences of renaming a repository](https://support.atlassian.com/bitbucket-cloud/kb/consequences-and-considerations-of-renaming-a-repository/)
-- [Renaming a repository doesn't mention it will break workflows](https://github.com/github/docs/issues/15575)
+1. `dotconfigs project` MUST add `.dotconfigs/` to `.git/info/exclude` (or `.gitignore` if user chose that) as part of its workflow -- not optional.
+2. Validate the ignore rule exists on every `dotconfigs project` invocation (idempotent).
+3. Warn if `.dotconfigs/` is tracked by git (detected via `git ls-files`).
 
 ---
 
-### Pitfall 3: Git Hooks Conflicts with Other Hook Managers
+#### Pitfall 3: jq Dependency Breaks the "Lightweight" Promise
 
-**What goes wrong:** Setting global `core.hooksPath` conflicts with project-level hook managers (Husky, pre-commit, lefthook), causing "Cowardly refusing to install" errors or silent hook non-execution.
+**What goes wrong:** Moving to JSON config requires `jq`, which is not installed by default on macOS. Users run `dotconfigs setup` and immediately hit "jq: command not found".
 
-**Why it happens:**
-- v1 sets: `git config --global core.hooksPath ~/.claude/git-hooks`
-- User clones project using Husky → Husky install fails
-- Or: Husky installs, but hooks in `.git/hooks/` never run (global path overrides local)
-- Global setting is invisible to most users
+**Why it happens:** Bash cannot natively parse JSON. Any JSON-based config requires an external tool.
 
 **Consequences:**
-- Projects with their own hook managers break
-- Cryptic error messages from hook managers
-- Silent failures: users think hooks are running, they're not
-- Reputation damage: "dotconfigs broke my project"
+- First-run experience is broken for users without `jq`
+- Adds install friction ("I need to install something before I can install something")
+- Contradicts "lightweight as possible"
 
 **Prevention:**
-1. **Do NOT use global core.hooksPath by default in v2:**
-   ```bash
-   # OLD (v1 — problematic):
-   git config --global core.hooksPath "$githooks_target"
+1. Check for `jq` in `dotconfigs setup` with clear install instructions.
+2. Consider: could the config stay as a simple key=value format (`.env` or INI) for v3.0, deferring JSON to v4.0?
+3. If JSON is essential: provide a `scripts/install-jq.sh` helper or use Python's `json` module as fallback (Python is on every macOS).
+4. Alternative: use a structured but bash-parseable format. See "INI-style alternative" below.
 
-   # NEW (v2 — safe):
-   # Use per-project .git/hooks/ copies instead
-   # Only set global hooksPath if user explicitly opts in
-   ```
+**INI-style alternative (no jq needed):**
+```ini
+[dotconfigs]
+version=3.0
 
-2. **Provide opt-in global hooks with warning:**
-   ```bash
-   wizard_header 8 "Git Hooks Scope"
-   echo "Git hooks can be deployed globally or per-project."
-   echo ""
-   echo "⚠️  WARNING: Global hooks (core.hooksPath) conflict with"
-   echo "    project-level hook managers (Husky, pre-commit, lefthook)."
-   echo ""
-   echo "Recommended: Per-project (safe, no conflicts)"
-   echo "Alternative: Global (convenient but may conflict)"
-   echo ""
-   if wizard_yesno "Deploy git hooks globally? (not recommended)" "n"; then
-       GIT_HOOKS_SCOPE="global"
-       echo "  You chose global. If projects use Husky/pre-commit, you may need to unset."
-   else
-       GIT_HOOKS_SCOPE="project"
-   fi
-   ```
+[claude]
+enabled=true
+deploy_target=~/.claude
+hooks=block-destructive post-tool-format
 
-3. **Detect and warn about existing global hooksPath:**
-   ```bash
-   deploy_git_plugin() {
-       local existing_path=$(git config --global core.hooksPath 2>/dev/null || echo "")
-       if [[ -n "$existing_path" && "$existing_path" != "$githooks_target" ]]; then
-           echo "⚠️  Global core.hooksPath already set: $existing_path"
-           echo "    This may be from another tool or old dotclaude install."
-           if wizard_yesno "Overwrite with dotconfigs hooks?" "n"; then
-               git config --global core.hooksPath "$githooks_target"
-           else
-               echo "  Skipped global hooks. Use per-project deployment instead."
-               return
-           fi
-       fi
-   }
-   ```
+[git]
+enabled=true
+hooks.pre-commit=true
+hooks.commit-msg=true
+```
 
-4. **Provide per-project hook deployment in project scaffolding:**
-   ```bash
-   cmd_project() {
-       # ... existing scaffolding ...
-
-       # Copy git hooks to .git/hooks/ (NOT global)
-       if [[ "$INSTALL_GIT_HOOKS" == "true" ]]; then
-           echo "Installing git hooks locally (project-scoped)..."
-           cp "$SCRIPT_DIR/githooks"/* "$project_path/.git/hooks/"
-           chmod +x "$project_path/.git/hooks"/*
-           echo "  ✓ Git hooks installed to .git/hooks/"
-       fi
-   }
-   ```
-
-**Detection:**
-- Warning signs: Users report Husky/pre-commit errors after dotconfigs install
-- Test: Install dotconfigs globally → clone Husky project → verify no conflicts
-
-**Phase assignment:** Phase 3 (Deploy: Git plugin deployment)
-
-**Sources:**
-- [Setting a global hooks path causes "Cowardly refusing to install" everywhere](https://github.com/pre-commit/pre-commit/issues/1198)
-- [If git core.hooksPath is set, hk doesn't work](https://github.com/jdx/hk/discussions/385)
-- [Unset core.hookspath in lefthook install](https://github.com/evilmartians/lefthook/issues/1248)
+This keeps bash parsing simple (`source` or `grep/sed`) while adding structure the flat `.env` lacks. Worth serious consideration for "lightweight as possible".
 
 ---
 
-### Pitfall 4: Bash 3.2 Incompatibilities Break macOS Users
+#### Pitfall 4: Implicit Deploy Surprising Users
 
-**What goes wrong:** Plugin architecture uses bash 4+ features (nameref, associative arrays, `${var,,}`), script silently fails or crashes on macOS.
+**What goes wrong:** User runs `dotconfigs global claude` expecting just the wizard, but it immediately deploys settings to `~/.claude/`. Unintended side effects.
 
-**Why it happens:**
-- macOS ships bash 3.2.57 (2007 vintage, never updated due to licensing)
-- Modern bash tutorials/AI-generated code uses bash 4+ features
-- Developer tests on Linux (bash 5+), doesn't catch macOS breakage
-- Bash 3.2 errors are cryptic: "declare: -A: invalid option"
+**Why it happens:** The recommended merge of configure + deploy (Section 4) removes the safety of a separate deploy step.
 
 **Consequences:**
-- macOS users (majority of target audience) cannot use tool
-- Confusing errors with no clear fix
-- Workaround (install bash via Homebrew) is documented but not enforced
-- Partial breakage: some features work, others silently skip
+- User overwrites existing config they wanted to keep
+- No "I changed my mind" moment between configure and deploy
+- Scripted/CI usage harder if deploy is implicit
 
 **Prevention:**
-1. **Enforce bash 3.2 compatibility from Phase 1:**
-   ```bash
-   # At top of every script:
-   # Bash 3.2 compatible (macOS default)
-   if [[ "${BASH_VERSINFO[0]}" -lt 3 ]]; then
-       echo "Error: Bash 3.2+ required"
-       exit 1
-   fi
-   ```
-
-2. **Avoid bash 4+ features entirely:**
-   ```bash
-   # BANNED SYNTAX (bash 4+):
-   declare -A assoc_array          # Associative arrays (bash 4.0+)
-   local -n nameref_var            # Namerefs (bash 4.3+)
-   ${var,,}                        # Lowercase expansion (bash 4.0+)
-   ${var^^}                        # Uppercase expansion (bash 4.0+)
-   declare -g global_var           # -g flag (bash 4.2+)
-
-   # SAFE ALTERNATIVES (bash 3.2):
-   # Use space-separated strings instead of associative arrays
-   plugins_enabled="claude git"
-
-   # Use eval for indirect references instead of nameref
-   eval "local value=\${${var_name}}"
-
-   # Use tr for case conversion instead of ${var,,}
-   lowercase=$(echo "$var" | tr '[:upper:]' '[:lower:]')
-   ```
-
-3. **Add pre-commit shellcheck with bash 3.2 enforcement:**
-   ```bash
-   # In githooks/pre-commit or CI
-   shellcheck --shell=bash --enable=all --exclude=SC1090 \
-              --severity=warning \
-              **/*.sh
-   ```
-
-4. **Test on actual macOS bash 3.2:**
-   ```bash
-   # In CI or local test script
-   if [[ "$OSTYPE" == "darwin"* ]]; then
-       /bin/bash --version  # Should be 3.2.57
-       /bin/bash ./dotconfigs setup --test
-   fi
-   ```
-
-5. **Document compatibility clearly in README:**
-   ```markdown
-   ## Requirements
-
-   - Bash 3.2+ (macOS default bash is 3.2.57 — compatible)
-   - No bash 4+ features used (we support macOS out of the box)
-   ```
-
-**Detection:**
-- Warning signs: macOS users report "invalid option" or "command not found"
-- Test: Run full workflow on macOS with `/bin/bash` (not Homebrew bash)
-- Check: `grep -r 'declare -A' **/*.sh` → should return nothing
-
-**Phase assignment:** Phase 1 (Setup: Library code split) — enforce from start
-
-**Sources:**
-- [Document that bash 3.2 on macOS won't work](https://github.com/docopt/docopts/issues/24)
-- [Associative array error on macOS for bash: : declare: -A: invalid option](https://dipeshmajumdar.medium.com/associative-array-error-on-macos-for-bash-declare-a-invalid-option-16466534e445)
+1. Show a confirmation summary before deploying: "These changes will be deployed. Continue? [Y/n]"
+2. Always show a `--dry-run` preview before actual deployment in interactive mode.
+3. Provide `--no-deploy` flag to run wizard only (configure without deploying).
+4. Alternative: keep the two-step model but make `deploy` automatic after `global-configs` with a confirmation prompt.
 
 ---
 
-### Pitfall 5: Plugin Source Path Resolution Breaks After Restructure
+### Moderate Pitfalls
 
-**What goes wrong:** Monolithic `deploy.sh` splits into `dotconfigs` + `lib/*.sh` + `plugins/*/setup.sh`. Source statements use relative paths that break when called from different contexts (direct invocation vs symlink vs plugin).
+#### Pitfall 5: Migration Path from .env to config.json
 
-**Why it happens:**
-- v1: `source "$SCRIPT_DIR/scripts/lib/wizard.sh"` — works because everything is relative to `deploy.sh`
-- v2: Plugins in `plugins/claude/setup.sh` try to `source ../../lib/wizard.sh` — breaks if called via symlink
-- `$SCRIPT_DIR` changes meaning depending on invocation context
-- `source` resolves paths relative to calling script, not sourced script
+**What goes wrong:** Users upgrade from v2.0 to v3.0. Their `.env` exists but `config.json` does not. Tool breaks or ignores existing config.
 
-**Consequences:**
-- "No such file or directory" errors during setup/deploy
-- Scripts work when invoked directly, fail when called via alias/symlink
-- Hard to debug: same command works in one terminal, fails in another
-- Plugin isolation breaks: plugins can't reliably import shared lib
+**Why it happens:** No migration logic between config formats.
 
 **Prevention:**
-1. **Use BASH_SOURCE[0] for absolute path resolution:**
-   ```bash
-   # In dotconfigs entry point:
-   DOTCONFIGS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   export DOTCONFIGS_ROOT  # Make available to all sourced scripts
-
-   # In plugins/claude/setup.sh:
-   source "$DOTCONFIGS_ROOT/lib/wizard.sh"  # Absolute, always works
-   ```
-
-2. **Never use relative paths in source statements:**
-   ```bash
-   # BAD (breaks with symlinks):
-   source ../../lib/wizard.sh
-
-   # GOOD (always works):
-   source "$DOTCONFIGS_ROOT/lib/wizard.sh"
-   ```
-
-3. **Validate DOTCONFIGS_ROOT is set:**
-   ```bash
-   # At top of all lib/*.sh and plugins/*/setup.sh:
-   if [[ -z "$DOTCONFIGS_ROOT" ]]; then
-       echo "Error: DOTCONFIGS_ROOT not set. Source from dotconfigs entry point only."
-       exit 1
-   fi
-   ```
-
-4. **Test via multiple invocation methods:**
-   ```bash
-   # Test suite must include:
-   /absolute/path/to/dotconfigs setup       # Direct absolute
-   ./dotconfigs setup                        # Direct relative
-   alias dotconfigs='bash /path/dotconfigs'
-   dotconfigs setup                          # Via alias
-   ln -s /path/dotconfigs /tmp/dc
-   /tmp/dc setup                             # Via symlink
-   ```
-
-**Detection:**
-- Warning signs: "source: file not found" errors in testing
-- Test: Create symlink to dotconfigs → invoke via symlink → verify all sources work
-
-**Phase assignment:** Phase 1 (Setup: Library code split) — foundation for all plugins
-
-**Sources:**
-- [Study: including other bash scripts from relative paths and absolute paths](https://gist.github.com/jay3126/fab953d4e60cef6538ab1067570c4ecc)
-- [BashFAQ/028](https://mywiki.wooledge.org/BashFAQ/028)
+1. On first v3.0 run, detect `.env` and offer to migrate: "Found v2.0 config (.env). Migrate to v3.0 (config.json)? [Y/n]"
+2. Write a `_migrate_env_to_json()` function that maps `.env` keys to JSON structure.
+3. Keep `.env` as backup after migration (rename to `.env.v2-backup`).
+4. Version the config file: `"version": "3.0"` at the top.
 
 ---
 
-## Moderate Pitfalls
+#### Pitfall 6: `.dotconfigs/` Name Conflicts
 
-Mistakes that cause delays, technical debt, or user friction.
+**What goes wrong:** Another tool already uses `.dotconfigs/` in the project, or the name is confused with the tool's own repo directory.
 
-### Pitfall 6: Variable Scope Leakage Between Plugins
-
-**What goes wrong:** Monolithic script becomes plugin-based. Plugins share global variables, causing cross-plugin contamination (plugin A sets `$DEPLOY_TARGET`, plugin B inherits wrong value).
-
-**Why it happens:**
-- v1 uses globals freely: `DEPLOY_TARGET`, `SETTINGS_ENABLED`, etc.
-- v2 plugins run in same shell session, inherit parent environment
-- No namespacing: both plugins use generic names like `$target`, `$config`
-- Functions in lib/*.sh use globals, plugins call them with different contexts
+**Why it happens:** `.dotconfigs` is both the tool name and the directory name. Ambiguity.
 
 **Prevention:**
-1. **Namespace all plugin variables:**
-   ```bash
-   # In plugins/claude/setup.sh:
-   CLAUDE_DEPLOY_TARGET=""
-   CLAUDE_SETTINGS_ENABLED=""
+1. Validate on `dotconfigs project` that `.dotconfigs/` does not already exist (or if it does, that it was created by dotconfigs -- check for `config.json` with version field).
+2. Consider: should the project directory be `.dotconfigs/` at all? Alternative: `.dotconfigs.d/` or just `.dotconfigs.json` (staying with a single file, no directory).
 
-   # NOT:
-   DEPLOY_TARGET=""  # Clashes with git plugin
-   ```
-
-2. **Use local variables in functions:**
-   ```bash
-   # In lib/wizard.sh:
-   wizard_prompt() {
-       local prompt_text="$1"
-       local default_value="$2"
-       local variable_name="$3"
-       local user_input        # Prevent leakage
-       # ...
-   }
-   ```
-
-3. **Pass context explicitly, don't rely on globals:**
-   ```bash
-   # BAD:
-   deploy_settings() {
-       # Assumes $DEPLOY_TARGET exists
-       cp settings.json "$DEPLOY_TARGET/"
-   }
-
-   # GOOD:
-   deploy_settings() {
-       local deploy_target="$1"
-       cp settings.json "$deploy_target/"
-   }
-   ```
-
-4. **Enforce in code review:**
-   - Checklist: "All plugin variables prefixed with plugin name?"
-   - Checklist: "All function variables declared local?"
-
-**Detection:**
-- Test: Run claude setup, then git setup → verify no variable contamination
-- Check: Search for unqualified globals in plugin code
-
-**Phase assignment:** Phase 1 (Setup: Library code split)
-
-**Sources:**
-- [Classic pitfalls: accidental global variables](https://medium.com/mkdir-awesome/the-ultimate-guide-to-modularizing-bash-script-code-f4a4d53000c2)
+**Assessment:** The user explicitly wants to move FROM `.dotconfigs.json` TO `.dotconfigs/` directory. The name is intentional. Just validate on creation.
 
 ---
 
-### Pitfall 7: Symlink Ownership Detection Breaks After Restructure
+#### Pitfall 7: Wizard Compatibility -- v2.0 Wizards Generating v3.0 Config
 
-**What goes wrong:** v1 uses `is_dotclaude_owned()` to check if symlink points into dotclaude repo. After rename to dotconfigs, ownership detection fails, causes re-prompts on every deploy.
+**What goes wrong:** The user said "existing v2.0 wizards should be compatible -- they may be adapted to generate these config files in v4.0." If v3.0 changes the config format but v2.0 wizards still run, they will write `.env` while v3.0 expects `config.json`.
 
-**Why it happens:**
-- Function in `scripts/lib/symlinks.sh` extracts repo path from symlink target
-- Hardcoded assumption: path contains "dotclaude"
-- After rename: path contains "dotconfigs", old logic breaks
-- Symlinks created by v1 still point to old path
+**Why it happens:** Hybrid state during migration where wizards and config format are out of sync.
 
 **Prevention:**
-1. **Remove hardcoded repo name from ownership detection:**
-   ```bash
-   # In lib/symlinks.sh:
-   is_dotconfigs_owned() {
-       local target_path="$1"
-       local dotconfigs_path="$2"  # Passed explicitly, not inferred
-
-       if [[ ! -L "$target_path" ]]; then
-           return 1
-       fi
-
-       # Get absolute path of link target
-       local link_target=$(resolve_symlink "$target_path")
-
-       # Check if starts with dotconfigs_path
-       if [[ "$link_target" == "$dotconfigs_path"* ]]; then
-           return 0
-       fi
-
-       return 1
-   }
-   ```
-
-2. **Handle migration of v1 symlinks:**
-   ```bash
-   deploy_global() {
-       # ... existing deployment ...
-
-       # Detect old dotclaude symlinks
-       if [[ -L "$DEPLOY_TARGET/settings.json" ]]; then
-           local link_target=$(resolve_symlink "$DEPLOY_TARGET/settings.json")
-           if [[ "$link_target" == *"/dotclaude/"* ]]; then
-               echo "⚠️  Detected old dotclaude symlink, updating..."
-               # Re-link to new dotconfigs path
-               ln -sfn "$DOTCONFIGS_ROOT/settings.json" "$DEPLOY_TARGET/settings.json"
-           fi
-       fi
-   }
-   ```
-
-**Detection:**
-- Test: v1 deploy → rename repo → v2 deploy → verify no re-prompts
-
-**Phase assignment:** Phase 4 (Deploy: Claude plugin deployment)
+1. v3.0 should be able to read BOTH `.env` and `config.json`, preferring `config.json` if it exists.
+2. Wizards in v3.0 should write to `config.json` only.
+3. If a wizard writes `.env` (v2.0 wizard still running), the deploy command should detect this and suggest migration.
+4. Or: v3.0 does NOT change the config format at all (keeps `.env`), and only introduces the `.dotconfigs/` directory for project-level config. This is the safest approach for "compatible wizards".
 
 ---
 
-### Pitfall 8: Cross-Platform Symlink Resolution Differs
+#### Pitfall 8: Confusing `global` and `project` Scopes
 
-**What goes wrong:** macOS `readlink` doesn't support `-f` flag (GNU extension), symlink resolution breaks on macOS, ownership detection fails.
+**What goes wrong:** User runs `dotconfigs global` in a project directory and expects it to configure the project. Or runs `dotconfigs project` and expects global effects.
 
-**Why it happens:**
-- Linux: `readlink -f` resolves full absolute path
-- macOS: `readlink` doesn't have `-f` → error or wrong result
-- v1 already has workaround (perl fallback in symlinks.sh), but easy to forget when adding new symlink code
+**Why it happens:** Scope names are abstract. Users think location-first ("I'm in my project, so this must be project config").
 
 **Prevention:**
-1. **Use existing cross-platform helper consistently:**
-   ```bash
-   # In lib/symlinks.sh (already exists in v1):
-   resolve_symlink() {
-       local target_path="$1"
-       if [[ "$OSTYPE" == "darwin"* ]]; then
-           # macOS: use perl
-           perl -MCwd -le 'print Cwd::abs_path(shift)' "$target_path" 2>/dev/null
-       else
-           # Linux: use readlink -f
-           readlink -f "$target_path" 2>/dev/null
-       fi
-   }
-   ```
-
-2. **Never call readlink -f directly:**
-   ```bash
-   # BAD:
-   link_target=$(readlink -f "$path")
-
-   # GOOD:
-   link_target=$(resolve_symlink "$path")
-   ```
-
-3. **Enforce in code review:**
-   - Checklist: "Any new readlink calls? Use resolve_symlink() instead."
-
-**Detection:**
-- Test on macOS: Verify all symlink operations work
-
-**Phase assignment:** Phase 1 (Setup: Library code split) — centralize helper
-
-**Sources:**
-- [How to get GNU's readlink -f behavior on OS X](https://gist.github.com/esycat/5279354)
+1. `dotconfigs global` should work from any directory (it always writes to the dotconfigs repo).
+2. `dotconfigs project` should require being in a git repo (or specifying a path).
+3. Show the scope explicitly in output: "Configuring GLOBAL settings for claude (affects all projects)".
+4. Error clearly if user runs `dotconfigs project` outside a git repo.
 
 ---
 
-### Pitfall 9: Shell Aliases with Spaces in Path Break
+### Minor Pitfalls
 
-**What goes wrong:** User installs dotconfigs to path with spaces (e.g., `/Users/John Doe/repos/dotconfigs`), shell aliases break, command not found errors.
+#### Pitfall 9: deploy --dry-run Fidelity
 
-**Why it happens:**
-- v1 alias setup: `alias deploy='bash $dotclaude_root/deploy.sh'`
-- If `$dotclaude_root` contains spaces and isn't quoted → shell splits on space
-- Result: `alias deploy='bash /Users/John Doe/repos/dotconfigs'` → tries to run `bash /Users/John` with args `Doe/repos/dotconfigs`
+**What goes wrong:** Dry-run output says "Would create X" but actual deploy creates Y. Dry-run and real deploy diverge over time.
 
-**Prevention:**
-1. **Quote all paths in alias definitions:**
-   ```bash
-   # In setup_shell_aliases():
-   alias_block=$(cat <<EOF
-   ${marker_start}
-   alias ${alias_name}='bash "${dotconfigs_root}/dotconfigs"'
-   alias registry-scan='bash "${dotconfigs_root}/scripts/registry-scan.sh"'
-   ${marker_end}
-   EOF
-   )
-   ```
-
-2. **Escape internal quotes if needed:**
-   ```bash
-   # If path itself has quotes, escape them
-   local escaped_path="${dotconfigs_root//\"/\\\"}"
-   alias ${alias_name}='bash "${escaped_path}/dotconfigs"'
-   ```
-
-3. **Test with spaces in path:**
-   ```bash
-   # In test suite:
-   mkdir -p "/tmp/path with spaces/dotconfigs"
-   cd "/tmp/path with spaces/dotconfigs"
-   ./dotconfigs setup
-   source ~/.zshrc
-   dotconfigs --version  # Should work
-   ```
-
-**Detection:**
-- Test: Install to path with spaces → verify alias works
-
-**Phase assignment:** Phase 2 (Setup: Wizard for git plugin)
-
-**Sources:**
-- [Spaces need to be escaped in the call to alias](https://fishshell.com/docs/current/cmds/alias.html)
-- [Alias with windows path which contains a space](https://github.com/nushell/nushell/issues/3363)
+**Prevention:** Implement dry-run as the same code path with a `dry_run` flag checked at write operations, not as a separate code path. This is already the v2.0 approach -- keep it.
 
 ---
 
-### Pitfall 10: Git Config Overwrite Without Backup
+#### Pitfall 10: Missing `--force` / `--yes` for Scripted Usage
 
-**What goes wrong:** User has existing git identity/config, v2 git plugin overwrites without warning, user loses personal config.
+**What goes wrong:** Users want to run `dotconfigs project --defaults .` in CI or a setup script, but the command requires interactive input.
 
-**Why it happens:**
-- v1 prompts for git identity, writes with `git config --global user.name`
-- No detection of existing values
-- No "keep existing" option
-- No backup before overwrite
-
-**Prevention:**
-1. **Detect and pre-fill existing git config:**
-   ```bash
-   # In plugins/git/setup.sh:
-   wizard_header 3 "Git Identity"
-
-   # Get existing config
-   local existing_name=$(git config --global user.name 2>/dev/null || echo "")
-   local existing_email=$(git config --global user.email 2>/dev/null || echo "")
-
-   if [[ -n "$existing_name" ]]; then
-       echo "Current git user.name: $existing_name"
-       if wizard_yesno "Keep existing git user.name?" "y"; then
-           GIT_USER_NAME="$existing_name"
-       else
-           wizard_prompt "New git user.name" "$existing_name" GIT_USER_NAME
-       fi
-   else
-       wizard_prompt "Git user.name" "" GIT_USER_NAME
-   fi
-   ```
-
-2. **Allow blank to skip overwrite:**
-   ```bash
-   if [[ -n "$GIT_USER_NAME" ]]; then
-       git config --global user.name "$GIT_USER_NAME"
-       echo "  ✓ Set git user.name=$GIT_USER_NAME"
-   else
-       echo "  - Skipped git user.name (keeping existing)"
-   fi
-   ```
-
-**Detection:**
-- Test: Existing git config → setup → verify not overwritten without consent
-
-**Phase assignment:** Phase 2 (Setup: Wizard for git plugin)
-
-**Sources:**
-- [Git Configuration Best Practices](https://developer.lsst.io/v/DM-5063/tools/git_setup.html)
+**Prevention:** Every command that has interactive prompts must accept `--yes` or `--defaults` to skip them. This is essential for automation. `clig.dev` emphasises: "Never require prompts -- always provide flag alternatives for scripting."
 
 ---
 
-## Minor Pitfalls
+## 8. Architecture Decision: config.json vs .env -- A Deeper Look
 
-Mistakes that cause annoyance but are easily fixable.
+Given the "lightweight as possible" constraint, this deserves more analysis.
 
-### Pitfall 11: Load Order Dependencies Between Lib Files
+### Option A: Keep .env for Global, Use config.json for Project (Hybrid)
 
-**What goes wrong:** Plugin tries to use function from `lib/wizard.sh`, but `lib/config.sh` must be loaded first. Silent failures or cryptic errors.
+```
+Global:  ~/Repos/dotconfigs/.env          (unchanged from v2.0)
+Project: <repo>/.dotconfigs/config.json   (new in v3.0)
+```
 
-**Why it happens:**
-- Modularizing monolithic script creates dependencies
-- No explicit declaration of load order
-- Bash sources files in order they're listed
-- Easy to miss: works during development, breaks in different invocation context
+**Pros:**
+- Zero migration for global config
+- Wizards continue writing `.env` unchanged
+- Only project config needs JSON (smaller scope)
+- No `jq` dependency for global operations
 
-**Prevention:**
-1. **Document load order in lib/README.md:**
-   ```markdown
-   ## Load Order
+**Cons:**
+- Two different formats to maintain
+- JSON parsing still needed for project config
+- Inconsistency between global and project config
 
-   Plugins should source lib files in this order:
-   1. lib/config.sh (environment variables, path detection)
-   2. lib/wizard.sh (interactive prompts)
-   3. lib/symlinks.sh (file operations)
-   ```
+### Option B: config.json for Both (Full Migration)
 
-2. **Use defensive function existence checks:**
-   ```bash
-   # In lib/wizard.sh:
-   if ! declare -f load_config >/dev/null 2>&1; then
-       echo "Error: lib/config.sh must be sourced before lib/wizard.sh"
-       exit 1
-   fi
-   ```
+```
+Global:  ~/Repos/dotconfigs/config.json   (replaces .env)
+Project: <repo>/.dotconfigs/config.json   (new in v3.0)
+```
 
-3. **Provide single lib/all.sh loader:**
-   ```bash
-   # lib/all.sh
-   # Sources all lib files in correct order
-   source "$DOTCONFIGS_ROOT/lib/config.sh"
-   source "$DOTCONFIGS_ROOT/lib/wizard.sh"
-   source "$DOTCONFIGS_ROOT/lib/symlinks.sh"
+**Pros:**
+- Consistent format everywhere
+- JSON supports nesting, arrays, types
+- Better tooling (schema validation, IDE support)
 
-   # In plugins:
-   source "$DOTCONFIGS_ROOT/lib/all.sh"  # One line, correct order
-   ```
+**Cons:**
+- Migration required for all users
+- `jq` dependency added
+- Wizard rewrite needed
 
-**Detection:**
-- Test: Source lib files in wrong order → verify error message
+### Option C: Structured .env (INI-style) for Both
 
-**Phase assignment:** Phase 1 (Setup: Library code split)
+```
+Global:  ~/Repos/dotconfigs/.env          (enhanced with sections)
+Project: <repo>/.dotconfigs/config        (same format)
+```
 
-**Sources:**
-- [Load order matters when modularizing your configuration](https://carmelyne.com/modularizing-your-zshrc/)
+**Pros:**
+- No new dependencies
+- Bash-native parsing
+- Lightweight
 
----
+**Cons:**
+- Limited structure (no nesting, no arrays)
+- Non-standard -- no tooling support
+- Doesn't solve the "richer config" problem
 
-### Pitfall 12: Plugin Discovery Breaks with Non-Standard Directory Layout
+### Recommendation
 
-**What goes wrong:** v2 adds plugin discovery (list available plugins), assumes all plugins in `plugins/*/setup.sh`. User adds custom plugin with different structure, discovery breaks.
+**For v3.0: Option A (Hybrid).** Keep `.env` for global, introduce `config.json` for project only. This minimises disruption and limits the `jq` dependency to project operations only (which are less frequent).
 
-**Why it happens:**
-- Hardcoded assumptions about plugin structure
-- No validation of plugin directory contents
-- Discovery script uses `find plugins/*/setup.sh` — fails if setup.sh missing
+**For v4.0: Option B (Full migration).** Once v3.0 is stable, migrate global to JSON too.
 
-**Prevention:**
-1. **Use manifest files for plugin registration:**
-   ```bash
-   # plugins/claude/plugin.conf
-   PLUGIN_NAME=claude
-   PLUGIN_DESCRIPTION="Claude Code configuration"
-   PLUGIN_SETUP=setup.sh
-   PLUGIN_DEPLOY=deploy.sh
-   ```
+This aligns with "existing v2.0 wizards should be compatible" -- the wizards keep writing `.env`, and only the new project-init code writes JSON.
 
-2. **Discovery reads manifests, not file structure:**
-   ```bash
-   discover_plugins() {
-       local dotconfigs_root="$1"
-       for plugin_dir in "$dotconfigs_root/plugins"/*; do
-           if [[ -f "$plugin_dir/plugin.conf" ]]; then
-               source "$plugin_dir/plugin.conf"
-               echo "$PLUGIN_NAME"
-           fi
-       done
-   }
-   ```
-
-**Detection:**
-- Test: Add plugin without setup.sh → verify discovery doesn't crash
-
-**Phase assignment:** Phase 5 (Test: Integration testing)
+**Confidence:** MEDIUM -- this is a genuine tradeoff. The user should decide based on how strongly they feel about "lightweight" vs "consistent format".
 
 ---
 
-## Phase-Specific Warnings
+## 9. Roadmap Implications
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Phase 1: Library split | Source path resolution breaks (Pitfall 5) | Use BASH_SOURCE[0], test via symlink |
-| Phase 1: Library split | Bash 3.2 incompatibility (Pitfall 4) | Enforce 3.2 syntax from day 1 |
-| Phase 2: Setup wizards | .env migration breaks existing users (Pitfall 1) | Version .env files, auto-migrate |
-| Phase 2: Setup wizards | Shell alias path breakage (Pitfall 2) | Detect old aliases, quote paths with spaces |
-| Phase 3: Deploy git plugin | core.hooksPath conflicts (Pitfall 3) | Default to per-project hooks, warn on global |
-| Phase 3: Deploy git plugin | Git config overwrite (Pitfall 10) | Detect existing, pre-fill, allow keep |
-| Phase 4: Deploy claude plugin | Symlink ownership detection breaks (Pitfall 7) | Remove hardcoded repo name checks |
-| Phase 5: Integration testing | Variable scope leakage (Pitfall 6) | Namespace all plugin variables |
+Based on this research, the suggested v3.0 phase structure:
 
-## Testing Checklist
+### Phase 1: .dotconfigs/ Directory Foundation
+- Create `.dotconfigs/` directory scaffold
+- Define `config.json` schema for project config
+- Implement `jq` detection and fallback
+- Add `.dotconfigs/` to `.git/info/exclude` logic
 
-To verify pitfalls are avoided during development:
+### Phase 2: CLI Command Restructure
+- Rename `global-configs` to `global`
+- Rename `project-configs`/`project-init` to `project`
+- Add implicit deploy to `global` and `project`
+- Add `--dry-run`, `--no-deploy`, `--defaults` flags
+- Deprecate old command names with warnings
 
-**Environment:**
-- [ ] Test on macOS with `/bin/bash` (3.2.57)
-- [ ] Test on Linux with bash 5+
-- [ ] Test with fresh install (no prior .env)
-- [ ] Test with v1 .env present (upgrade path)
-- [ ] Test with path containing spaces
-- [ ] Test via symlink invocation
+### Phase 3: Project Config Migration
+- `dotconfigs project` creates `.dotconfigs/config.json`
+- Project deploy reads from `config.json`
+- Migrate from `.dotconfigs.json` to `.dotconfigs/config.json`
+- Validate gitignore/exclude rule on every project invocation
 
-**Migration:**
-- [ ] v1 install → rename repo → v2 upgrade → verify aliases updated
-- [ ] v1 install → v2 upgrade → verify .env migrated
-- [ ] v1 symlinks → v2 deploy → verify ownership detection works
-- [ ] Global core.hooksPath set → v2 install → verify warning displayed
+### Phase 4: Polish and Migration
+- `.env` to `config.json` migration helper (optional)
+- Status command updated for new structure
+- Documentation updated
+- Deprecation warnings for v2.0 patterns
 
-**Integration:**
-- [ ] Setup claude + git → verify no variable contamination
-- [ ] Project with Husky → dotconfigs install → verify no hook conflicts
-- [ ] Existing git config → git plugin setup → verify not overwritten
+---
+
+## 10. Open Questions for Discussion
+
+1. **Should `global` run the wizard AND deploy, or keep them separate?** The research recommends merging, but this changes user expectations from v2.0.
+
+2. **Is `jq` an acceptable dependency?** If not, the INI-style format or keeping `.env` for everything are the alternatives.
+
+3. **Should v3.0 change the global config format at all?** The safest path is to only introduce `.dotconfigs/config.json` for projects, leaving global `.env` untouched until v4.0.
+
+4. **Should `.dotconfigs/` contain anything beyond `config.json`?** The research says no for v3.0 -- but future versions might add `.dotconfigs/local.json` for personal overrides if the directory ever becomes committable.
+
+5. **Per-module deploy locations in config.json -- how to specify?** The user said "each module can be deployed to custom locations on a per-module basis." The JSON schema needs a `deploy_target` field per module. What is the default?
+
+---
 
 ## Sources
 
-Research sources used in this document:
+### Tool Directory Conventions
+- Direct filesystem inspection of `.git/`, `.claude/`, `.vscode/` on local machine (HIGH confidence)
+- [Husky -- Git hooks made easy](https://github.com/typicode/husky) -- .husky/ directory structure
+- [JetBrains .idea directory documentation](https://www.jetbrains.com/help/idea/creating-and-managing-projects.html)
+- [VS Code user and workspace settings](https://code.visualstudio.com/docs/getstarted/settings)
+- [Claude Code settings reference](https://www.eesel.ai/blog/settings-json-claude-code)
 
-**Bash Pitfalls:**
-- [Common shell script mistakes](http://www.pixelbeat.org/programming/shell_script_mistakes.html)
-- [BashPitfalls - Greg's Wiki](http://mywiki.wooledge.org/BashPitfalls)
-- [The Ultimate Guide to Modularizing Bash Script Code](https://medium.com/mkdir-awesome/the-ultimate-guide-to-modularizing-bash-script-code-f4a4d53000c2)
+### CLI Design
+- [Command Line Interface Guidelines (clig.dev)](https://clig.dev/) -- comprehensive CLI design principles
+- [The Poetics of CLI Command Names](https://smallstep.com/blog/the-poetics-of-cli-command-names/) -- naming patterns
+- [chezmoi command overview](https://www.chezmoi.io/user-guide/command-overview/) -- dotfiles manager CLI surface
+- [10 design principles for delightful CLIs](https://www.atlassian.com/blog/it-teams/10-design-principles-for-delightful-clis)
 
-**Bash 3.2 Compatibility:**
-- [Document that bash 3.2 on macOS won't work](https://github.com/docopt/docopts/issues/24)
-- [Associative array error on macOS](https://dipeshmajumdar.medium.com/associative-array-error-on-macos-for-bash-declare-a-invalid-option-16466534e445)
+### Gitignore Strategy
+- [Understanding .gitignore vs .git/info/exclude](https://www.yopa.page/blog/2024-11-1-understanding-git-ignore-patterns-gitignore-vs-git-info-exclude.html)
+- [Git exclude, a handy feature](https://marijkeluttekes.dev/blog/articles/2025/09/03/git-exclude-a-handy-feature-you-might-not-know-about/)
+- [git-scm.com gitignore documentation](https://git-scm.com/docs/gitignore)
 
-**Git Configuration:**
-- [Git Configuration Best Practices](https://developer.lsst.io/v/DM-5063/tools/git_setup.html)
-- [Popular git config options](https://jvns.ca/blog/2024/02/16/popular-git-config-options/)
+### Config File Patterns
+- [ESLint flat config in monorepo discussion](https://github.com/eslint/eslint/discussions/16960) -- single vs multiple config
+- [Use .config to store project configs (Lobsters discussion)](https://lobste.rs/s/wac58n/use_config_store_your_project_configs)
+- [The creeping scourge of tooling config files (HN)](https://news.ycombinator.com/item?id=24066748)
 
-**Git Hooks:**
-- [Setting a global hooks path causes "Cowardly refusing to install"](https://github.com/pre-commit/pre-commit/issues/1198)
-- [If git core.hooksPath is set, hk doesn't work](https://github.com/jdx/hk/discussions/385)
-- [Unset core.hookspath in lefthook install](https://github.com/evilmartians/lefthook/issues/1248)
+### XDG / Global Config
+- [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/)
+- [XDG Base Directory - ArchWiki](https://wiki.archlinux.org/title/XDG_Base_Directory)
 
-**Repository Migration:**
-- [Consequences of renaming a repository](https://support.atlassian.com/bitbucket-cloud/kb/consequences-and-considerations-of-renaming-a-repository/)
-- [Renaming a repository doesn't mention it will break workflows](https://github.com/github/docs/issues/15575)
-
-**Symlink Management:**
-- [How to get GNU's readlink -f behavior on OS X](https://gist.github.com/esycat/5279354)
-- [How to Create Symlink in Linux and Mac](https://blog.purestorage.com/purely-educational/how-to-create-symlink-in-linux-and-mac/)
-
-**Shell Aliases:**
-- [Spaces need to be escaped in alias](https://fishshell.com/docs/current/cmds/alias.html)
-- [Alias with windows path which contains a space](https://github.com/nushell/nushell/issues/3363)
-
-**Path Resolution:**
-- [Study: including bash scripts from relative/absolute paths](https://gist.github.com/jay3126/fab953d4e60cef6538ab1067570c4ecc)
-- [BashFAQ/028](https://mywiki.wooledge.org/BashFAQ/028)
-
-**Modularization:**
-- [Modularizing your .zshrc](https://carmelyne.com/modularizing-your-zshrc/)
-- [Bash Functions: Comprehensive Guide to Modular Scripting](https://linuxvox.com/blog/bash-functions/)
+### Dotfiles Management
+- [chezmoi design FAQ](https://www.chezmoi.io/user-guide/frequently-asked-questions/design/)
+- [awesome-dotfiles](https://github.com/webpro/awesome-dotfiles) -- dotfiles tool landscape
+- [yadm - Yet Another Dotfiles Manager](https://yadm.io/)
