@@ -145,15 +145,17 @@ source "$REPO_ROOT/plugins/claude/project.sh"
 # Re-apply test env to override real .env values
 source "$TEST_ENV_FILE"
 
-# Pipe "y" for every wizard_yesno prompt.
+# Pipe responses for all prompts (wizard_yesno and read menus).
 # Greenfield project expected prompts:
 #   1. Create project-specific settings.json? [Y/n] -> y
-#   2. Enable PreToolUse hook? [Y/n] -> y
-#   3. Deploy Claude hook configuration file? [Y/n] -> y
-#   4. Create project CLAUDE.md from global sections? [Y/n] -> y
-#   5. Apply CLAUDE.md exclusion for this project? [Y/n] -> y
-#   6. Commit .dotconfigs.json to git? [y/N] -> n  (we want it excluded)
-yes_responses=$(printf 'y\ny\ny\ny\ny\nn\n')
+#   2. Select [1-2] settings source -> 1 (copy global, or template if no global)
+#   3. Deploy block-destructive.sh? [Y/n] -> y
+#   4. Deploy post-tool-format.py? [Y/n] -> y
+#   5. Deploy Claude hook configuration file? [Y/n] -> y
+#   6. Create project CLAUDE.md from global sections? [Y/n] -> y
+#   7. Apply CLAUDE.md exclusion for this project? [Y/n] -> y
+#   8. Commit .dotconfigs.json to git? [y/N] -> n  (we want it excluded)
+yes_responses=$(printf 'y\n1\ny\ny\ny\ny\ny\nn\n')
 echo "$yes_responses" | plugin_claude_project "$TEST_DIR" 2>&1 || true
 
 echo ""
@@ -190,70 +192,79 @@ else
     check_fail ".claude/ directory does not exist"
 fi
 
-# --- .claude/settings.json ---
+# --- .claude/settings.local.json ---
 echo " Settings:"
-if [[ -f "$TEST_DIR/.claude/settings.json" ]]; then
-    check_pass ".claude/settings.json exists"
+if [[ -f "$TEST_DIR/.claude/settings.local.json" ]]; then
+    check_pass ".claude/settings.local.json exists"
 
     # Valid JSON
-    if python3 -c "import json; json.load(open('$TEST_DIR/.claude/settings.json'))" 2>/dev/null; then
-        check_pass ".claude/settings.json is valid JSON"
+    if python3 -c "import json; json.load(open('$TEST_DIR/.claude/settings.local.json'))" 2>/dev/null; then
+        check_pass "settings.local.json is valid JSON"
     else
-        check_fail ".claude/settings.json is invalid JSON"
+        check_fail "settings.local.json is invalid JSON"
     fi
 
-    # Check it has permissions section (from base.json)
+    # Check it has permissions section (from global or base)
     has_permissions=$(python3 -c "
 import json
-d = json.load(open('$TEST_DIR/.claude/settings.json'))
+d = json.load(open('$TEST_DIR/.claude/settings.local.json'))
 print('yes' if 'permissions' in d else 'no')
 " 2>/dev/null || echo "error")
     if [[ "$has_permissions" == "yes" ]]; then
-        check_pass "settings.json has permissions section"
+        check_pass "settings.local.json has permissions section"
     else
-        check_fail "settings.json missing permissions section"
+        check_fail "settings.local.json missing permissions section"
     fi
 
-    # Check hook paths use .claude/hooks/ not $CLAUDE_PROJECT_DIR
+    # Check hook commands use .claude/hooks/ not $CLAUDE_PROJECT_DIR
     bad_paths=$(python3 -c "
 import json
-d = json.load(open('$TEST_DIR/.claude/settings.json'))
+d = json.load(open('$TEST_DIR/.claude/settings.local.json'))
 bad = []
 for event in ('PreToolUse', 'PostToolUse'):
-    for h in d.get('hooks', {}).get(event, []):
-        cmd = h.get('command', '')
-        if '\$CLAUDE_PROJECT_DIR' in cmd or 'plugins/claude/hooks' in cmd:
-            bad.append(cmd)
+    for matcher_group in d.get('hooks', {}).get(event, []):
+        for h in matcher_group.get('hooks', []):
+            cmd = h.get('command', '')
+            if '\$CLAUDE_PROJECT_DIR' in cmd or 'plugins/claude/hooks' in cmd:
+                bad.append(cmd)
 if bad:
     print('BAD: ' + ', '.join(bad))
 else:
     print('OK')
 " 2>/dev/null || echo "error")
     if [[ "$bad_paths" == "OK" ]]; then
-        check_pass "settings.json hook paths use .claude/hooks/ (not source repo paths)"
+        check_pass "settings.local.json hook paths use .claude/hooks/ (not source repo paths)"
     else
-        check_fail "settings.json has wrong hook paths: $bad_paths"
+        check_fail "settings.local.json has wrong hook paths: $bad_paths"
     fi
 
-    # Check hook paths reference .claude/hooks/ specifically
+    # Check hook entries exist for PreToolUse and PostToolUse
     has_hooks=$(python3 -c "
 import json
-d = json.load(open('$TEST_DIR/.claude/settings.json'))
+d = json.load(open('$TEST_DIR/.claude/settings.local.json'))
 hooks = d.get('hooks', {})
 has_pre = len(hooks.get('PreToolUse', [])) > 0
 has_post = len(hooks.get('PostToolUse', [])) > 0
 print('yes' if has_pre and has_post else 'no')
 " 2>/dev/null || echo "error")
     if [[ "$has_hooks" == "yes" ]]; then
-        check_pass "settings.json has PreToolUse and PostToolUse hook entries"
+        check_pass "settings.local.json has PreToolUse and PostToolUse hook entries"
     else
-        check_fail "settings.json missing hook entries (hooks.json not merged)"
+        check_fail "settings.local.json missing hook entries (hooks.json not merged)"
     fi
 else
-    check_fail ".claude/settings.json does not exist"
+    check_fail ".claude/settings.local.json does not exist"
 fi
 
-# --- .claude/hooks/block-destructive.sh ---
+# --- Global settings template check ---
+echo " Global template:"
+if grep -q 'CLAUDE_PROJECT_DIR' "$REPO_ROOT/plugins/claude/templates/settings/settings-template.json" 2>/dev/null; then
+    check_fail "settings-template.json contains \$CLAUDE_PROJECT_DIR (should use ~/.claude/hooks/)"
+else
+    check_pass "settings-template.json uses resolved paths (no \$CLAUDE_PROJECT_DIR)"
+fi
+
+# --- .claude/hooks/ ---
 echo " Hooks:"
 if [[ -f "$TEST_DIR/.claude/hooks/block-destructive.sh" ]]; then
     check_pass ".claude/hooks/block-destructive.sh exists"
@@ -264,6 +275,17 @@ if [[ -f "$TEST_DIR/.claude/hooks/block-destructive.sh" ]]; then
     fi
 else
     check_fail ".claude/hooks/block-destructive.sh does not exist"
+fi
+
+if [[ -f "$TEST_DIR/.claude/hooks/post-tool-format.py" ]]; then
+    check_pass ".claude/hooks/post-tool-format.py exists"
+    if [[ -x "$TEST_DIR/.claude/hooks/post-tool-format.py" ]]; then
+        check_pass ".claude/hooks/post-tool-format.py is executable"
+    else
+        check_fail ".claude/hooks/post-tool-format.py is not executable"
+    fi
+else
+    check_fail ".claude/hooks/post-tool-format.py does not exist"
 fi
 
 # --- .claude/claude-hooks.conf ---
