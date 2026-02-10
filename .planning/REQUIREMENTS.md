@@ -93,9 +93,9 @@ All 32 v2.0 requirements delivered across phases 4-9. See MILESTONES.md for summ
 
 ### Hook Path Resolution
 
-- [ ] **PATH-01**: Global Claude hooks use absolute paths to `~/.claude/hooks/` (symlinks to dotconfigs repo)
-- [ ] **PATH-02**: Project Claude hooks use relative `.claude/hooks/` paths (resolved relative to project root)
-- [ ] **PATH-03**: Deploy bakes all paths at deploy time — no unresolved `$CLAUDE_PROJECT_DIR` variables in generated files
+- [x] **PATH-01**: Global Claude hooks use absolute paths to `~/.claude/hooks/` (symlinks to dotconfigs repo)
+- [x] **PATH-02**: Project Claude hooks use relative `.claude/hooks/` paths (resolved relative to project root)
+- [x] **PATH-03**: Deploy bakes all paths at deploy time — no unresolved `$CLAUDE_PROJECT_DIR` variables in generated files
 
 ### JSON Configuration
 
@@ -172,9 +172,9 @@ All 32 v2.0 requirements delivered across phases 4-9. See MILESTONES.md for summ
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PATH-01 | Phase 10 | Pending |
-| PATH-02 | Phase 10 | Pending |
-| PATH-03 | Phase 10 | Pending |
+| PATH-01 | Phase 10 | Complete |
+| PATH-02 | Phase 10 | Complete |
+| PATH-03 | Phase 10 | Complete |
 | CONF-05 | Phase 11 | Pending |
 | CONF-06 | Phase 11 | Pending |
 | CONF-07 | Phase 11 | Pending |

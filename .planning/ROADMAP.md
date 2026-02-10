@@ -12,7 +12,7 @@ Phase numbering continues from v2.0 (phases 4-9 complete).
 - Integer phases (10, 11, 12, 13, 14): Planned milestone work
 - Decimal phases (11.1, 11.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 10: Hook Path Resolution** - Fix global hooks to use absolute paths, project hooks to use relative paths, bake all paths at deploy time
+- [x] **Phase 10: Hook Path Resolution** - Fix global hooks to use absolute paths, project hooks to use relative paths, bake all paths at deploy time
 - [ ] **Phase 11: JSON Config Foundation** - JSON schema, global + project config.json, .dotconfigs/ directory, jq dependency
 - [ ] **Phase 12: Wizard Refactor** - Wizards write JSON config, deploy reads JSON independently, adapt existing wizards
 - [ ] **Phase 13: CLI Restructure + Per-Module Scope** - Merge wizard+deploy commands, add flags, per-module scope as config
@@ -32,7 +32,7 @@ Phase numbering continues from v2.0 (phases 4-9 complete).
 **Plans**: 1 plan
 
 Plans:
-- [ ] 10-01-PLAN.md -- Fix template paths, deploy-time resolution, regenerate settings, update tests
+- [x] 10-01-PLAN.md -- Fix template paths, deploy-time resolution, regenerate settings, update tests
 
 ### Phase 11: JSON Config Foundation
 **Goal**: Both global and project configuration stored as JSON with a versioned schema, replacing .env as the primary config format
@@ -106,7 +106,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Hook Path Resolution | 0/1 | Planned | - |
+| 10. Hook Path Resolution | 1/1 | Complete | 2026-02-10 |
 | 11. JSON Config Foundation | 0/0 | Not started | - |
 | 12. Wizard Refactor | 0/0 | Not started | - |
 | 13. CLI Restructure + Per-Module Scope | 0/0 | Not started | - |
