@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 ## Current Position
 
 Phase: 10 (Hook Path Resolution) -- first of 5 v3.0 phases (10-14)
-Plan: None yet
-Status: Ready to plan
-Last activity: 2026-02-10 -- v3.0 roadmap created
+Plan: 01 of 1 in phase
+Status: Phase complete
+Last activity: 2026-02-10 -- Completed 10-01-PLAN.md
 
-Progress: ░░░░░░░░░░░░░░░░ 0%
+Progress: █░░░░░░░░░░░░░░░ 6.25% (1/16 plans)
 
 ## Performance Metrics
 
@@ -29,8 +29,9 @@ Progress: ░░░░░░░░░░░░░░░░ 0%
 - Average duration: 2.6min
 
 **v3.0:**
-- Total plans completed: 0
-- Total execution time: 0min
+- Total plans completed: 1
+- Total execution time: 2min
+- Average duration: 2.0min
 
 ## Accumulated Context
 
@@ -54,6 +55,11 @@ Decisions logged in PROJECT.md Key Decisions table.
 - Bash 3.2 compatibility (macOS requirement)
 - File-level symlinks for GSD coexistence
 
+**Phase 10 decisions:**
+- Global hooks use ~/.claude/hooks/ (absolute) vs project hooks use .claude/hooks/ (relative)
+- Template contains final paths, sed provides safety net for drift
+- settings.json stays gitignored (user-editable assembled file)
+
 ### Pending Todos
 
 - [ ] **Architecture**: Rethink global vs project-level interaction model -- PRIMARY v3.0 DRIVER
@@ -61,11 +67,14 @@ Decisions logged in PROJECT.md Key Decisions table.
 
 ### Blockers/Concerns
 
+**Resolved:**
+- Global hooks only work from dotconfigs repo -- FIXED in 10-01 (now use ~/.claude/hooks/)
+
 **Active:**
-- Global hooks only work from dotconfigs repo -- `$CLAUDE_PROJECT_DIR` resolves to CWD (Phase 10 fixes this)
+None
 
 ## Session Continuity
 
-Last session: 2026-02-10
-Stopped at: v3.0 roadmap created, ready to plan Phase 10
+Last session: 2026-02-10T16:50:11Z
+Stopped at: Completed 10-01-PLAN.md (Phase 10 complete)
 Resume file: None
