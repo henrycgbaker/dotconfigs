@@ -32,7 +32,8 @@ dotconfigs — Unified configuration management
 Usage:
   dotconfigs setup                              Initialize tool (PATH symlinks)
   dotconfigs global-configs <plugin>            Configure plugin defaults (.env)
-  dotconfigs project-init [plugin] <path>        Scaffold per-project config
+  dotconfigs project-init <path>                Scaffold per-project config
+  dotconfigs project <path> [options]           Deploy per-project configuration
   dotconfigs deploy [group] [options]           Deploy configuration to filesystem
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
@@ -43,6 +44,8 @@ Commands:
   setup           Initialize dotconfigs tool (one-time setup)
   global-configs  Interactive wizard to configure plugin defaults (.env)
   project-init    Scaffold per-project configuration (alias: project-configs)
+  project         Deploy per-project configuration from .dotconfigs/project.json
+                  Options: --force, --dry-run
   deploy          Deploy configuration from global.json
                   Options: --force, --dry-run
                   Without group: deploys all groups
@@ -53,7 +56,8 @@ Commands:
 Examples:
   dotconfigs setup                      Initialize dotconfigs
   dotconfigs global-configs claude      Configure Claude defaults
-  dotconfigs project-init claude .      Scaffold Claude config for project
+  dotconfigs project-init .             Scaffold project config
+  dotconfigs project .                  Deploy project configuration
   dotconfigs deploy                     Deploy all configurations
   dotconfigs deploy git                 Deploy git configuration only
   dotconfigs deploy --dry-run           Preview all deployments
@@ -116,24 +120,45 @@ EOF
 dotconfigs project-init — Scaffold per-project configuration
 
 Usage:
-  dotconfigs project-init [plugin] <path>
+  dotconfigs project-init <path>
 
 Description:
-  Scaffolds per-project configuration files for the specified plugin.
-  These override global defaults from .env for specific projects.
-  Without a plugin name, runs project setup for all plugins.
-  Requires a git repository at the target path.
+  Creates .dotconfigs/project.json at the target project path.
+  The config file specifies which hooks, settings, and files to deploy.
+  Source paths resolve against dotconfigs repo root.
+  Target paths resolve relative to the project root.
+
+  After creating the config, edit it, then run: dotconfigs project <path>
 
 Examples:
-  dotconfigs project-init .              Run all plugin project setup
-  dotconfigs project-init claude .       Run Claude project setup only
-  dotconfigs project-init git /path      Configure git for specific repo
+  dotconfigs project-init .              Create config for current project
+  dotconfigs project-init ~/myrepo       Create config for specific project
 EOF
             ;;
         project)
-            echo "Warning: 'dotconfigs project' is deprecated. Use 'dotconfigs project-init' instead." >&2
-            echo "" >&2
-            show_command_help "project-init"
+            cat <<EOF
+dotconfigs project — Deploy per-project configuration
+
+Usage:
+  dotconfigs project <path> [--dry-run] [--force]
+
+Description:
+  Reads .dotconfigs/project.json from the target project and deploys
+  all configured modules (hooks, settings, etc.).
+  Source paths resolve against dotconfigs repo root.
+  Target paths resolve relative to the project root.
+
+  Auto-excludes .dotconfigs/ in .git/info/exclude.
+
+Options:
+  --dry-run       Preview changes without deploying
+  --force         Overwrite all conflicts without prompting
+
+Examples:
+  dotconfigs project .                   Deploy current project config
+  dotconfigs project ~/myrepo            Deploy specific project config
+  dotconfigs project . --dry-run         Preview deployment
+EOF
             ;;
         deploy)
             cat <<EOF
@@ -476,6 +501,83 @@ cmd_list() {
     done < <(discover_plugins "$PLUGINS_DIR")
 }
 
+cmd_project() {
+    local project_path=""
+    local dry_run="false"
+    local force="false"
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                dry_run="true"
+                shift
+                ;;
+            --force)
+                force="true"
+                shift
+                ;;
+            -*)
+                echo "Error: Unknown option '$1'" >&2
+                echo "Usage: dotconfigs project <path> [--dry-run] [--force]" >&2
+                exit 1
+                ;;
+            *)
+                if [[ -z "$project_path" ]]; then
+                    project_path="$1"
+                    shift
+                else
+                    echo "Error: Multiple paths specified" >&2
+                    exit 1
+                fi
+                ;;
+        esac
+    done
+
+    # Require path
+    if [[ -z "$project_path" ]]; then
+        echo "Error: Project path required" >&2
+        echo "Usage: dotconfigs project <path> [--dry-run] [--force]" >&2
+        exit 1
+    fi
+
+    # Resolve to absolute path
+    project_path=$(expand_path "$project_path")
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Invalid path: $project_path" >&2
+        exit 1
+    fi
+
+    # Validate git repo
+    if ! validate_git_repo "$project_path"; then
+        echo "Error: Not a git repository: $project_path" >&2
+        echo "Initialize with: git init" >&2
+        exit 1
+    fi
+
+    # Check for project.json
+    local config_file="$project_path/.dotconfigs/project.json"
+    if [[ ! -f "$config_file" ]]; then
+        echo "Error: No .dotconfigs/project.json found at $project_path" >&2
+        echo "Run: dotconfigs project-init $project_path" >&2
+        exit 1
+    fi
+
+    # Deploy from JSON
+    deploy_from_json "$config_file" "$SCRIPT_DIR" "" "$dry_run" "$force" "$project_path"
+
+    # Auto-exclude .dotconfigs/ in .git/info/exclude (unless dry-run)
+    if [[ "$dry_run" != "true" ]]; then
+        local exclude_file="$project_path/.git/info/exclude"
+        if ! grep -qxF ".dotconfigs/" "$exclude_file" 2>/dev/null; then
+            mkdir -p "$(dirname "$exclude_file")"
+            echo ".dotconfigs/" >> "$exclude_file"
+            echo ""
+            echo "Added .dotconfigs/ to .git/info/exclude"
+        fi
+    fi
+}
+
 cmd_project_configs() {
     local plugin_filter=""
     local project_path=""
@@ -584,9 +686,7 @@ main() {
             cmd_project_configs "${@:2}"
             ;;
         project)
-            echo "Warning: 'dotconfigs project' is deprecated. Use 'dotconfigs project-init'." >&2
-            echo "" >&2
-            cmd_project_configs "${@:2}"
+            cmd_project "${@:2}"
             ;;
         deploy)
             cmd_deploy "${@:2}"

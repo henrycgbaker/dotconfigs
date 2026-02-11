@@ -258,13 +258,14 @@ deploy_module() {
 }
 
 # Main deployment entry point
-# Args: config_file, dotconfigs_root, [group_key], [dry_run], [force]
+# Args: config_file, dotconfigs_root, [group_key], [dry_run], [force], [project_root]
 deploy_from_json() {
     local config_file="$1"
     local dotconfigs_root="$2"
     local group_key="${3:-}"
     local dry_run="${4:-false}"
     local force="${5:-false}"
+    local project_root="${6:-}"
     local interactive_mode
     local modules_data
     local line
@@ -324,6 +325,10 @@ deploy_from_json() {
 
     # Deploy each module
     while IFS=$'\t' read -r source target method include_csv; do
+        # If project_root is set, resolve relative targets against it
+        if [[ -n "$project_root" && "$target" != /* && "$target" != ~* ]]; then
+            target="$project_root/$target"
+        fi
         deploy_module "$source" "$target" "$method" "$include_csv" "$dotconfigs_root" "$dry_run" "$interactive_mode"
     done <<< "$modules_data"
 
