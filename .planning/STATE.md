@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 11 (JSON Config + Core Deploy) — second of 4 v3.0 phases (10-13)
-Plan: 11-01 of 4 (JSON deployment engine)
-Status: Plan 01 complete, in progress
-Last activity: 2026-02-11 — Completed 11-01-PLAN.md (JSON deployment engine)
+Plan: 11-02 of 4 (CLI deploy integration)
+Status: Plan 02 complete, in progress
+Last activity: 2026-02-11 — Completed 11-02-PLAN.md (CLI deploy integration)
 
-Progress: █████░░░░░░░░░░░ 25% (1/4 phases)
+Progress: ██████░░░░░░░░░░ 50% (2/4 phases)
 
 ## Performance Metrics
 
@@ -27,8 +27,8 @@ Progress: █████░░░░░░░░░░░ 25% (1/4 phases)
 - Total execution time: ~75min
 
 **v3.0:**
-- Total plans completed: 2
-- Total execution time: 4min
+- Total plans completed: 3
+- Total execution time: 6min
 
 ## Accumulated Context
 
@@ -45,6 +45,9 @@ Decisions logged in PROJECT.md Key Decisions table.
 - VS Code plugin added to v3 scope
 - Shell plugin deferred to v4+
 - jq dependency required
+- Group argument maps to top-level keys in global.json (11-02)
+- No validation that group exists - jq returns empty for missing keys (11-02)
+- Old plugin deploy scripts preserved for status/list commands until Phase 12 (11-02)
 
 **Carrying forward from v2.0:**
 - Plugin architecture (plugins/claude/, plugins/git/, shared lib/)
@@ -55,8 +58,8 @@ Decisions logged in PROJECT.md Key Decisions table.
 ### Pending Todos
 
 - [x] **Phase 11 Plan 01**: JSON deployment engine (complete)
-- [ ] **Phase 11 Plan 02**: CLI deploy command integration
-- [ ] **Phase 11 Plan 03**: Project.json scaffolding
+- [x] **Phase 11 Plan 02**: CLI deploy command integration (complete)
+- [ ] **Phase 11 Plan 03**: Project.json scaffolding (in parallel - different agent)
 - [ ] **Phase 11 Plan 04**: Global/project deploy workflows
 - [ ] **Phase 12**: VS Code plugin + .env migration + CLI cleanup
 - [ ] **Phase 13**: Documentation
@@ -78,6 +81,6 @@ Wizard code (setup.sh files, lib/wizard.sh) preserved in codebase — shelved, n
 
 ## Session Continuity
 
-Last session: 2026-02-11
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-02-11 14:30:03 UTC
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
