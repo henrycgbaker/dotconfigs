@@ -167,7 +167,7 @@ Plans:
 - [x] 11-01-PLAN.md -- Generic JSON deploy engine (lib/deploy.sh)
 - [x] 11-02-PLAN.md -- CLI deploy rewrite to use global.json
 - [x] 11-03-PLAN.md -- Project deploy and project-init commands
-- [ ] 11-04-PLAN.md -- Gap closure: generate project.json from global.json (SSOT)
+- [x] 11-04-PLAN.md -- Gap closure: generate project.json from global.json (SSOT)
 
 ### Phase 12: VS Code Plugin + Migration + CLI
 **Goal**: Add VS Code config management, migrate from .env, clean up CLI for new model
@@ -202,6 +202,6 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Hook Path Resolution | 1/1 | Complete | 2026-02-10 |
-| 11. JSON Config + Core Deploy | 3/4 | Gap closure | 2026-02-11 |
+| 11. JSON Config + Core Deploy | 4/4 | Complete | 2026-02-11 |
 | 12. VS Code + Migration + CLI | 0/0 | Not started | - |
 | 13. Documentation | 0/0 | Not started | - |
