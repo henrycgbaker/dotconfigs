@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 11 (JSON Config + Core Deploy) — second of 4 v3.0 phases (10-13)
-Plan: 11-02 of 4 (CLI deploy integration)
-Status: Plan 02 complete, in progress
-Last activity: 2026-02-11 — Completed 11-02-PLAN.md (CLI deploy integration)
+Plan: 11-03 of 4 (Project JSON config)
+Status: Plan 03 complete, in progress
+Last activity: 2026-02-11 — Completed 11-03-PLAN.md (Project JSON config)
 
-Progress: ██████░░░░░░░░░░ 50% (2/4 phases)
+Progress: ███████░░░░░░░░░ 75% (3/4 phase plans)
 
 ## Performance Metrics
 
@@ -28,7 +28,7 @@ Progress: ██████░░░░░░░░░░ 50% (2/4 phases)
 
 **v3.0:**
 - Total plans completed: 3
-- Total execution time: 6min
+- Total execution time: 9min
 
 ## Accumulated Context
 
@@ -48,6 +48,9 @@ Decisions logged in PROJECT.md Key Decisions table.
 - Group argument maps to top-level keys in global.json (11-02)
 - No validation that group exists - jq returns empty for missing keys (11-02)
 - Old plugin deploy scripts preserved for status/list commands until Phase 12 (11-02)
+- project_root parameter enables relative target path resolution for per-project configs (11-03)
+- .dotconfigs/ auto-excluded in .git/info/exclude to keep projects clean (11-03)
+- Removed plugin filter from project-init — JSON config controls what's deployed (11-03)
 
 **Carrying forward from v2.0:**
 - Plugin architecture (plugins/claude/, plugins/git/, shared lib/)
@@ -59,7 +62,7 @@ Decisions logged in PROJECT.md Key Decisions table.
 
 - [x] **Phase 11 Plan 01**: JSON deployment engine (complete)
 - [x] **Phase 11 Plan 02**: CLI deploy command integration (complete)
-- [ ] **Phase 11 Plan 03**: Project.json scaffolding (in parallel - different agent)
+- [x] **Phase 11 Plan 03**: Project JSON config (complete)
 - [ ] **Phase 11 Plan 04**: Global/project deploy workflows
 - [ ] **Phase 12**: VS Code plugin + .env migration + CLI cleanup
 - [ ] **Phase 13**: Documentation
@@ -71,8 +74,10 @@ Decisions logged in PROJECT.md Key Decisions table.
 - Over-engineered wizard-driven deployment — RESOLVED by v3 simplification
 
 **Active:**
-- Project scaffolding (project.sh) has 3 critical bugs — will be replaced by project.json mechanism in Phase 11
 - .env quoting bugs — will be eliminated by JSON migration in Phase 12
+
+**Fixed in 11-03:**
+- Project scaffolding (project.sh) bugs — replaced by JSON-based project config commands
 
 ### Backup Reference
 
@@ -81,6 +86,6 @@ Wizard code (setup.sh files, lib/wizard.sh) preserved in codebase — shelved, n
 
 ## Session Continuity
 
-Last session: 2026-02-11 14:30:03 UTC
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-02-11 22:38:28 UTC
+Stopped at: Completed 11-03-PLAN.md
 Resume file: None
