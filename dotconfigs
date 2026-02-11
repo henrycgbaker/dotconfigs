@@ -628,14 +628,78 @@ cmd_project_init() {
     # Create .dotconfigs directory
     mkdir -p "$project_path/.dotconfigs"
 
-    # Copy template and strip _comment field
+    # Generate project.json dynamically from global.json
     if ! command -v jq &>/dev/null; then
         echo "Error: jq is required but not installed." >&2
         echo "Install with: brew install jq" >&2
         exit 1
     fi
 
-    jq 'del(._comment)' "$SCRIPT_DIR/project.json.example" > "$config_file"
+    # Use jq to transform global.json into project.json with project-specific overrides
+    jq -n --slurpfile global "$SCRIPT_DIR/global.json" '
+      # Project-specific overrides for known groups
+      {
+        "claude": {
+          "hooks": {
+            "source": "plugins/claude/hooks",
+            "target": ".claude/hooks",
+            "method": "symlink",
+            "include": ["block-destructive.sh"]
+          },
+          "settings": {
+            "source": "plugins/claude/templates/settings/project-template.json",
+            "target": ".claude/settings.json",
+            "method": "copy"
+          }
+        },
+        "git": {
+          "hooks": {
+            "source": "plugins/git/hooks",
+            "target": ".git/hooks",
+            "method": "symlink",
+            "include": ["pre-commit", "commit-msg"]
+          },
+          "exclude-patterns": {
+            "source": "plugins/git/project-exclude-patterns",
+            "target": ".git/info/exclude",
+            "method": "copy"
+          },
+          "gitignore": {
+            "source": "plugins/git/templates/gitignore-default",
+            "target": ".gitignore",
+            "method": "copy"
+          }
+        }
+      } as $overrides |
+
+      # Add any groups from global.json that are NOT in overrides
+      $global[0] as $globalConfig |
+      $overrides + (
+        $globalConfig | to_entries | map(
+          select(.key | in($overrides) | not) |
+          {
+            key: .key,
+            value: (
+              .value | to_entries | map(
+                {
+                  key: .key,
+                  value: (
+                    .value |
+                    # Transform target path from global (absolute/tilde) to project-relative
+                    .target |= (
+                      if startswith("~/") then .[2:]
+                      elif startswith("~") then .[1:]
+                      else .
+                      end
+                    )
+                  )
+                }
+              ) | from_entries
+            )
+          }
+        ) | from_entries
+      )
+    ' > "$config_file"
 
     # Auto-exclude .dotconfigs/ in .git/info/exclude
     local exclude_file="$project_path/.git/info/exclude"
