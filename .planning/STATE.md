@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Single source of truth for all personal dev configuration — one repo, one JSON config, deployed everywhere via symlinks.
-**Current focus:** v3.0 Explicit Config MVP — Phase 10 complete, ready for Phase 11
+**Current focus:** v3.0 Explicit Config MVP — Phase 11 complete, ready for Phase 12
 
 ## Current Position
 
-Phase: 11 (JSON Config + Core Deploy) — second of 4 v3.0 phases (10-13)
-Plan: 11-03 of 4 (Project JSON config)
-Status: Plan 03 complete, in progress
-Last activity: 2026-02-11 — Completed 11-03-PLAN.md (Project JSON config)
+Phase: 12 (VS Code Plugin + Migration + CLI) — third of 4 v3.0 phases (10-13)
+Plan: Not yet planned
+Status: Ready for planning
+Last activity: 2026-02-11 — Phase 11 complete (JSON Config + Core Deploy)
 
-Progress: ███████░░░░░░░░░ 75% (3/4 phase plans)
+Progress: ██████████░░░░░░ 50% (2/4 phases)
 
 ## Performance Metrics
 
@@ -27,8 +27,8 @@ Progress: ███████░░░░░░░░░ 75% (3/4 phase plans)
 - Total execution time: ~75min
 
 **v3.0:**
-- Total plans completed: 3
-- Total execution time: 9min
+- Total plans completed: 4
+- Total execution time: ~11min
 
 ## Accumulated Context
 
@@ -60,10 +60,6 @@ Decisions logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- [x] **Phase 11 Plan 01**: JSON deployment engine (complete)
-- [x] **Phase 11 Plan 02**: CLI deploy command integration (complete)
-- [x] **Phase 11 Plan 03**: Project JSON config (complete)
-- [ ] **Phase 11 Plan 04**: Global/project deploy workflows
 - [ ] **Phase 12**: VS Code plugin + .env migration + CLI cleanup
 - [ ] **Phase 13**: Documentation
 
@@ -72,12 +68,10 @@ Decisions logged in PROJECT.md Key Decisions table.
 **Resolved:**
 - Global hooks only work from dotconfigs repo — FIXED in 10-01
 - Over-engineered wizard-driven deployment — RESOLVED by v3 simplification
+- Project scaffolding (project.sh) bugs — REPLACED by JSON-based project config commands in 11-03
 
 **Active:**
 - .env quoting bugs — will be eliminated by JSON migration in Phase 12
-
-**Fixed in 11-03:**
-- Project scaffolding (project.sh) bugs — replaced by JSON-based project config commands
 
 ### Backup Reference
 
@@ -86,6 +80,6 @@ Wizard code (setup.sh files, lib/wizard.sh) preserved in codebase — shelved, n
 
 ## Session Continuity
 
-Last session: 2026-02-11 22:38:28 UTC
-Stopped at: Completed 11-03-PLAN.md
+Last session: 2026-02-11
+Stopped at: Phase 11 complete, ready for Phase 12
 Resume file: None

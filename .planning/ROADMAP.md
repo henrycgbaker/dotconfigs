@@ -141,7 +141,7 @@ Phase numbering continues from v2.0 (phases 4-9 complete).
 ## Phases
 
 - [x] **Phase 10: Hook Path Resolution** — Fix global hooks to use absolute paths
-- [ ] **Phase 11: JSON Config + Core Deploy** — global.json schema, deploy reads JSON, gitconfig include file, project deploy
+- [x] **Phase 11: JSON Config + Core Deploy** — global.json schema, deploy reads JSON, gitconfig include file, project deploy
 - [ ] **Phase 12: VS Code Plugin + Migration + CLI** — New VS Code plugin, .env→JSON migration, CLI cleanup
 - [ ] **Phase 13: Documentation** — README, schema reference, architecture diagram
 
@@ -155,28 +155,16 @@ Phase numbering continues from v2.0 (phases 4-9 complete).
 Plans:
 - [x] 10-01-PLAN.md — Fix template paths, deploy-time resolution
 
-### Phase 11: JSON Config + Core Deploy
+### Phase 11: JSON Config + Core Deploy (Complete)
 **Goal**: global.json and project.json as the sole configuration mechanism, with deploy reading JSON to symlink files
+**Status**: Complete (2026-02-11)
 **Depends on**: Phase 10
 **Requirements**: CONF-01..08, DEPL-01..07, PROJ-01..04, GITF-01..04
-**Success Criteria** (what must be TRUE):
-  1. `global.json` exists in repo root with source→target module definitions
-  2. `dotconfigs deploy` reads global.json and symlinks all modules to their targets
-  3. `dotconfigs deploy <group>` deploys only modules under that group key
-  4. Directory sources deploy each file individually (not directory symlinks)
-  5. `--dry-run` and `--force` flags work
-  6. `plugins/git/gitconfig` contains identity+workflow+aliases in Git's INI format, symlinked directly to `~/.gitconfig`
-  7. `git config --global` commands write through the symlink back into the repo
-  8. `.dotconfigs/project.json` per-repo works with `dotconfigs project <path>`
-  9. `.dotconfigs/` auto-excluded via `.git/info/exclude`
-  10. `jq` dependency checked with clear error message
-  11. Existing hook/skill/settings deployments preserved (no functionality loss)
-**Plans**: 3 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Generic JSON deploy engine (lib/deploy.sh)
-- [ ] 11-02-PLAN.md — CLI deploy rewrite to use global.json
-- [ ] 11-03-PLAN.md — Project deploy and project-init commands
+- [x] 11-01-PLAN.md — Generic JSON deploy engine (lib/deploy.sh)
+- [x] 11-02-PLAN.md — CLI deploy rewrite to use global.json
+- [x] 11-03-PLAN.md — Project deploy and project-init commands
 
 ### Phase 12: VS Code Plugin + Migration + CLI
 **Goal**: Add VS Code config management, migrate from .env, clean up CLI for new model
@@ -211,6 +199,6 @@ Phases execute in numeric order: 10 → 11 → 12 → 13
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Hook Path Resolution | 1/1 | Complete | 2026-02-10 |
-| 11. JSON Config + Core Deploy | 0/0 | Not started | - |
+| 11. JSON Config + Core Deploy | 3/3 | Complete | 2026-02-11 |
 | 12. VS Code + Migration + CLI | 0/0 | Not started | - |
 | 13. Documentation | 0/0 | Not started | - |
