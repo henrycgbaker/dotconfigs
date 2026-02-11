@@ -135,15 +135,20 @@ dotconfigs project ~/myrepo       # Deploy project hooks + skills
 
 ### dotconfigs setup
 
-One-time initialisation. Scaffolds `global.json` from plugin manifests (if it doesn't exist), creates PATH symlinks for `dotconfigs` and `dots`.
+One-time initialisation. Scaffolds `global.json` from plugin manifests (if it doesn't exist) and creates PATH symlinks for `dotconfigs` and `dots`.
+
+```bash
+dotconfigs setup          # Run once after cloning
+```
 
 ### dotconfigs deploy [group] [--dry-run] [--force]
 
-Deploys configuration from `global.json` to the filesystem via symlinks.
+Deploys configuration from `global.json` to the filesystem via symlinks. Also ensures `dotconfigs` and `dots` are on PATH.
 
 ```bash
-dotconfigs deploy               # Deploy all plugins
+dotconfigs deploy               # Deploy all groups
 dotconfigs deploy claude        # Deploy claude group only
+dotconfigs deploy git           # Deploy git group only
 dotconfigs deploy --dry-run     # Preview without changes
 dotconfigs deploy --force       # Skip conflict prompts
 ```
@@ -154,7 +159,7 @@ Aliases: `global-deploy`
 
 ### dotconfigs project-init [path]
 
-Scaffolds `.dotconfigs/project.json` from plugin manifests (project scope only). Auto-excludes `.dotconfigs/` in `.git/info/exclude`.
+Assembles `.dotconfigs/project.json` from plugin manifests (`.project` sections only). Auto-excludes `.dotconfigs/` in `.git/info/exclude`. Defaults to current directory. Requires a git repository.
 
 ```bash
 dotconfigs project-init .              # Current directory
@@ -162,15 +167,17 @@ dotconfigs project-init ~/myrepo       # Specific repo
 dotconfigs project init ~/myrepo       # Space-separated alias
 ```
 
-The generated `project.json` has pre-populated include lists and empty exclude lists. Edit the exclude lists to skip specific hooks or skills per-project.
+Aliases: `project-configs`, `project init`
+
+The generated `project.json` has pre-populated include lists and empty exclude lists. Edit the exclude lists to skip specific hooks or skills per-project, then deploy with `dotconfigs project`.
 
 ### dotconfigs project [path] [--dry-run] [--force]
 
-Deploys per-project configuration from `.dotconfigs/project.json`. Symlinks hooks, skills, and other modules into the project.
+Deploys per-project configuration from `.dotconfigs/project.json`. Symlinks hooks, skills, and other modules into the project. Respects include/exclude lists. Defaults to current directory. Requires `.dotconfigs/project.json` (run `project-init` first).
 
 ```bash
 dotconfigs project .                   # Deploy current project
-dotconfigs project ~/myrepo --force    # Deploy, skip prompts
+dotconfigs project ~/myrepo --force    # Deploy, skip conflict prompts
 dotconfigs project . --dry-run         # Preview
 ```
 
@@ -180,9 +187,14 @@ Aliases: `project-deploy`
 
 Interactive wizard to configure a plugin. Writes to `.env`. This is the legacy configuration path -- the manifest-based system (`global.json`) is the primary approach.
 
+```bash
+dotconfigs global-configs claude       # Configure Claude via wizard
+dotconfigs global-configs git          # Configure Git via wizard
+```
+
 ### dotconfigs status [plugin]
 
-Shows deployment status with drift detection.
+Shows deployment status with drift detection. Requires `.env` (legacy -- only works for plugins configured via `global-configs` wizard).
 
 **States:**
 - ✓ **Deployed** -- symlink correct
@@ -191,7 +203,17 @@ Shows deployment status with drift detection.
 
 ### dotconfigs list
 
-Lists available plugins with descriptions.
+Lists available plugins and whether they're configured. Checks legacy `.env` variables.
+
+### dotconfigs help [command]
+
+Shows detailed help for a specific command with usage, options, and examples.
+
+```bash
+dotconfigs help                # Overview of all commands
+dotconfigs help deploy         # Detailed help for deploy
+dotconfigs help project-init   # Detailed help for project-init
+```
 
 ## Plugins
 

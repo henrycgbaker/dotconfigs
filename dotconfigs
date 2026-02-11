@@ -31,39 +31,40 @@ show_usage() {
 dotconfigs — Unified configuration management
 
 Usage:
-  dotconfigs setup                              Initialize tool (PATH symlinks)
-  dotconfigs global-configs <plugin>            Configure plugin defaults (.env)
+  dotconfigs setup                              One-time init (PATH + global.json)
+  dotconfigs deploy [group] [options]           Deploy global config to filesystem
   dotconfigs project-init [path]                Scaffold per-project config
   dotconfigs project [path] [options]           Deploy per-project configuration
-  dotconfigs deploy [group] [options]           Deploy configuration to filesystem
+  dotconfigs global-configs <plugin>            Configure plugin via wizard (.env)
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
   dotconfigs help [command]                     Show help for command
-  dotconfigs --help                             Show this help
 
 Commands:
-  setup           Initialize dotconfigs tool (one-time setup)
-  global-configs  Interactive wizard to configure plugin defaults (.env)
-  project-init    Scaffold per-project configuration (alias: project-configs)
-  project         Deploy per-project configuration from .dotconfigs/project.json
-                  Options: --force, --dry-run
-  deploy          Deploy configuration from global.json
+  setup           One-time init: scaffold global.json from manifests, add to PATH
+  deploy          Deploy configuration from global.json (symlinks)
                   Options: --force, --dry-run
                   Without group: deploys all groups
-  status          Check deployment status and drift detection
+                  Aliases: global-deploy
+  project-init    Scaffold .dotconfigs/project.json from plugin manifests
+                  Aliases: project-configs, project init
+  project         Deploy per-project config from .dotconfigs/project.json
+                  Options: --force, --dry-run
+                  Aliases: project-deploy
+  global-configs  Interactive wizard to configure plugin defaults (.env)
+  status          Check deployment status (requires .env)
   list            List all available plugins
   help            Show detailed help for specific command
 
 Examples:
-  dotconfigs setup                      Initialize dotconfigs
-  dotconfigs global-configs claude      Configure Claude defaults
+  dotconfigs setup                      One-time init
+  dotconfigs deploy                     Deploy all global config
+  dotconfigs deploy claude              Deploy claude group only
+  dotconfigs deploy --dry-run           Preview all deployments
   dotconfigs project-init .             Scaffold project config
   dotconfigs project .                  Deploy project configuration
-  dotconfigs deploy                     Deploy all configurations
-  dotconfigs deploy git                 Deploy git configuration only
-  dotconfigs deploy --dry-run           Preview all deployments
-  dotconfigs status                     Show status of all plugins
-  dotconfigs list                       Show all plugins
+  dotconfigs project . --force          Deploy, skip conflict prompts
+  dotconfigs global-configs claude      Configure Claude via wizard
 
 Available plugins:
 EOF
@@ -78,18 +79,18 @@ show_command_help() {
     case "$command" in
         setup)
             cat <<EOF
-dotconfigs setup — Initialize dotconfigs tool
+dotconfigs setup — One-time initialisation
 
 Usage:
   dotconfigs setup
 
 Description:
-  One-time initialization of dotconfigs.
-  Configures deploy target directory and adds tool to PATH.
-  Run this once before configuring individual plugins.
+  Scaffolds global.json from plugin manifests (if it doesn't exist).
+  Creates PATH symlinks for dotconfigs and dots.
+  Run once after cloning, then use 'dotconfigs deploy' to apply.
 
 Example:
-  dotconfigs setup    Initialize dotconfigs
+  dotconfigs setup
 EOF
             ;;
         global-configs)
@@ -123,17 +124,23 @@ dotconfigs project-init — Scaffold per-project configuration
 Usage:
   dotconfigs project-init [path]
 
-Description:
-  Creates .dotconfigs/project.json at the target project path.
-  The config file specifies which hooks, settings, and files to deploy.
-  Source paths resolve against dotconfigs repo root.
-  Target paths resolve relative to the project root.
+Aliases:
+  dotconfigs project-configs [path]
+  dotconfigs project init [path]
 
-  After creating the config, edit it, then run: dotconfigs project <path>
+Description:
+  Assembles .dotconfigs/project.json from plugin manifests (.project sections).
+  Pre-populates include lists, empty exclude lists for customisation.
+  Auto-excludes .dotconfigs/ in .git/info/exclude.
+  Defaults to current directory if no path given.
+  Requires a git repository.
+
+  After creating the config, edit exclude lists, then run: dotconfigs project <path>
 
 Examples:
-  dotconfigs project-init .              Create config for current project
-  dotconfigs project-init ~/myrepo       Create config for specific project
+  dotconfigs project-init .              Current directory
+  dotconfigs project-init ~/myrepo       Specific project
+  dotconfigs project init ~/myrepo       Space-separated alias
 EOF
             ;;
         project)
@@ -143,34 +150,40 @@ dotconfigs project — Deploy per-project configuration
 Usage:
   dotconfigs project [path] [--dry-run] [--force]
 
-Description:
-  Reads .dotconfigs/project.json from the target project and deploys
-  all configured modules (hooks, settings, etc.).
-  Source paths resolve against dotconfigs repo root.
-  Target paths resolve relative to the project root.
+Aliases:
+  dotconfigs project-deploy [path] [options]
 
-  Auto-excludes .dotconfigs/ in .git/info/exclude.
+Description:
+  Reads .dotconfigs/project.json and deploys all configured modules
+  (hooks, skills, etc.) as symlinks into the project.
+  Respects include/exclude lists per module.
+  Defaults to current directory if no path given.
+  Requires a git repository with .dotconfigs/project.json.
 
 Options:
   --dry-run       Preview changes without deploying
   --force         Overwrite all conflicts without prompting
 
 Examples:
-  dotconfigs project .                   Deploy current project config
-  dotconfigs project ~/myrepo            Deploy specific project config
+  dotconfigs project .                   Deploy current project
+  dotconfigs project ~/myrepo --force    Deploy, skip conflict prompts
   dotconfigs project . --dry-run         Preview deployment
 EOF
             ;;
         deploy)
             cat <<EOF
-dotconfigs deploy — Deploy configuration to filesystem
+dotconfigs deploy — Deploy global configuration
 
 Usage:
   dotconfigs deploy [group] [options]
 
+Aliases:
+  dotconfigs global-deploy [group] [options]
+
 Description:
-  Deploys configuration from global.json to the filesystem.
+  Deploys configuration from global.json to the filesystem via symlinks.
   Without a group name, deploys all groups.
+  Also ensures dotconfigs and dots are on PATH.
 
 Options:
   --force          Overwrite all conflicts without prompting
@@ -180,7 +193,7 @@ Conflicts (files not managed by dotconfigs) prompt for resolution:
 overwrite, skip, backup, or diff. Use --force to skip prompts.
 
 Examples:
-  dotconfigs deploy                      Deploy all groups (prompts on conflicts)
+  dotconfigs deploy                      Deploy all groups
   dotconfigs deploy claude               Deploy claude group only
   dotconfigs deploy git                  Deploy git group only
   dotconfigs deploy --force              Deploy all, overwrite conflicts
@@ -226,7 +239,7 @@ EOF
         *)
             echo "Error: Unknown command '$command'" >&2
             echo "" >&2
-            echo "Available commands: setup, global-configs, project-init, deploy, status, list, help" >&2
+            echo "Available commands: setup, deploy, project-init, project, global-configs, status, list, help" >&2
             return 1
             ;;
     esac
