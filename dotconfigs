@@ -578,18 +578,10 @@ cmd_project() {
     fi
 }
 
-cmd_project_configs() {
-    local plugin_filter=""
+cmd_project_init() {
     local project_path=""
 
-    # Parse arguments: could be "project-init ." or "project-init claude ."
-    # If first arg is a plugin name, treat it as filter
-    if [[ $# -gt 0 ]] && plugin_exists "$1"; then
-        plugin_filter="$1"
-        shift
-    fi
-
-    # If no path argument, try CWD detection
+    # Parse argument
     if [[ $# -eq 0 ]]; then
         # Check if CWD is the dotconfigs repo itself
         if [[ "$(pwd)" -ef "$SCRIPT_DIR" ]]; then
@@ -605,14 +597,8 @@ cmd_project_configs() {
             exit 1
         fi
 
-        # Confirm with user
-        echo "Detected project: $(basename "$PWD") ($PWD)"
-        if wizard_yesno "Use this directory?" "y"; then
-            project_path="$PWD"
-        else
-            echo "Specify path: dotconfigs project-init <path>" >&2
-            exit 1
-        fi
+        # Use CWD
+        project_path="$PWD"
     else
         project_path="$1"
         shift
@@ -632,36 +618,37 @@ cmd_project_configs() {
         exit 1
     fi
 
-    # Execute project setup
-    if [[ -n "$plugin_filter" ]]; then
-        # Single plugin mode
-        if [[ ! -f "$PLUGINS_DIR/$plugin_filter/project.sh" ]]; then
-            echo "Error: Plugin '$plugin_filter' does not support project setup" >&2
-            exit 1
-        fi
-
-        source "$PLUGINS_DIR/$plugin_filter/project.sh"
-        "plugin_${plugin_filter}_project" "$project_path"
-    else
-        # All plugins mode
-        # Collect plugins into array first to avoid stdin redirection
-        local project_plugins=()
-        while IFS= read -r plugin; do
-            if [[ -f "$PLUGINS_DIR/$plugin/project.sh" ]]; then
-                project_plugins+=("$plugin")
-            fi
-        done < <(discover_plugins "$PLUGINS_DIR")
-
-        if [[ ${#project_plugins[@]} -eq 0 ]]; then
-            echo "No plugins with project setup found" >&2
-            exit 1
-        fi
-
-        for plugin in "${project_plugins[@]}"; do
-            source "$PLUGINS_DIR/$plugin/project.sh"
-            "plugin_${plugin}_project" "$project_path"
-        done
+    # Check if project.json already exists
+    local config_file="$project_path/.dotconfigs/project.json"
+    if [[ -f "$config_file" ]]; then
+        echo "Project config already exists at $config_file"
+        exit 0
     fi
+
+    # Create .dotconfigs directory
+    mkdir -p "$project_path/.dotconfigs"
+
+    # Copy template and strip _comment field
+    if ! command -v jq &>/dev/null; then
+        echo "Error: jq is required but not installed." >&2
+        echo "Install with: brew install jq" >&2
+        exit 1
+    fi
+
+    jq 'del(._comment)' "$SCRIPT_DIR/project.json.example" > "$config_file"
+
+    # Auto-exclude .dotconfigs/ in .git/info/exclude
+    local exclude_file="$project_path/.git/info/exclude"
+    if ! grep -qxF ".dotconfigs/" "$exclude_file" 2>/dev/null; then
+        mkdir -p "$(dirname "$exclude_file")"
+        echo ".dotconfigs/" >> "$exclude_file"
+    fi
+
+    echo "Created .dotconfigs/project.json"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Edit $config_file"
+    echo "  2. Run: dotconfigs project $project_path"
 }
 
 main() {
@@ -683,7 +670,7 @@ main() {
             cmd_global_configs "${@:2}"
             ;;
         project-configs|project-init)
-            cmd_project_configs "${@:2}"
+            cmd_project_init "${@:2}"
             ;;
         project)
             cmd_project "${@:2}"
