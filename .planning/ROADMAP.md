@@ -2,112 +2,215 @@
 
 ## Overview
 
-Targeted architecture rethink for dotconfigs -- fix the blocking hook path bug, migrate from .env to JSON config, decouple wizards from deploy, streamline the CLI, and add per-module scope. Not a rewrite: the v2.0 plugin architecture is sound; v3.0 fixes the deployment model on top of it. Shell plugin deferred to v4.0.
+Replace the wizard-driven .env deployment model with explicit JSON config. Every module is a source→target pair. The tool is a generic file deployer — it doesn't know about Claude, Git, or VS Code. Wizards deferred to v4.
 
 Phase numbering continues from v2.0 (phases 4-9 complete).
 
+## Config Schema
+
+```jsonc
+// global.json — in dotconfigs repo root
+//
+// "source" paths are ALWAYS relative to the dotconfigs repo root.
+// "target" paths are absolute (tilde-expanded) for global.json.
+// "method": always specify — "symlink", "copy", or "append". Helps debugging.
+// "include" filters files when source is a directory. Omit to deploy all files.
+// Top-level keys (claude, git, etc.) are arbitrary labels — the tool just
+// finds objects with "source" + "target" and deploys them.
+//
+// See: global.json (actual config) and project.json.example (reference)
+{
+  "claude": {
+    "hooks": {
+      "source": "plugins/claude/hooks",
+      "target": "~/.claude/hooks",
+      "method": "symlink",
+      "include": ["block-destructive.sh", "post-tool-format.py"]
+    },
+    "settings": {
+      "source": "plugins/claude/settings.json",
+      "target": "~/.claude/settings.json",
+      "method": "symlink"
+    },
+    "skills": {
+      "source": "plugins/claude/commands",
+      "target": "~/.claude/commands",
+      "method": "symlink",
+      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md"]
+    },
+    "claude-md": {
+      "source": "plugins/claude/CLAUDE.md",
+      "target": "~/.claude/CLAUDE.md",
+      "method": "symlink"
+    }
+  },
+  "git": {
+    "hooks": {
+      "source": "plugins/git/hooks",
+      "target": "~/.dotconfigs/git-hooks",
+      "method": "symlink",
+      "include": ["pre-commit", "commit-msg", "prepare-commit-msg", "pre-push"]
+    },
+    "config": {
+      "source": "plugins/git/gitconfig",
+      "target": "~/.gitconfig",
+      "method": "symlink"
+      // Git's native INI format. Direct symlink — no intermediate.
+      // `git config --global` writes through the symlink back into the repo.
+    },
+    "global-excludes": {
+      "source": "plugins/git/global-excludes",
+      "target": "~/.config/git/ignore",
+      "method": "symlink"
+      // Referenced by core.excludesFile in gitconfig. Applies to all repos.
+    }
+  },
+  "vscode": {
+    "settings": {
+      "source": "plugins/vscode/settings.json",
+      "target": "~/Library/Application Support/Code/User/settings.json",
+      "method": "symlink"
+    },
+    "keybindings": {
+      "source": "plugins/vscode/keybindings.json",
+      "target": "~/Library/Application Support/Code/User/keybindings.json",
+      "method": "symlink"
+    },
+    "snippets": {
+      "source": "plugins/vscode/snippets",
+      "target": "~/Library/Application Support/Code/User/snippets",
+      "method": "symlink"
+    }
+  },
+  "shell": {
+    "init": {
+      "source": "plugins/shell/init.zsh",
+      "target": "~/.dotconfigs/shell/init.zsh",
+      "method": "symlink"
+      // User adds `source ~/.dotconfigs/shell/init.zsh` to ~/.zshrc once.
+    },
+    "aliases": {
+      "source": "plugins/shell/aliases.zsh",
+      "target": "~/.dotconfigs/shell/aliases.zsh",
+      "method": "symlink"
+    }
+  }
+}
+
+// .dotconfigs/project.json — in each project
+//
+// Same schema as global.json.
+// "source" paths are ALWAYS relative to the dotconfigs repo root (tool resolves).
+// "target" paths are relative to the project root (where .dotconfigs/ lives).
+// See: project.json.example in repo root for a working example.
+{
+  "claude": {
+    "hooks": {
+      "source": "plugins/claude/hooks",
+      "target": ".claude/hooks",
+      "method": "symlink",
+      "include": ["block-destructive.sh"]
+    },
+    "settings": {
+      "source": "plugins/claude/templates/settings/project-template.json",
+      "target": ".claude/settings.json",
+      "method": "copy"  // copy — project settings are user-editable after first deploy
+    }
+  },
+  "git": {
+    "hooks": {
+      "source": "plugins/git/hooks",
+      "target": ".git/hooks",
+      "method": "symlink",
+      "include": ["pre-commit", "commit-msg"]
+    },
+    "exclude-patterns": {
+      "source": "plugins/git/project-exclude-patterns",
+      "target": ".git/info/exclude",
+      "method": "copy"
+    },
+    "gitignore": {
+      "source": "plugins/git/templates/gitignore-default",
+      "target": ".gitignore",
+      "method": "copy"  // copy — .gitignore is tracked in git and project-specific
+    }
+  }
+}
+```
+
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (10, 11, 12, 13, 14): Planned milestone work
-- Decimal phases (11.1, 11.2): Urgent insertions (marked with INSERTED)
-
-- [x] **Phase 10: Hook Path Resolution** - Fix global hooks to use absolute paths, project hooks to use relative paths, bake all paths at deploy time
-- [ ] **Phase 11: JSON Config Foundation** - JSON schema, global + project config.json, .dotconfigs/ directory, jq dependency
-- [ ] **Phase 12: Wizard Refactor** - Wizards write JSON config, deploy reads JSON independently, adapt existing wizards
-- [ ] **Phase 13: CLI Restructure + Per-Module Scope** - Merge wizard+deploy commands, add flags, per-module scope as config
-- [ ] **Phase 14: Migration + Documentation** - .env-to-JSON migration helper, beginner-friendly README, architecture diagram
+- [x] **Phase 10: Hook Path Resolution** — Fix global hooks to use absolute paths
+- [ ] **Phase 11: JSON Config + Core Deploy** — global.json schema, deploy reads JSON, gitconfig include file, project deploy
+- [ ] **Phase 12: VS Code Plugin + Migration + CLI** — New VS Code plugin, .env→JSON migration, CLI cleanup
+- [ ] **Phase 13: Documentation** — README, schema reference, architecture diagram
 
 ## Phase Details
 
-### Phase 10: Hook Path Resolution
-**Goal**: Global Claude hooks work correctly in any project directory, not just the dotconfigs repo
-**Depends on**: Nothing (independent blocking bug fix)
+### Phase 10: Hook Path Resolution (Complete)
+**Goal**: Global Claude hooks work correctly in any project directory
+**Status**: Complete (2026-02-10)
 **Requirements**: PATH-01, PATH-02, PATH-03
-**Success Criteria** (what must be TRUE):
-  1. Running `claude` in any project directory triggers global hooks from `~/.claude/hooks/` (symlinked to dotconfigs repo)
-  2. Project-level hooks use relative `.claude/hooks/` paths that resolve correctly within the project
-  3. No `$CLAUDE_PROJECT_DIR` variables appear in any deployed settings.json or hook references -- all paths are baked at deploy time
-  4. Existing hook functionality (block-destructive, post-tool-format, PreToolUse guard) is preserved
-**Plans**: 1 plan
 
 Plans:
-- [x] 10-01-PLAN.md -- Fix template paths, deploy-time resolution, regenerate settings, update tests
+- [x] 10-01-PLAN.md — Fix template paths, deploy-time resolution
 
-### Phase 11: JSON Config Foundation
-**Goal**: Both global and project configuration stored as JSON with a versioned schema, replacing .env as the primary config format
-**Depends on**: Phase 10 (hook paths must be correct before config references them)
-**Requirements**: CONF-05, CONF-06, CONF-07, CONF-08, CONF-10, PROJ-01, PROJ-02, PROJ-03
+### Phase 11: JSON Config + Core Deploy
+**Goal**: global.json and project.json as the sole configuration mechanism, with deploy reading JSON to symlink files
+**Depends on**: Phase 10
+**Requirements**: CONF-01..08, DEPL-01..07, PROJ-01..04, GITF-01..04
 **Success Criteria** (what must be TRUE):
-  1. Global `config.json` exists in the dotconfigs repo root with a `"version": "3.0"` field and records only user choices (enabled modules, scope preferences)
-  2. Project `.dotconfigs/config.json` exists per-repo with the same schema, recording project-level overrides
-  3. `.dotconfigs/` directory is automatically excluded via `.git/info/exclude` when created
-  4. `dotconfigs` validates `.dotconfigs/` existence on any project command invocation (clear error if missing)
-  5. `jq` dependency is checked at setup time with install instructions for macOS (`brew install jq`) and Linux
-**Plans**: TBD
+  1. `global.json` exists in repo root with source→target module definitions
+  2. `dotconfigs deploy` reads global.json and symlinks all modules to their targets
+  3. `dotconfigs deploy <group>` deploys only modules under that group key
+  4. Directory sources deploy each file individually (not directory symlinks)
+  5. `--dry-run` and `--force` flags work
+  6. `plugins/git/gitconfig` contains identity+workflow+aliases in Git's INI format, symlinked directly to `~/.gitconfig`
+  7. `git config --global` commands write through the symlink back into the repo
+  8. `.dotconfigs/project.json` per-repo works with `dotconfigs project <path>`
+  9. `.dotconfigs/` auto-excluded via `.git/info/exclude`
+  10. `jq` dependency checked with clear error message
+  11. Existing hook/skill/settings deployments preserved (no functionality loss)
+**Plans**: 3 plans
 
 Plans:
-- [ ] 11-01: TBD
-- [ ] 11-02: TBD
+- [ ] 11-01-PLAN.md — Generic JSON deploy engine (lib/deploy.sh)
+- [ ] 11-02-PLAN.md — CLI deploy rewrite to use global.json
+- [ ] 11-03-PLAN.md — Project deploy and project-init commands
 
-### Phase 12: Wizard Refactor
-**Goal**: Wizards and deploy are fully decoupled -- wizards write JSON config, deploy reads JSON config, either can run independently
-**Depends on**: Phase 11 (JSON config must exist for wizards to write to)
-**Requirements**: WIZD-01, WIZD-02, WIZD-03
+### Phase 12: VS Code Plugin + Migration + CLI
+**Goal**: Add VS Code config management, migrate from .env, clean up CLI for new model
+**Depends on**: Phase 11
+**Requirements**: MIGR-01..03, VSCD-01..04, CLI-01..04, SHEL-01..02
 **Success Criteria** (what must be TRUE):
-  1. Running `dotconfigs setup claude` writes choices to `config.json` (not `.env`) -- wizard output is a JSON file
-  2. Running `dotconfigs deploy claude` reads `config.json` and deploys without asking any questions -- deploy is wizard-independent
-  3. Hand-editing `config.json` and running deploy produces the same result as using the wizard
-  4. Existing wizard flows (claude setup, git setup, project scaffolding) work with the new JSON backend -- adapted, not rewritten
-  5. Config schema is forward-compatible with v4.0 wizard UX layer (no structural dead ends)
-**Plans**: TBD
+  1. `plugins/vscode/` exists with settings.json, keybindings.json, snippets/
+  2. VS Code modules in global.json deploy to correct macOS paths
+  3. `plugins/vscode/extensions.txt` auto-populated by `dotconfigs setup` via `code --list-extensions`
+  4. `plugins/shell/` exists with init.zsh and aliases.zsh
+  5. `dotconfigs migrate` converts .env → global.json with backup
+  6. Old wizard commands show deprecation messages pointing to global.json
+  7. `dotconfigs status` and `dotconfigs list` work with JSON config
+  8. Help text reflects new command set
+**Plans**: TBD (estimate: 3-4 plans)
 
-Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
-
-### Phase 13: CLI Restructure + Per-Module Scope
-**Goal**: Streamlined CLI commands that merge wizard + deploy with confirmation, plus per-module scope control for granular deployment
-**Depends on**: Phase 12 (wizards must be decoupled before merging wizard+deploy into single commands)
-**Requirements**: CLI-08, CLI-09, CLI-10, CLI-11, CLI-12, SCOP-01, SCOP-02, SCOP-03
+### Phase 13: Documentation
+**Goal**: Clear docs for new users and reference for the config schema
+**Depends on**: Phase 12
+**Requirements**: DOC-01..03
 **Success Criteria** (what must be TRUE):
-  1. `dotconfigs global` runs wizard then shows a confirmation summary and deploys (replacing `global-configs`)
-  2. `dotconfigs project` runs wizard then shows a confirmation summary and deploys (replacing `project-configs`/`project-init`)
-  3. Old command names (`global-configs`, `project-configs`, `project-init`) produce deprecation warnings pointing to new names
-  4. `dotconfigs deploy` re-deploys from existing config without running any wizard
-  5. `--no-deploy`, `--dry-run`, and `--yes` flags work on `global` and `project` commands
-  6. Each module (hook, config, skill) can be independently scoped to global, project, or both -- scope stored in `config.json`
-  7. Deploy targets follow conventions: hooks deploy to `hooks/`, skills deploy to `commands/` -- no per-file path configuration needed
-**Plans**: TBD
-
-Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
-
-### Phase 14: Migration + Documentation
-**Goal**: Seamless upgrade path from v2.0 and clear documentation for new users
-**Depends on**: Phase 13 (documents and migrates to the final v3.0 state)
-**Requirements**: CONF-09, DOC-01, DOC-02
-**Success Criteria** (what must be TRUE):
-  1. Running `dotconfigs migrate` (or equivalent) converts existing `.env` to `config.json` with a backup of the original file
-  2. Migration preserves all user choices from `.env` -- no config loss
-  3. README covers installation, first-run experience, daily usage, and plugin overview in a beginner-friendly tone
-  4. Architecture diagram shows the plugin -> module -> deploy flow and global/project config layering
-**Plans**: TBD
-
-Plans:
-- [ ] 14-01: TBD
-- [ ] 14-02: TBD
+  1. README covers: install, first-run, daily usage, adding a new plugin
+  2. global.json schema documented with examples
+  3. Architecture diagram shows: repo → config → deploy → targets
+**Plans**: TBD (estimate: 1-2 plans)
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14
+Phases execute in numeric order: 10 → 11 → 12 → 13
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Hook Path Resolution | 1/1 | Complete | 2026-02-10 |
-| 11. JSON Config Foundation | 0/0 | Not started | - |
-| 12. Wizard Refactor | 0/0 | Not started | - |
-| 13. CLI Restructure + Per-Module Scope | 0/0 | Not started | - |
-| 14. Migration + Documentation | 0/0 | Not started | - |
+| 11. JSON Config + Core Deploy | 0/0 | Not started | - |
+| 12. VS Code + Migration + CLI | 0/0 | Not started | - |
+| 13. Documentation | 0/0 | Not started | - |
