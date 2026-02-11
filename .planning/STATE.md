@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 Phase: 12 (VS Code Plugin + Migration + CLI) — third of 4 v3.0 phases (10-13)
 Plan: Not yet planned
 Status: Ready for planning
-Last activity: 2026-02-11 — Phase 11 complete (JSON Config + Core Deploy)
+Last activity: 2026-02-11 — Completed 11-04-PLAN.md (gap closure)
 
 Progress: ██████████░░░░░░ 50% (2/4 phases)
 
@@ -27,8 +27,8 @@ Progress: ██████████░░░░░░ 50% (2/4 phases)
 - Total execution time: ~75min
 
 **v3.0:**
-- Total plans completed: 4
-- Total execution time: ~11min
+- Total plans completed: 5
+- Total execution time: ~12min
 
 ## Accumulated Context
 
@@ -51,6 +51,8 @@ Decisions logged in PROJECT.md Key Decisions table.
 - project_root parameter enables relative target path resolution for per-project configs (11-03)
 - .dotconfigs/ auto-excluded in .git/info/exclude to keep projects clean (11-03)
 - Removed plugin filter from project-init — JSON config controls what's deployed (11-03)
+- Project-specific overrides hardcoded for claude/git, unknown groups auto-transformed (11-04)
+- project.json.example deleted — global.json is single source of truth (11-04)
 
 **Carrying forward from v2.0:**
 - Plugin architecture (plugins/claude/, plugins/git/, shared lib/)
@@ -80,6 +82,6 @@ Wizard code (setup.sh files, lib/wizard.sh) preserved in codebase — shelved, n
 
 ## Session Continuity
 
-Last session: 2026-02-11
-Stopped at: Phase 11 complete, ready for Phase 12
+Last session: 2026-02-11 15:15:20Z
+Stopped at: Completed 11-04-PLAN.md (gap closure for UAT Test 5)
 Resume file: None
