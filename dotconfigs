@@ -31,7 +31,8 @@ show_usage() {
 dotconfigs — Unified configuration management
 
 Usage:
-  dotconfigs setup                              One-time init (PATH + global.json)
+  dotconfigs setup                              One-time init (PATH symlinks)
+  dotconfigs global-init                        Scaffold global.json from manifests
   dotconfigs deploy [group] [options]           Deploy global config to filesystem
   dotconfigs project-init [path]                Scaffold per-project config
   dotconfigs project [path] [options]           Deploy per-project configuration
@@ -41,7 +42,8 @@ Usage:
   dotconfigs help [command]                     Show help for command
 
 Commands:
-  setup           One-time init: scaffold global.json from manifests, add to PATH
+  setup           One-time init: add dotconfigs to PATH, then run global-init
+  global-init     Scaffold global.json from plugin manifests
   deploy          Deploy configuration from global.json (symlinks)
                   Options: --force, --dry-run
                   Without group: deploys all groups
@@ -57,7 +59,8 @@ Commands:
   help            Show detailed help for specific command
 
 Examples:
-  dotconfigs setup                      One-time init
+  dotconfigs setup                      One-time init (PATH only)
+  dotconfigs global-init                Scaffold global.json
   dotconfigs deploy                     Deploy all global config
   dotconfigs deploy claude              Deploy claude group only
   dotconfigs deploy --dry-run           Preview all deployments
@@ -85,12 +88,29 @@ Usage:
   dotconfigs setup
 
 Description:
-  Scaffolds global.json from plugin manifests (if it doesn't exist).
   Creates PATH symlinks for dotconfigs and dots.
-  Run once after cloning, then use 'dotconfigs deploy' to apply.
+  Run once after cloning, then run 'global-init' to scaffold config.
 
 Example:
   dotconfigs setup
+EOF
+            ;;
+        global-init)
+            cat <<EOF
+dotconfigs global-init — Scaffold global.json
+
+Usage:
+  dotconfigs global-init
+
+Description:
+  Assembles global.json from plugin manifests (.global sections).
+  Pre-populates modules with sources, targets, and include/exclude lists.
+  Won't overwrite an existing global.json without confirmation.
+
+  After creating the config, edit it to customise, then run: dotconfigs deploy
+
+Example:
+  dotconfigs global-init
 EOF
             ;;
         global-configs)
@@ -239,7 +259,7 @@ EOF
         *)
             echo "Error: Unknown command '$command'" >&2
             echo "" >&2
-            echo "Available commands: setup, deploy, project-init, project, global-configs, status, list, help" >&2
+            echo "Available commands: setup, global-init, deploy, project-init, project, global-configs, status, list, help" >&2
             return 1
             ;;
     esac
@@ -268,16 +288,6 @@ cmd_setup() {
     echo "========================================================="
     echo ""
 
-    # Scaffold global.json from manifests if it doesn't exist
-    if [[ ! -f "$GLOBAL_CONFIG" ]]; then
-        if command -v jq &>/dev/null; then
-            assemble_from_manifests "global" > "$GLOBAL_CONFIG"
-            echo "Created global.json from plugin manifests"
-        else
-            echo "Warning: jq not installed, skipping global.json scaffold" >&2
-        fi
-    fi
-
     # Save version marker
     wizard_save_env "$ENV_FILE" "DOTCONFIGS_VERSION" "2.0"
 
@@ -289,11 +299,31 @@ cmd_setup() {
     echo "Setup complete."
     echo ""
     echo "Next steps:"
+    echo "  1. dotconfigs global-init          Scaffold global.json from manifests"
+    echo "  2. (optional) Edit global.json to customise"
+    echo "  3. dotconfigs deploy               Deploy all global config"
+    echo "  4. dotconfigs project-init .       Scaffold per-project config"
+    echo "  5. dotconfigs project .            Deploy project config"
+    echo ""
+}
+
+cmd_global_init() {
+    if ! command -v jq &>/dev/null; then
+        echo "Error: jq is required but not installed." >&2
+        exit 1
+    fi
+
+    local json
+    json=$(assemble_from_manifests "global")
+
+    if ! write_with_overwrite_protection "$GLOBAL_CONFIG" "$json"; then
+        return 0
+    fi
+
+    echo ""
+    echo "Next steps:"
     echo "  1. (optional) Edit global.json to customise"
     echo "  2. dotconfigs deploy              Deploy all global config"
-    echo "  3. dotconfigs project-init .      Scaffold per-project config"
-    echo "  4. dotconfigs project .           Deploy project config"
-    echo ""
 }
 
 cmd_global_configs() {
@@ -681,6 +711,9 @@ main() {
             else
                 cmd_setup
             fi
+            ;;
+        global-init)
+            cmd_global_init
             ;;
         global-configs)
             cmd_global_configs "${@:2}"

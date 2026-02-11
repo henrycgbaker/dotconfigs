@@ -38,11 +38,12 @@ def test_unknown_command_errors(run_dotconfigs):
 @pytest.mark.parametrize(
     "cmd,expected_fragment",
     [
-        ("deploy", "Deploy configuration"),
+        ("deploy", "Deploy global configuration"),
         ("project", "Deploy per-project"),
         ("project-init", "Scaffold per-project"),
         ("status", "deployment status"),
-        ("setup", "Initialize dotconfigs"),
+        ("setup", "One-time initialisation"),
+        ("global-init", "Scaffold global.json"),
     ],
 )
 def test_help_subcommand(run_dotconfigs, cmd, expected_fragment):

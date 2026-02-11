@@ -1,10 +1,10 @@
 # dotconfigs
 
-My personal SSOT for dev configurations (no secrets, but various hooks and other that I've setup) - deployable across machines, configurable both globally & per-project.
+My personal registry for dev configurations (no secrets, but various hooks and other that I've setup) - deployable across machines, configurable both globally & per-project.
 
-**dotconfigs** is a plugin-based configuration manager. Clone onto any machine to get a consistent development environment. Manages Claude Code, Git, shell, and VS Code configuration through a manifest-driven architecture with per-file symlink tracking.
+**dotconfigs** is a plugin-based configuration manager. Clone onto any machine to get a consistent development environment. Extensible 'plugins' (i.e. tools I use a lot and want to replicate my setup acorss machines) configuration through a manifest-driven architecture with per-file symlink tracking.
 
-**Note:** `dots` is available as a convenience alias for `dotconfigs`.
+**Note:** `dots` is a convenience alias for `dotconfigs`.
 
 ## Architecture
 

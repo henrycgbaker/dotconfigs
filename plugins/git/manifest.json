@@ -23,7 +23,7 @@
       "target": ".git/hooks",
       "method": "symlink",
       "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "prepare-commit-msg"],
-      "exclude": []
+      "exclude": [] 
     },
     "project-excludes": {
       "source": "plugins/git/templates/project-excludes",
