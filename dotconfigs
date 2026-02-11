@@ -14,6 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
 PLUGINS_DIR="$SCRIPT_DIR/plugins"
 ENV_FILE="$SCRIPT_DIR/.env"
+GLOBAL_CONFIG="$SCRIPT_DIR/global.json"
 
 # Source shared libraries eagerly (small files)
 source "$SCRIPT_DIR/lib/wizard.sh"
@@ -22,6 +23,7 @@ source "$SCRIPT_DIR/lib/discovery.sh"
 source "$SCRIPT_DIR/lib/validation.sh"
 source "$SCRIPT_DIR/lib/colours.sh"
 source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/deploy.sh"
 
 show_usage() {
     cat <<EOF
@@ -30,8 +32,8 @@ dotconfigs — Unified configuration management
 Usage:
   dotconfigs setup                              Initialize tool (PATH symlinks)
   dotconfigs global-configs <plugin>            Configure plugin defaults (.env)
-  dotconfigs project-configs [plugin] <path>    Configure per-project overrides
-  dotconfigs deploy [plugin] [options]          Deploy configuration to filesystem
+  dotconfigs project-init [plugin] <path>        Scaffold per-project config
+  dotconfigs deploy [group] [options]           Deploy configuration to filesystem
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
   dotconfigs help [command]                     Show help for command
@@ -40,10 +42,10 @@ Usage:
 Commands:
   setup           Initialize dotconfigs tool (one-time setup)
   global-configs  Interactive wizard to configure plugin defaults (.env)
-  project-configs Scaffold per-project configuration overrides
-  deploy          Deploy configuration from .env to filesystem
-                  Options: --force, --dry-run, --regenerate
-                  Without plugin: deploys all configured plugins
+  project-init    Scaffold per-project configuration (alias: project-configs)
+  deploy          Deploy configuration from global.json
+                  Options: --force, --dry-run
+                  Without group: deploys all groups
   status          Check deployment status and drift detection
   list            List all available plugins
   help            Show detailed help for specific command
@@ -51,7 +53,7 @@ Commands:
 Examples:
   dotconfigs setup                      Initialize dotconfigs
   dotconfigs global-configs claude      Configure Claude defaults
-  dotconfigs project-configs claude .   Override Claude config for project
+  dotconfigs project-init claude .      Scaffold Claude config for project
   dotconfigs deploy                     Deploy all configurations
   dotconfigs deploy git                 Deploy git configuration only
   dotconfigs deploy --dry-run           Preview all deployments
@@ -109,12 +111,12 @@ Examples:
   dotconfigs global-configs git       Configure git hooks and identity
 EOF
             ;;
-        project-configs)
+        project-configs|project-init)
             cat <<EOF
-dotconfigs project-configs — Scaffold per-project configuration
+dotconfigs project-init — Scaffold per-project configuration
 
 Usage:
-  dotconfigs project-configs [plugin] <path>
+  dotconfigs project-init [plugin] <path>
 
 Description:
   Scaffolds per-project configuration files for the specified plugin.
@@ -123,45 +125,40 @@ Description:
   Requires a git repository at the target path.
 
 Examples:
-  dotconfigs project-configs .              Run all plugin project setup
-  dotconfigs project-configs claude .       Run Claude project setup only
-  dotconfigs project-configs git /path      Configure git for specific repo
+  dotconfigs project-init .              Run all plugin project setup
+  dotconfigs project-init claude .       Run Claude project setup only
+  dotconfigs project-init git /path      Configure git for specific repo
 EOF
             ;;
         project)
-            echo "Warning: 'dotconfigs project' is deprecated. Use 'dotconfigs project-configs' instead." >&2
+            echo "Warning: 'dotconfigs project' is deprecated. Use 'dotconfigs project-init' instead." >&2
             echo "" >&2
-            show_command_help "project-configs"
+            show_command_help "project-init"
             ;;
         deploy)
             cat <<EOF
 dotconfigs deploy — Deploy configuration to filesystem
 
 Usage:
-  dotconfigs deploy [plugin] [options]
+  dotconfigs deploy [group] [options]
 
 Description:
-  Deploys plugin configuration from .env to the filesystem.
-  Without a plugin name, deploys all configured plugins.
+  Deploys configuration from global.json to the filesystem.
+  Without a group name, deploys all groups.
 
 Options:
   --force          Overwrite all conflicts without prompting
   --dry-run        Preview changes without deploying
-  --regenerate     Rebuild generated files from templates (with backup)
-
-Generated files (CLAUDE.md, settings.json) are only created from
-templates on first deploy. After that, they're your files to edit.
-Use --regenerate to reset them from templates (creates backups).
 
 Conflicts (files not managed by dotconfigs) prompt for resolution:
 overwrite, skip, backup, or diff. Use --force to skip prompts.
 
 Examples:
-  dotconfigs deploy                      Deploy all (prompts on conflicts)
-  dotconfigs deploy claude               Deploy Claude configuration only
+  dotconfigs deploy                      Deploy all groups (prompts on conflicts)
+  dotconfigs deploy claude               Deploy claude group only
+  dotconfigs deploy git                  Deploy git group only
   dotconfigs deploy --force              Deploy all, overwrite conflicts
   dotconfigs deploy --dry-run            Preview all deployments
-  dotconfigs deploy --regenerate         Rebuild generated files from templates
 EOF
             ;;
         status)
@@ -203,7 +200,7 @@ EOF
         *)
             echo "Error: Unknown command '$command'" >&2
             echo "" >&2
-            echo "Available commands: setup, global-configs, project-configs, deploy, status, list, help" >&2
+            echo "Available commands: setup, global-configs, project-init, deploy, status, list, help" >&2
             return 1
             ;;
     esac
@@ -349,14 +346,11 @@ _create_path_symlink() {
 }
 
 cmd_deploy() {
-    local plugin=""
+    local group=""
     local dry_run=false
     local force_mode=false
-    local interactive_mode=true
-    local regenerate=false
-    local args=()
 
-    # Parse arguments: extract plugin name and flags
+    # Parse arguments: extract group name and flags
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --dry-run)
@@ -367,89 +361,33 @@ cmd_deploy() {
                 force_mode=true
                 shift
                 ;;
-            --regenerate)
-                regenerate=true
-                shift
-                ;;
             -*)
                 echo "Error: Unknown option '$1'" >&2
                 exit 1
                 ;;
             *)
-                # First non-flag argument is the plugin name
-                if [[ -z "$plugin" ]]; then
-                    plugin="$1"
+                # First non-flag argument is the group name
+                if [[ -z "$group" ]]; then
+                    group="$1"
                 fi
                 shift
                 ;;
         esac
     done
 
-    # Build args array to pass to plugin deploy functions
+    # Initialize colours for dry-run header
     if [[ "$dry_run" == "true" ]]; then
-        args+=("--dry-run")
-        # Initialize colours for dry-run header
         init_colours
+        echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+        echo "$(colour_cyan "  DRY RUN - No changes will be made")"
+        echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+        echo ""
     fi
 
-    # Flag precedence: --dry-run overrides --force
-    if [[ "$dry_run" != "true" && "$force_mode" == "true" ]]; then
-        args+=("--force")
-    fi
+    # Deploy from global.json
+    deploy_from_json "$GLOBAL_CONFIG" "$SCRIPT_DIR" "$group" "$dry_run" "$force_mode"
 
-    if [[ "$interactive_mode" == "true" && "$force_mode" != "true" ]]; then
-        args+=("--interactive")
-    fi
-
-    if [[ "$regenerate" == "true" ]]; then
-        args+=("--regenerate")
-    fi
-
-    if [[ -z "$plugin" ]]; then
-        # Deploy all configured plugins
-        if [[ "$dry_run" == "true" ]]; then
-            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
-            echo "$(colour_cyan "  DRY RUN - No changes will be made")"
-            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
-            echo ""
-        fi
-        echo "Deploying all configured plugins..."
-        local deployed_any=false
-        while IFS= read -r p; do
-            if [[ -f "$PLUGINS_DIR/$p/deploy.sh" ]]; then
-                echo ""
-                echo "==> Deploying $p"
-                source "$PLUGINS_DIR/$p/deploy.sh"
-                "plugin_${p}_deploy" "${args[@]}"
-                deployed_any=true
-            fi
-        done < <(discover_plugins "$PLUGINS_DIR")
-
-        if [[ "$deployed_any" == "false" ]]; then
-            echo "No plugins with deploy support found" >&2
-            exit 1
-        fi
-    else
-        # Deploy single plugin
-        if ! plugin_exists "$plugin"; then
-            echo "Error: Plugin '$plugin' not found" >&2
-            echo "" >&2
-            list_available_plugins
-            exit 1
-        fi
-
-        if [[ "$dry_run" == "true" ]]; then
-            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
-            echo "$(colour_cyan "  DRY RUN - No changes will be made")"
-            echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
-            echo ""
-        fi
-
-        source "$PLUGINS_DIR/$plugin/deploy.sh"
-        "plugin_${plugin}_deploy" "${args[@]}"
-    fi
-
-    # Create PATH symlink (after all plugin deploys)
+    # Create PATH symlink (after all deploys)
     echo ""
     _create_path_symlink "$dry_run" "$force_mode"
 }
@@ -542,7 +480,7 @@ cmd_project_configs() {
     local plugin_filter=""
     local project_path=""
 
-    # Parse arguments: could be "project-configs ." or "project-configs claude ."
+    # Parse arguments: could be "project-init ." or "project-init claude ."
     # If first arg is a plugin name, treat it as filter
     if [[ $# -gt 0 ]] && plugin_exists "$1"; then
         plugin_filter="$1"
@@ -554,14 +492,14 @@ cmd_project_configs() {
         # Check if CWD is the dotconfigs repo itself
         if [[ "$(pwd)" -ef "$SCRIPT_DIR" ]]; then
             echo "Error: Cannot use dotconfigs repo as project target" >&2
-            echo "Specify a path: dotconfigs project-configs <path>" >&2
+            echo "Specify a path: dotconfigs project-init <path>" >&2
             exit 1
         fi
 
         # Check if CWD is a git repo
         if ! git -C "$PWD" rev-parse --git-dir >/dev/null 2>&1; then
             echo "Error: Current directory is not a git repository" >&2
-            echo "Either run from a git repo or specify path: dotconfigs project-configs <path>" >&2
+            echo "Either run from a git repo or specify path: dotconfigs project-init <path>" >&2
             exit 1
         fi
 
@@ -570,7 +508,7 @@ cmd_project_configs() {
         if wizard_yesno "Use this directory?" "y"; then
             project_path="$PWD"
         else
-            echo "Specify path: dotconfigs project-configs <path>" >&2
+            echo "Specify path: dotconfigs project-init <path>" >&2
             exit 1
         fi
     else
@@ -642,12 +580,11 @@ main() {
         global-configs)
             cmd_global_configs "${@:2}"
             ;;
-        project-configs)
+        project-configs|project-init)
             cmd_project_configs "${@:2}"
             ;;
         project)
-            echo "Warning: 'dotconfigs project' is deprecated" >&2
-            echo "Use: 'dotconfigs project-configs' instead" >&2
+            echo "Warning: 'dotconfigs project' is deprecated. Use 'dotconfigs project-init'." >&2
             echo "" >&2
             cmd_project_configs "${@:2}"
             ;;
