@@ -13,83 +13,87 @@ Single source of truth for dev configuration -- one repo, one CLI, deployed ever
 Plugin manifests are the SSOT. Everything flows from them:
 
 ```
-                        SSOT: Plugin Manifests
-                     plugins/*/manifest.json
-                               |
-            +------------------+------------------+
-            |                                     |
-            v                                     v
-     .global sections                      .project sections
-            |                                     |
-            v                                     v
-  +-------------------+                +------------------------+
-  |    global.json    |                | .dotconfigs/project.json|
-  | (machine-wide)    |                | (per-repo)             |
-  +-------------------+                +------------------------+
-            |                                     |
-   dotconfigs deploy                     dotconfigs project
-            |                                     |
-            v                                     v
-  +-------------------+                +------------------------+
-  | ~/.claude/        |                | .git/hooks/            |
-  | ~/.gitconfig      |                | .claude/hooks/         |
-  | ~/.dotconfigs/    |                | .claude/commands/      |
-  | ~/Library/...     |                | .git/info/exclude      |
-  +-------------------+                +------------------------+
-     Filesystem (symlinks)                Filesystem (symlinks)
+                         SSOT: Plugin Manifests
+                      plugins/*/manifest.json
+                                │
+             ┌──────────────────┴──────────────────┐
+             │                                     │
+             ▼                                     ▼
+      .global sections                      .project sections
+             │                                     │
+             ▼                                     ▼
+   ┌───────────────────┐              ┌─────────────────────────┐
+   │    global.json    │              │ .dotconfigs/project.json │
+   │  (machine-wide)   │              │ (per-repo)              │
+   └────────┬──────────┘              └────────────┬────────────┘
+            │                                      │
+    dotconfigs deploy                      dotconfigs project
+            │                                      │
+            ▼                                      ▼
+   ┌───────────────────┐              ┌─────────────────────────┐
+   │ ~/.claude/        │              │ .git/hooks/             │
+   │ ~/.gitconfig      │              │ .claude/hooks/          │
+   │ ~/.dotconfigs/    │              │ .claude/commands/       │
+   │ ~/Library/...     │              │ .git/info/exclude       │
+   └───────────────────┘              └─────────────────────────┘
+     Filesystem (symlinks)              Filesystem (symlinks)
 ```
 
 Each manifest declares modules with `source`, `target`, `method`, and `include`/`exclude` lists:
 
 ```
-plugins/claude/manifest.json            plugins/git/manifest.json
-+----------------------------------+    +----------------------------------+
-| global:                          |    | global:                          |
-|   hooks    -> ~/.claude/hooks/   |    |   hooks  -> ~/.dotconfigs/git-hooks/
-|   settings -> ~/.claude/settings |    |   config -> ~/.gitconfig         |
-|   skills   -> ~/.claude/commands/|    |   excludes -> ~/.config/git/ignore
-|   claude-md -> ~/.claude/CLAUDE.md    | project:                         |
-| project:                         |    |   hooks  -> .git/hooks/          |
-|   hooks    -> .claude/hooks/     |    |   excludes -> .git/info/exclude  |
-|   skills   -> .claude/commands/  |    |   gitignore -> .gitignore        |
-+----------------------------------+    +----------------------------------+
-
-plugins/shell/manifest.json             plugins/vscode/manifest.json
-+----------------------------------+    +----------------------------------+
-| global:                          |    | global:                          |
-|   init    -> ~/.dotconfigs/shell/|    |   settings -> ~/Library/.../     |
-|   aliases -> ~/.dotconfigs/shell/|    |              Code/User/settings  |
-+----------------------------------+    +----------------------------------+
+  plugins/claude/manifest.json           plugins/git/manifest.json
+  ┌──────────────────────────────┐       ┌──────────────────────────────┐
+  │ global:                      │       │ global:                      │
+  │   hooks    → ~/.claude/hooks │       │   hooks  → ~/.dotconfigs/    │
+  │   settings → ~/.claude/      │       │            git-hooks         │
+  │   skills   → ~/.claude/cmds  │       │   config → ~/.gitconfig      │
+  │   claude-md → ~/.claude/     │       │   excludes → ~/.config/git/  │
+  │ project:                     │       │ project:                     │
+  │   hooks    → .claude/hooks   │       │   hooks  → .git/hooks/       │
+  │   skills   → .claude/cmds   │       │   excludes → .git/info/      │
+  └──────────────────────────────┘       │   gitignore → .gitignore     │
+                                         └──────────────────────────────┘
+  plugins/shell/manifest.json            plugins/vscode/manifest.json
+  ┌──────────────────────────────┐       ┌──────────────────────────────┐
+  │ global:                      │       │ global:                      │
+  │   init    → ~/.dotconfigs/   │       │   settings → ~/Library/      │
+  │             shell/init.zsh   │       │     Application Support/     │
+  │   aliases → ~/.dotconfigs/   │       │     Code/User/settings.json  │
+  │             shell/aliases.zsh│       └──────────────────────────────┘
+  └──────────────────────────────┘
 ```
 
 ### Data Flow
 
 ```
-First-time setup:
+  First-time setup
+  ─────────────────────────────────────────────────────────────────
 
   1. dotconfigs setup
-     +-- scaffolds global.json from manifests (if not exists)
-     +-- creates PATH symlinks (dotconfigs, dots)
+     ├── scaffolds global.json from manifests (if not exists)
+     └── creates PATH symlinks (dotconfigs, dots)
 
   2. dotconfigs deploy
-     +-- reads global.json
-     +-- for each module: symlink source -> target
-     +-- conflict resolution: overwrite / skip / backup / diff
+     ├── reads global.json
+     ├── for each module: symlink source → target
+     └── conflict resolution: overwrite / skip / backup / diff
 
-Per-project setup:
+  Per-project setup
+  ─────────────────────────────────────────────────────────────────
 
   3. dotconfigs project-init <path>
-     +-- reads .project from each manifest
-     +-- assembles .dotconfigs/project.json
-     +-- seeds .git/info/exclude
+     ├── reads .project from each manifest
+     ├── assembles .dotconfigs/project.json
+     └── seeds .git/info/exclude
 
   4. (optional) edit project.json exclude lists
-     +-- e.g. exclude: ["post-tool-format.py"]
+     └── e.g. exclude: ["post-tool-format.py"]
 
   5. dotconfigs project <path>
-     +-- reads .dotconfigs/project.json
-     +-- for each module: symlink source -> target
-     +-- respects include/exclude lists
+     ├── reads .dotconfigs/project.json
+     ├── for each module: symlink source → target
+     └── respects include/exclude lists
 ```
 
 ### Symlink Ownership
@@ -97,13 +101,13 @@ Per-project setup:
 dotconfigs uses per-file symlinks (not directory-level), tracked by target resolution:
 
 ```
-~/.claude/
-  hooks/
-    block-destructive.sh  --> dotconfigs/plugins/claude/hooks/...  (ours)
-    some-other-hook.sh    --> /other/tool/...                      (foreign, untouched)
-  commands/
-    commit.md             --> dotconfigs/plugins/claude/commands/.. (ours)
-    other-skill.md        --> /other/tool/...                      (foreign, untouched)
+  ~/.claude/
+  ├── hooks/
+  │   ├── block-destructive.sh ──→ dotconfigs/plugins/claude/hooks/...  (ours)
+  │   └── some-other-hook.sh   ──→ /other/tool/...               (foreign, untouched)
+  └── commands/
+      ├── commit.md            ──→ dotconfigs/plugins/claude/cmds/...   (ours)
+      └── other-skill.md       ──→ /other/tool/...               (foreign, untouched)
 ```
 
 Deploy only touches files it owns. Foreign files are never overwritten without prompting.
