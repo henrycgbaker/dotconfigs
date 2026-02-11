@@ -1,352 +1,465 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-02-06
+**Analysis Date:** 2026-02-10
 
-## Architecture & Design Issues
+## Critical Issues (Blocking)
 
-### 1. Fragile Remote Agent Sync System
+### 1. Project Config Wizard Broken — Functions Not Available in Plugin Context
 
-**Issue:** The `sync-project-agents.sh` script has brittle remote synchronization logic that can fail silently or create inconsistent states.
-
-**Files:** `sync-project-agents.sh`
-
-**Problems:**
-- SSH operations in pipes can fail silently with bash's `pipefail` set to `e` but subshell context lost in `while` loops (line 37, 159, 213)
-- No verification that remote files were fully transferred (uses `cat > file` which can truncate on connection loss)
-- Bidirectional sync attempts (pull vs push) can create conflicts if both sources diverge
-- `sync_status` compares file content with SSH subshells; network failures during diff silently mark files as "out of sync"
-- Remote path hardcoding (`ds01-infra` in line 20) assumes specific SSH host aliases exist
-
-**Impact:**
-- Project agents in different repos could diverge without warning
-- Failed syncs leave inconsistent state with no rollback
-- No transaction semantics or atomic operations
-
-**Fix approach:**
-- Add explicit success verification for SSH file transfers (checksum comparison post-transfer)
-- Implement atomic operations using temporary files + rename pattern
-- Add dry-run mode (`--dry-run` flag) to preview changes before execution
-- Wrap remote SSH operations in error handlers with clear failure messages
-- Document required SSH host aliases and configuration
-
-
-### 2. Complex Orchestrator Context Flow with No Validation
-
-**Issue:** The execute-phase orchestrator passes context between multiple agents (planner, checker, executor, verifier) with minimal validation of state consistency.
+**Issue:** The project-configs wizard fails to execute interactive prompts because `wizard_yesno()` and related functions from `lib/wizard.sh` are not accessible within the plugin execution context.
 
 **Files:**
-- `commands/gsd/execute-phase.md` (execute orchestrator)
-- `agents/gsd-executor.md` (executor)
-- `agents/gsd-plan-checker.md` (plan validator)
-- `agents/gsd-verifier.md` (goal verifier)
+- `plugins/claude/project.sh` (lines 221, 230, 276, 314, 388, 428, 506)
+- `lib/wizard.sh` (defines wizard functions)
 
 **Problems:**
-- No checksum or validation that PLAN.md hasn't been modified between checker and executor
-- STATE.md can become stale if executor crashes mid-task; no recovery mechanism defined
-- Frontmatter parsing (wave numbers, dependencies) relies on grep patterns; malformed YAML goes undetected
-- `@-references` in plans (context files) are not validated to exist before execution starts
-- Model profile resolution (line 44-57 in execute-phase.md) uses fragile grep patterns for JSON parsing instead of proper JSON parsing
+- Wizard prompts at lines 221/230/276/314/388/428/506 fall through silently or return invalid-input errors
+- Functions from `lib/wizard.sh` are not sourced in the plugin's execution environment
+- Plugin context does not inherit wizard functions from main dotconfigs script
 
 **Impact:**
-- State drift between planning and execution phases could cause silent failures
-- Missing context files discovered mid-execution with no graceful fallback
-- Invalid plan frontmatter could cause agents to misinterpret execution order
+- Users cannot interactively configure project-level settings
+- Project scaffolding produces non-functional output (broken symlinks, missing configurations)
+- Deployment to new projects fails silently with garbled prompts
 
 **Fix approach:**
-- Add PLAN.md validation step at start of execute-phase: checksum verification and frontmatter schema validation
-- Implement state checkpointing: each executor writes checkpoint before task execution
-- Parse JSON config with proper JSON tools, not grep
-- Validate all `@-references` exist and are readable before agent spawning
-- Add recovery protocol: executor can detect and resume from checkpoint
-
-
-### 3. Git Hook Configuration Drift
-
-**Issue:** Git hooks are installed to `.git/hooks/` (local, untracked) but the source template is in `githooks/` (tracked). Configuration divergence can occur.
-
-**Files:**
-- `githooks/pre-commit` (template)
-- `setup.sh` (installation script)
-- `.git/hooks/pre-commit` (local copy)
-
-**Problems:**
-- No automatic sync of updated hook templates to existing installations
-- Setup.sh copies hooks once; updates to `githooks/` don't propagate unless setup.sh is re-run
-- Agent auto-sync disabled (line 80 in pre-commit); this was over-engineered but leaving it out means agent changes aren't caught
-- Identity enforcement is hardcoded (`henrycgbaker` / `henry.c.g.baker@gmail.com`); can't be configured per-project
-
-**Impact:**
-- Long-lived repos could have stale hooks that don't enforce current standards
-- New policy enforcements (e.g., additional secret patterns) won't apply to existing repos
-- Identity check prevents contribution from other team members
-
-**Fix approach:**
-- Add `--update-hooks` flag to setup.sh to refresh existing installations
-- Store hook version in `.git/hooks/.hook-version`; warn if older than source
-- Make identity check configurable via `.git/config` hook.identity-user/email
-- Document hook update procedure in setup documentation
-
-
-### 4. Weak Error Handling in Security Hooks
-
-**Issue:** The `block-sensitive.py` security hook has permissive failure modes that could leak secrets.
-
-**Files:** `hooks/block-sensitive.py`
-
-**Problems:**
-- Line 76: `return 0  # Allow on parse error (fail open)` — malformed JSON in stdin bypasses all checks
-- Pattern matching is case-insensitive (line 54) but `.env` patterns are commented out (lines 22-24); `.env` files NOT actually blocked
-- `get_file_path_from_input()` tries only 3 parameter names; custom tools with different parameter names bypass protection
-- No logging of blocked attempts; security violations are silent except to stderr
-
-**Impact:**
-- Malformed Claude context causes hook to silently allow blocked files
-- `.env` files are NOT actually blocked despite rule in settings.json line 20
-- Logging failures (missing `>>` in error handling) means sensitive access isn't recorded
-
-**Fix approach:**
-- Change fail-open behavior: return 2 (block) on parse error, log to syslog
-- Uncomment and enable `.env` protection patterns
-- Parse tool input more robustly (iterate through all values, not just 3 keys)
-- Add audit logging to dedicated security log file
-- Add integration test that verifies common secret file patterns are actually blocked
-
-
-## Testing & Verification Gaps
-
-### 5. No Tests for Agent Instructions
-
-**Issue:** Agent definitions (.md files) have no validation that their instructions are syntactically correct or internally consistent.
-
-**Files:** `agents/*.md` (all agent definitions)
-
-**Problems:**
-- No linting of frontmatter (YAML schema validation missing)
-- No validation that `@-references` in agent instructions point to valid files
-- No check that role descriptions match actual capabilities (tools listed may not match what the role assumes)
-- Circular role dependencies not detected (agent A spawns agent B which spawns agent A)
-- Context size calculations are manual estimates with no automated validation
-
-**Impact:**
-- Agent definitions can have broken references without discovery until runtime
-- Bloated agents exceeding context budgets aren't caught before spawning
-- Role inconsistencies cause executor confusion mid-task
-
-**Fix approach:**
-- Create `validate-agents.sh` script that:
-  - Validates frontmatter YAML syntax
-  - Checks all `@-references` exist
-  - Validates declared tools are actually used
-  - Estimates token count and warns if >50% budget
-  - Detects circular spawn dependencies
-- Run as pre-commit hook (optional but recommended)
-- Document in setup instructions
-
-
-## Scaling & Performance Issues
-
-### 6. Plan Dependency Resolution Is O(n²)
-
-**Issue:** Wave-based execution in execute-phase orchestrator doesn't scale well with many plans.
-
-**Files:** `commands/gsd/execute-phase.md` (step 3-5)
-
-**Problems:**
-- No dependency graph structure; just reads frontmatter `depends_on` field and re-scans for each plan
-- Wave calculation logic is described but not implemented; actual implementation would be sequential scan
-- No topological sort; if circular dependencies exist, they're not detected until runtime
-- Context for tracking plan dependencies is lost between orchestrator and subagent spawning
-
-**Impact:**
-- Projects with 50+ plans per phase become slow to execute (O(n²) dependency checks)
-- Circular dependencies cause infinite wait or deadlock
-- Large plan sets exceed context budget for orchestrator (15% budget allocation)
-
-**Fix approach:**
-- Build dependency graph once at start of phase execution, not per-plan
-- Implement topological sort with cycle detection; fail fast if circular
-- Cache wave assignments in a `.planning/phase-X-waves.json` file
-- Validate all dependencies exist before starting execution
-
-
-### 7. State Reconstruction After Failures
-
-**Issue:** When executor crashes mid-execution, there's no automated state recovery mechanism.
-
-**Files:** `agents/gsd-executor.md` (step load_project_state)
-
-**Problems:**
-- STATE.md can be hours old if a plan fails partway through
-- Executor checkpoints aren't persisted; only git commits are (which may be paused at checkpoints)
-- Recovery requires manual "continue from task X" — no automated detection of partial completion
-- If subagent crashes, orchestrator doesn't know which task failed and must be re-run
-
-**Impact:**
-- Large phases that fail partway through lose work and context
-- Manual recovery is error-prone (risk of re-running completed tasks)
-- No audit trail of what succeeded/failed
-
-**Fix approach:**
-- Executor writes `.planning/phase-X-task-checkpoints.json` after each task:
-  ```json
-  {
-    "plan_id": "16-01",
-    "task": 3,
-    "commit_hash": "abc123...",
-    "timestamp": "2026-02-06T10:30:00Z",
-    "status": "completed"
-  }
-  ```
-- Orchestrator reads checkpoints and resumes from last completed task
-- Add `--recover-from=16-01:task-3` flag to execute-phase
-- Document recovery in usage guide
-
-
-## Security Concerns
-
-### 8. Credential Configuration Management
-
-**Issue:** Settings for remote SSH hosts and credentials are hardcoded or poorly isolated.
-
-**Files:**
-- `sync-project-agents.sh` (line 20: hardcoded `ds01-infra|dsl:...`)
-- `deploy-remote.sh` (SSH credentials in command line)
-- `settings.json` (no credential isolation)
-
-**Problems:**
-- SSH host aliases are hardcoded in script; deploying to new hosts requires editing source
-- No `.env` file support for host configuration (appears intentional but limits flexibility)
-- Deploy script passes `--rsync` credentials via command line (visible in process list)
-- No IP whitelist or host key verification enforcement
-
-**Impact:**
-- Deploying to production servers requires modifying checked-in scripts
-- SSH credentials could be visible in process listings
-- No validation of remote host identity
-
-**Fix approach:**
-- Move host configuration to `~/.config/dotclaude/remotes.json` or `.git/config`:
-  ```
-  [dotclaude "remote-ds01"]
-    host = dsl
-    path = /opt/ds01-infra/.claude/agents
-    method = ssh
-  ```
-- Use SSH config (`~/.ssh/config`) for credential management
-- Add `StrictHostKeyChecking=accept-new` to SSH options
-- Document security best practices for remote deployment
-
-
-## Technical Debt & Over-Engineering
-
-### 9. Over-Engineered Agent Sync (Disabled)
-
-**Issue:** The `sync-project-agents.sh` script is complex but disabled in pre-commit hooks.
-
-**Files:**
-- `githooks/pre-commit` (line 80: agent sync disabled)
-- `sync-project-agents.sh` (400+ lines)
-
-**Problems:**
-- Agent sync attempted in line 48 of TODO.md but disabled as "over-engineering"
-- Script supports both local and remote sources but adds complexity
-- Status checking uses SSH + diff which is slow and fragile
-- Pull/push semantics are ambiguous when both sources are stale
-
-**Impact:**
-- Agents in different repos can diverge without warning
-- No automated way to keep project agents in sync
-- The script exists but is rarely used due to complexity
-
-**Fix approach:**
-- Decide: either commit to agent sync or remove the script entirely
-- If keeping: simplify to one-way push from dotclaude to projects
-- If removing: document manual sync process in CLAUDE.md
-- Current choice (disabled) leaves confusing code in repo
-
-
-### 10. Unclear Verification Flow
-
-**Issue:** Three agents verify different things (plan-checker, verifier, executor verification) with overlapping responsibilities.
-
-**Files:**
-- `agents/gsd-plan-checker.md` (verifies plans before execution)
-- `agents/gsd-verifier.md` (verifies goals after execution)
-- `agents/gsd-executor.md` (has internal verification steps)
-
-**Problems:**
-- Plan-checker validates that plans WILL achieve goal (predictive)
-- Verifier validates that plans DID achieve goal (confirmatory)
-- Executor has internal verification but output isn't formally structured
-- Relationship between these three isn't documented; unclear what happens when they disagree
-
-**Impact:**
-- Phase failures could be due to plan flaws or execution flaws; ambiguous where to look
-- Redundant verification work across multiple agents
-- No unified verification report
-
-**Fix approach:**
-- Document verification philosophy: design → predictive → execution → confirmatory
-- Clarify: plan-checker is gate (blocks execution), verifier is audit (can restart)
-- Executor verification is internal only; doesn't block phase
-- Create VERIFICATION.md template with structured output format
-
-
-## Missing Critical Features
-
-### 11. No Partial Phase Execution Mode
-
-**Issue:** Cannot execute a subset of tasks within a phase; must execute entire phase or nothing.
-
-**Files:** `commands/gsd/execute-phase.md`
-
-**Problems:**
-- No `--tasks=16-01:1,16-01:3` filtering
-- No way to re-run specific failed tasks without re-running entire plan
-- Large phases must all-or-nothing execute
-- Cannot interleave manual work with automated tasks
-
-**Impact:**
-- Cannot iterate on single task while keeping rest stable
-- Large changes must be all-in or all-out
-- Difficult to debug single task failures
-
-**Fix approach:**
-- Add `--tasks=PLAN:TASK,PLAN:TASK` parameter to execute-phase
-- Allow comma-separated task lists and ranges (`16-01:1-3,16-02:5`)
-- Still enforce wave dependencies (can't run task X if depends_on Y not complete)
-
-
-## Performance Concerns
-
-### 12. Context Budget Tracking Is Manual
-
-**Issue:** No automated enforcement of context budgets for agents and plans.
-
-**Files:**
-- `agents/gsd-planner.md` (line 85-95: manual quality degradation curve)
-- Various agent files declare context but don't measure against budget
-
-**Problems:**
-- Plans are sized by manual estimation ("2-3 tasks max")
-- No automated warning if plan context exceeds budget
-- Orchestrator can spawn agents that exceed 50% context immediately
-- Quality degradation isn't validated; agents may still be over-budget
-
-**Impact:**
-- Large phases with many interdependent plans exceed context budget silently
-- Quality degrades without warning
-- No way to optimize agent context usage
-
-**Fix approach:**
-- Add context budgeter utility that:
-  - Calculates actual token count for PLAN.md files
-  - Sums context for referenced @-files
-  - Warns if plan context > 20% of agent budget
-  - Estimates orchestrator context usage and phases that exceed capacity
-- Run as lint step in verify-work flow
-
+- Source wizard functions in `plugins/claude/project.sh` at start of execution
+- Add explicit source statement: `source "$SCRIPT_DIR/../lib/wizard.sh"` or pass via environment
+- Test wizard availability before prompting with `type wizard_yesno > /dev/null || error "..."`
+- Document required function sourcing in plugin architecture guidelines
 
 ---
 
-*Concerns audit: 2026-02-06*
+### 2. Project CLAUDE.md Builder Uses Hardcoded Boilerplate Instead of Global Sections
+
+**Issue:** When creating project-level CLAUDE.md, the code generates static boilerplate instead of assembling sections from the user's configured global CLAUDE.md.
+
+**Files:**
+- `plugins/claude/project.sh` (lines 388-407)
+
+**Problems:**
+- Lines 388-407 write hardcoded project instructions instead of using `_claude_build_md()` function
+- Global configuration (`CLAUDE_MD_SECTIONS` from global setup) is ignored
+- Project CLAUDE.md does not include user's custom guidelines, exclusions, or conventions
+- Generated file is minimal and unhelpful for project-specific configuration
+
+**Impact:**
+- Project scaffolding produces useless template files
+- Users must manually edit CLAUDE.md after project-configs completes
+- Project inherits none of the global configuration decisions
+
+**Fix approach:**
+- Replace hardcoded boilerplate (lines 388-407) with call to `_claude_build_md()` function
+- Pass `CLAUDE_MD_SECTIONS` into the builder to include user's selected sections
+- Append project-specific overrides after global content (e.g., project-level tool restrictions)
+- Add test case verifying CLAUDE.md contains global sections plus project additions
+
+---
+
+### 3. Project-Level settings.json References Non-Existent Hook Paths
+
+**Issue:** The hooks.json template contains paths pointing to `$CLAUDE_PROJECT_DIR/plugins/claude/hooks/` which do not exist in target projects.
+
+**Files:**
+- `plugins/claude/templates/settings/hooks.json`
+
+**Problems:**
+- Hook command paths reference `plugins/claude/hooks/` from dotconfigs source tree
+- Target projects have hooks deployed to `.claude/hooks/` directory
+- Settings assembler references broken paths, causing hook execution failures
+- Path variables not interpolated correctly; hardcoded paths assume specific directory layout
+
+**Impact:**
+- Deployed project settings cannot execute hooks (command not found errors)
+- Claude Code cannot trigger pre/post-tool hooks in projects using project-configs scaffold
+- Hook failures are silent; users won't know hooks aren't running
+
+**Fix approach:**
+- Update `hooks.json` template to use relative path: `~/.claude/hooks/` or project-relative `./.claude/hooks/`
+- Replace hardcoded `$CLAUDE_PROJECT_DIR` with actual relative path during assembly
+- Add path validation in deploy.sh: verify hook files exist before deploying settings
+- Document hook deployment and path expectations in project scaffold documentation
+
+---
+
+## Major Issues (Degraded Functionality)
+
+### 4. Deploy Output Lacks Source Provenance Information
+
+**Issue:** Deploy messages show only target file paths, omitting the source file path needed for SSOT (single source of truth) verification.
+
+**Files:**
+- `plugins/claude/deploy.sh` (8 echo statements)
+- `lib/symlinks.sh` (lines 111, 118, 126, 152)
+
+**Problems:**
+- Echo statements use `$name` (target filename only) instead of source path
+- Users cannot verify which template generated which deployed file
+- Deployments become harder to audit and troubleshoot
+- Symlink creation hides the mapping between source and destination
+
+**Impact:**
+- Reduced visibility into deployment process
+- Harder to debug which template file caused configuration issues
+- Users cannot trace deployed settings back to source
+
+**Fix approach:**
+- Update all deploy echo statements to include source path: `"${source_path} → ${target_path}"`
+- Modify `backup_and_link()` in `lib/symlinks.sh` to print mapping
+- Add consistent format: `"Deployed: plugins/claude/templates/settings.json → ~/.claude/settings.json"`
+- Add `--verbose` flag to show intermediate processing steps
+
+---
+
+### 5. Git Plugin Hook Section Lacks Granular Scope Control
+
+**Issue:** The git plugin wizard presents hook configuration as all-or-nothing but users need per-hook granularity (location: global, project, disabled).
+
+**Files:**
+- `plugins/git/setup.sh` (lines 280-410 hook configuration section)
+
+**Problems:**
+- Hook configuration only offers on/off toggle; cannot choose individual hook location
+- Users cannot set some hooks to project scope and others to global scope
+- No option to disable specific hooks (e.g., disable post-merge but enable pre-commit)
+- UI doesn't explain tracked vs untracked hook locations
+
+**Impact:**
+- Cannot customize hook behaviour per-project or per-team
+- Users forced to accept all hooks or disable entirely
+- No way to opt-out of specific enforcement (e.g., disabling secrets check for repos with test credentials)
+
+**Fix approach:**
+- Add per-hook menu: "Configure each hook individually? [y/n]"
+- If yes, iterate: `"post-commit hook: [1] global [2] project [3] disabled"`
+- Store per-hook locations in `.env` with suffixes: `GIT_HOOK_PRE_COMMIT_LOCATION=project`
+- Document hook precedence: project hook > global hook > disabled
+- Add test case for mixed hook configurations
+
+---
+
+### 6. Git Plugin Edit Mode Display Parsing Broken for Items 7+
+
+**Issue:** The edit mode for git plugin configuration has a parsing bug that causes garbled labels and non-functional selection beyond item 6.
+
+**Files:**
+- `plugins/git/setup.sh` (line 500+, display parsing section)
+
+**Problems:**
+- Edit mode shows numbered menu of current configuration values
+- Labels become garbled and misaligned after item 6
+- Selection input validation fails; entering valid numbers is rejected
+- Display parsing likely uses incorrect field separator or index calculation
+
+**Impact:**
+- Users cannot edit hook configuration in re-run mode
+- Configuration must be reset and re-run from scratch to change settings
+- Error messages ("Invalid input") appear even with valid input
+
+**Fix approach:**
+- Debug display parsing logic; likely issue in loop that generates numbered menu
+- Verify field separator handling (colon-delimited or space-delimited?)
+- Add test case with mock input to verify 10+ items render correctly
+- Add verbose debug mode: `bash -x plugins/git/setup.sh` should show parsing steps
+- Consider simplifying display format to avoid parsing complexity
+
+---
+
+## Data Integrity Issues
+
+### 7. Deploy Output Idempotency Not Fully Validated
+
+**Issue:** Repeat deployments correctly show "Unchanged" status but lack full verification that target files match source.
+
+**Files:**
+- `plugins/claude/deploy.sh`
+- `lib/symlinks.sh`
+
+**Problems:**
+- No checksum comparison between source and target
+- Filesystem timestamp changes could cause re-deployment of unchanged content
+- Symlink targets are not validated (symlink could point to wrong file but report unchanged)
+- No warning if target file differs from source (manual user edit gone undetected)
+
+**Impact:**
+- Silent drift between source templates and deployed files possible
+- Users could accidentally modify deployed files and have no visibility
+- No way to detect configuration corruption
+
+**Fix approach:**
+- Add checksum comparison before reporting "Unchanged": compute `sha256sum` of source and target
+- Store checksum in deployment metadata file (e.g., `.claude/deploy-manifest.json`)
+- Warn if deployed file differs from source without --force flag
+- Add `--verify` flag to audit existing deployments against sources
+- Document deployment state tracking approach
+
+---
+
+### 8. Project-Configs Scaffold Generates Orphaned Configuration Files
+
+**Issue:** Generated CLAUDE.md, settings.json, and hooks.json may reference non-existent source files or use paths that don't work in the target project context.
+
+**Files:**
+- `plugins/claude/project.sh` (scaffold generation)
+- `plugins/claude/templates/` (template files)
+
+**Problems:**
+- Generated files assume target project structure matches dotconfigs structure
+- Path variables in templates (e.g., `$CLAUDE_PROJECT_DIR`) not interpolated for target
+- Generated .dotconfigs.json excluded by default (recent fix, but implications unclear)
+- No validation that generated files reference valid tools, paths, or commands
+
+**Impact:**
+- Project scaffolding produces files that won't work without manual editing
+- Users must understand Claude Code internals to fix generated configuration
+- Configuration breaks on Claude updates or when project structure differs
+
+**Fix approach:**
+- Add validation step in project.sh: verify all referenced paths exist post-generation
+- Generate .dotconfigs.json with actually-available tools in target project
+- Document target-project path assumptions
+- Add `--validate` flag to check generated files before deployment
+- Create test fixture: run project-configs on test project, verify all paths work
+
+---
+
+## Configuration Management Issues
+
+### 9. Git Hook Identity Enforcement Hardcoded
+
+**Issue:** Identity validation in git hooks is hardcoded to specific user (henrycgbaker), blocking contributions from other team members.
+
+**Files:**
+- `plugins/git/hooks/commit-msg` (identity check logic)
+- `plugins/git/setup.sh` (configuration section)
+
+**Problems:**
+- Hardcoded identity check prevents other users from committing
+- Identity is not configurable per-repository via git config
+- No way to add team member identities or use team email addresses
+- Setup wizard doesn't prompt for identity configuration (assumes global git config is correct)
+
+**Impact:**
+- Multi-person teams cannot use repo-specific hooks with identity enforcement
+- Workaround: disable hooks entirely or edit checked-in hook files
+- Identity check is security-theater if not properly configured per-team
+
+**Fix approach:**
+- Store identity in `.git/config`: `[dotclaude] allowed_authors = user1@example.com,user2@example.com`
+- Read from git config in hook before checking identity
+- Wizard should prompt: "Allow commits from [git config user.email]? [y/n]" with option to add team emails
+- Document identity configuration in hook setup instructions
+- Add test case: simulate commit with different author identity
+
+---
+
+## Testing & Validation Gaps
+
+### 10. No Integration Tests for Project Scaffold Generation
+
+**Issue:** Project-configs scaffold generation has no automated tests, making it fragile to changes.
+
+**Files:**
+- `plugins/claude/project.sh` (scaffold generation)
+- `tests/` (test directory)
+
+**Problems:**
+- No test suite for project-configs output validation
+- Wizard function availability issues went undetected in development
+- Hook path issues in settings.json not caught until UAT
+- CLAUDE.md builder issues only discovered through user feedback
+
+**Impact:**
+- Regressions in project scaffold easily introduced
+- Feature changes break project-configs silently
+- User-facing issues discovered late (UAT vs development)
+
+**Fix approach:**
+- Add comprehensive test suite in `tests/test-project-configs.sh`:
+  - Verify wizard functions are available
+  - Validate CLAUDE.md includes expected sections
+  - Check settings.json hook paths point to valid locations
+  - Verify all template variables are interpolated
+- Add test fixtures: sample .env with various configurations
+- Run project-configs on test project, verify output is functional
+- Add pre-commit hook to run tests
+
+---
+
+### 11. No Validation of Plugin Interdependencies
+
+**Issue:** Plugins depend on shared lib functions but sourcing is not consistently handled, leading to missing-function errors at runtime.
+
+**Files:**
+- `plugins/claude/project.sh` (calls wizard functions)
+- `plugins/git/project.sh` (may have similar issues)
+- `lib/wizard.sh`, `lib/symlinks.sh` (shared functions)
+
+**Problems:**
+- Plugin execution context doesn't guarantee lib functions are available
+- No static validation that called functions are exported/sourced
+- Error messages are unhelpful when functions are missing
+- Plugin README/documentation doesn't explain dependency on lib
+
+**Impact:**
+- Runtime errors when plugins call unavailable functions
+- Plugin portability is fragile; moving plugins breaks them
+- Hard to debug function availability issues
+
+**Fix approach:**
+- Document function dependencies in each plugin
+- Add validation at plugin start: check all required functions exist, error clearly if missing
+- Create shared function export mechanism (e.g., `_export_functions` in main dotconfigs)
+- Test plugins in isolated execution context to catch sourcing issues
+- Update plugin development guidelines with sourcing requirements
+
+---
+
+## Architecture & Design Concerns
+
+### 12. Multiple Agents Perform Overlapping Verification (GSD)
+
+**Issue:** Plan-checker, verifier, and executor have overlapping verification responsibilities without clear role boundaries.
+
+**Files:**
+- `.planning/quick/002-fix-git-wizard-bug-restructure-cli-setup/` (ongoing work)
+- `agents/gsd-plan-checker.md`
+- `agents/gsd-verifier.md`
+- `agents/gsd-executor.md`
+
+**Problems:**
+- Plan-checker validates predictive (will plan work?)
+- Verifier validates confirmatory (did execution work?)
+- Executor has internal verification (valid plan execution?)
+- Relationship between phases not documented; unclear what happens on disagreement
+
+**Impact:**
+- Redundant verification work
+- Ambiguous phase failure diagnosis
+- No unified verification report or audit trail
+
+**Fix approach:**
+- Document verification philosophy: design → predictive → execution → confirmatory
+- Clarify plan-checker is gate (blocks execution), verifier is audit (can restart)
+- Create VERIFICATION.md template with structured output format
+- Executor verification is internal only; reports to verifier, not blocking
+
+---
+
+## Performance & Scaling Concerns
+
+### 13. Plan Dependency Resolution Could Be Inefficient
+
+**Issue:** Wave-based dependency resolution in GSD execute orchestrator scales linearly (O(n)) but documentation is unclear about implementation.
+
+**Files:**
+- `.planning/quick/002-fix-git-wizard-bug-restructure-cli-setup/` (ongoing work)
+- `commands/gsd/execute-phase.md`
+
+**Problems:**
+- No dependency graph structure; resolution described but not implemented detail clear
+- Circular dependencies not detected until runtime
+- Context for wave tracking not persisted between phases
+- Large phase sets could cause orchestrator context overflow
+
+**Impact:**
+- Projects with 50+ plans may have execution delays
+- Circular dependencies cause hangs or errors without clear messaging
+- Large plans exceed context budgets without warning
+
+**Fix approach:**
+- Build dependency graph once at phase start using topological sort
+- Implement cycle detection; fail fast on circular dependencies
+- Cache wave assignments in `.planning/phase-X-waves.json`
+- Validate all dependencies exist before execution starts
+- Add `--validate-deps` flag to check dependencies without executing
+
+---
+
+## Known Workarounds & Deferred Issues
+
+### 14. Claude Code Security Issues Bypassing Deny Rules
+
+**Issue:** Claude Code has known bugs (#6699, #8961) where deny rules are ineffective; security layer shipped anyway as future-proofing.
+
+**Files:**
+- `plugins/claude/templates/settings/` (deny rules)
+- `.planning/phases/03-settings-hooks-deploy-skills/03-01-SUMMARY.md` (documented)
+
+**Problems:**
+- `.env` and `.env.*` files currently not blocked despite deny rules
+- Deny rules will only activate when Claude Code bugs are fixed
+- No warning that security is partially ineffective in current version
+
+**Impact:**
+- `.env` files with secrets could be read by Claude if prompt is crafted to bypass rules
+- Users should not rely on deny rules for critical secret protection
+- Risk depends on Claude Code version and bug fix timeline
+
+**Fix approach:**
+- Document this limitation in setup wizard: "Note: deny rules ineffective until Claude Code vX.Y+"
+- Add ask rules as fallback: prompt user before accessing sensitive patterns
+- Recommend: store truly critical secrets outside .env (use credential managers)
+- Monitor Claude Code releases for bug fixes; update documentation when fixed
+- Add validation test: confirm deny rules are enforced in Claude Code version check
+
+---
+
+## Technical Debt
+
+### 15. Post-Tool Format Hook Uses Python Subprocess Without Error Handling
+
+**Issue:** The post-tool-format hook spawns Python subprocess but has weak error handling for Python execution failures.
+
+**Files:**
+- `plugins/claude/hooks/post-tool-format.py`
+
+**Problems:**
+- Hook does not validate Python version compatibility
+- Subprocess calls do not capture stderr or handle exceptions
+- Hook silently fails if Python dependencies missing or syntax error
+- No logging of hook execution or failures
+
+**Impact:**
+- Tool output formatting errors go unnoticed
+- Hook failures won't appear in Claude logs; users unaware of problems
+- Debugging hook issues requires manual bash -x inspection
+
+**Fix approach:**
+- Add Python version check at start: require Python 3.8+
+- Wrap subprocess calls in try/except with clear error messages
+- Add logging: output errors to stderr if hook fails
+- Document required Python dependencies and versions
+- Add pre-deployment validation: test hook syntax before deploy
+
+---
+
+## Minor Issues & Improvements
+
+### 16. Unclear Deployment State Visibility
+
+**Issue:** Users cannot easily determine what's deployed vs. what's pending without running full deploy command.
+
+**Files:**
+- `plugins/claude/deploy.sh`
+- `lib/symlinks.sh`
+
+**Problems:**
+- `status` command output doesn't show file paths or deployment state
+- No manifest of deployed files (e.g., `.claude/deploy-manifest.json`)
+- Users must infer state from directory listing
+
+**Impact:**
+- Harder to troubleshoot deployment issues
+- Users don't know what was deployed last
+- Audit trail of deployments missing
+
+**Fix approach:**
+- Create deployment manifest: `.claude/deploy-manifest.json` with file list + checksums
+- Enhance `status` command to show deployment state vs. source state
+- Add `--list-deployed` flag to show all deployed files with timestamps
+- Document manifest format for users
+
+---
+
+*Concerns audit: 2026-02-10*

@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: unit tests (bash function level)",
+    "e2e: end-to-end tests (full CLI invocations)",
+]

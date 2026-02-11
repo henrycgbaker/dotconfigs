@@ -2,210 +2,87 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-07)
+See: .planning/PROJECT.md (updated 2026-02-11)
 
-**Core value:** Single source of truth for all personal dev configuration — one repo, one CLI, one `.env`, deployed everywhere with minimal context footprint.
-**Current focus:** v2.0 Plugin Architecture — requirements and roadmap defined, ready for phase planning.
+**Core value:** Single source of truth for all personal dev configuration — one repo, one JSON config, deployed everywhere via symlinks.
+**Current focus:** v3.0 Explicit Config MVP — Phase 11 complete, ready for Phase 12
 
 ## Current Position
 
-Phase: Quick task 004 of ongoing (Fix UAT deploy provenance + project wizard)
-Plan: 2 of 2
-Status: Complete
-Last activity: 2026-02-09 — Completed 004-02-PLAN.md (fix project-configs wizard)
+Phase: 12 (VS Code Plugin + Migration + CLI) — third of 4 v3.0 phases (10-13)
+Plan: Not yet planned
+Status: Ready for planning
+Last activity: 2026-02-11 — Completed 11-04-PLAN.md (gap closure)
 
-Progress: ████████████████ 100% (44/44 completed in v2.0, quick task 004 complete)
+Progress: ██████████░░░░░░ 50% (2/4 phases)
 
 ## Performance Metrics
 
 **v1.0 (archived):**
 - Total plans completed: 12
 - Total execution time: 24min
-- Average duration: 2.0min
 
-**v2.0 (current):**
-- Total plans completed: 29
+**v2.0 (archived):**
+- Total plans completed: 44 (29 phase plans + 8 quick tasks + 7 gap closures)
 - Total execution time: ~75min
-- Average duration: 2.6min
+
+**v3.0:**
+- Total plans completed: 5
+- Total execution time: ~12min
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
+Decisions logged in PROJECT.md Key Decisions table.
 
-Key decisions carrying forward from v1:
-- Subcommand CLI design (not flag-based)
+**v3.0 decisions:**
+- Explicit source→target JSON config (global.json, project.json)
+- Generic file deployer — tool doesn't know about plugin names
+- Git config as gitconfig include file (not git config commands)
+- CLAUDE.md as single maintained file (no template assembly)
+- Wizards deferred to v4 — users edit JSON directly
+- VS Code plugin added to v3 scope
+- Shell plugin deferred to v4+
+- jq dependency required
+- Group argument maps to top-level keys in global.json (11-02)
+- No validation that group exists - jq returns empty for missing keys (11-02)
+- Old plugin deploy scripts preserved for status/list commands until Phase 12 (11-02)
+- project_root parameter enables relative target path resolution for per-project configs (11-03)
+- .dotconfigs/ auto-excluded in .git/info/exclude to keep projects clean (11-03)
+- Removed plugin filter from project-init — JSON config controls what's deployed (11-03)
+- Project-specific overrides hardcoded for claude/git, unknown groups auto-transformed (11-04)
+- project.json.example deleted — global.json is single source of truth (11-04)
+
+**Carrying forward from v2.0:**
+- Plugin architecture (plugins/claude/, plugins/git/, shared lib/)
+- `dotconfigs` as CLI entry point name
+- Bash 3.2 compatibility (macOS requirement)
 - File-level symlinks for GSD coexistence
-- .env for deploy configuration
-- Settings.json layering (global → project)
-- Hooks as local-only copies (not tracked in projects)
-- macOS portability via perl for absolute path resolution
-- bash select for menus (no dialog/whiptail dependencies)
 
-New v2.0 decisions:
-- [v2.0]: Rename dotclaude → dotconfigs
-- [v2.0]: Plugin architecture (plugins/claude/, plugins/git/, shared lib/)
-- [v2.0]: `dotconfigs` as CLI entry point name
-- [v2.0]: Separate setup (wizard → .env) from deploy (.env → filesystem)
-- [v2.0]: Git plugin covers hooks + identity + gitconfig workflow
-- [v2.0]: Shell plugin deferred to v3
-- [v2.0]: Bash 3.2 fixes already on branch (refactor/lean-claude-setup)
-- [v2.0]: Strangler fig migration — deploy.sh deleted (clean break per user decision)
-- [05-05]: deploy.sh clean break — deleted, not wrapped (user decision MIGR-01)
-- [v2.0]: Plugin function naming: `plugin_<name>_<action>`
-- [v2.0]: Eager lib loading, lazy plugin loading
-- [04-01]: No shebangs in lib/ files (sourced libraries, not executables)
-- [04-01]: Hybrid discovery.sh with plugin + legacy content discovery
-- [04-01]: Filesystem-based plugin discovery (find + basename pattern)
-- [04-02]: Subcommand-based CLI design (verified and implemented)
-- [04-02]: Lazy plugin loading (source on-demand in cmd_setup/cmd_deploy)
-- [04-02]: No shebang in plugin files (sourced libraries, not executables)
-- [04-02]: Error output to stderr, usage to stdout, non-zero exit codes
-- [05-01]: Assets organized under plugins/claude/ with subdirectories for templates, hooks, commands
-- [05-01]: Discovery functions accept plugin_dir parameter for flexibility
-- [05-01]: discover_hooks_conf_profiles function added for hooks.conf profile discovery
-- [05-01]: All lib/ references changed from dotclaude to dotconfigs
-- [05-02]: All Claude plugin keys get CLAUDE_* prefix (including git identity)
-- [05-02]: Migration logic comments out old keys with notice (not deleted)
-- [05-02]: 7-step wizard (dropped aliases, moved conflict review to deploy)
-- [05-02]: Summary + confirm before saving (user can cancel)
-- [05-03]: Plugin derives DOTCONFIGS_ROOT from PLUGIN_DIR location
-- [05-03]: Settings.json symlinked from repo root (global shared file)
-- [05-03]: Hooks/commands symlinked from plugin dir (plugin assets)
-- [05-03]: Shell aliases and remote deploy dropped (dead code)
-- [06-01]: Git hooks source of truth moved to plugins/git/hooks/
-- [06-01]: commit-msg uses research-based conventional commit regex with scope and breaking change support
-- [06-01]: pre-push protection configurable via GIT_HOOK_PREPUSH_PROTECTION (block/warn/off)
-- [06-01]: Claude plugin no longer manages git hooks or identity
-- [06-02]: Menu-based wizard (not linear walk-through) per user decision in 06-CONTEXT.md
-- [06-02]: Opinionated defaults: settings enabled by default, user opts out
-- [06-02]: Custom alias names validated against git built-in commands blacklist
-- [06-02]: Global hooks scope shows explicit conflict warning about core.hooksPath overriding per-project hooks
-- [06-02]: Pre-fill from .env values, fall back to git config on first run for identity
-- [06-03]: deploy.sh warns on drift before overwriting git config
-- [06-03]: Alias definitions fall back to hardcoded defaults when GIT_ALIAS_* env vars missing
-- [06-03]: Hooks deploy per-project by default, global deployment is opt-in
-- [06-03]: project.sh offers optional per-repo git identity configuration
-- [07-01]: TTY-aware colour output via [[ -t 1 ]] check (ANSI when TTY, plain when piped)
-- [07-01]: 5-state drift detection model (deployed, not-deployed, drifted-broken, drifted-foreign, drifted-wrong-target)
-- [07-01]: Hierarchical help system (overview + per-command detail)
-- [07-01]: Deploy-all mode when no plugin specified (dotconfigs deploy)
-- [07-02]: Plugin status functions follow plugin_<name>_status() naming convention
-- [07-02]: Status functions report per-file/per-config-item granularity
-- [07-02]: Git config items use _print_config_status() helper (separate from file status)
-- [07-02]: List command shows minimal output (plugin name + installed/not-installed)
-- [07-03]: backup_and_link interactive_mode supports three values: true/false/force
-- [07-03]: Diff option in conflict prompt shows file differences before decision
-- [07-03]: Backup suffix changed from .backup to .bak per shell convention
-- [07-03]: Deploy summary always printed (created/updated/skipped/unchanged)
-- [07-03]: --dry-run takes precedence over --force when both specified
-- [07-03]: Force mode suppresses git drift confirmation and all conflict prompts
-- [07-04]: README with no example terminal output (concise documentation approach)
-- [07-04]: ASCII architecture diagram in README (makes three-command model clear)
-- [07-04]: Deprecation notice for CLAUDE_GIT_* keys (moved to GIT_* namespace)
-- [08-01]: Unified hook variable naming: GIT_HOOK_* for git hooks, CLAUDE_HOOK_* for claude hooks
-- [08-01]: AI attribution blocking now configurable (GIT_HOOK_BLOCK_AI_ATTRIBUTION) with strong default ON
-- [08-01]: Config hierarchy: hardcoded default → env var → config file
-- [08-01]: Multi-path config discovery for backwards compatibility
-- [08-01]: Deprecated hooks.conf profile templates, replaced with single documented template
-- [08-01]: Per-hook enable/disable via {PREFIX}_{HOOK_NAME}_ENABLED variables
-- [08-01]: Metadata headers in hooks for auto-documentation
-- [08-03]: Secrets detection blocks hard (no warn mode) — security-critical
-- [08-03]: Large file detection warns only — not a correctness issue
-- [08-03]: Debug statement detection configurable strict mode (warn vs block)
-- [08-03]: Branch prefix only on branch commits, skips merge/squash/amend
-- [08-03]: Post-* hooks informational only — never block workflow
-- [08-03]: Post-rewrite only checks rebase (not amend) — amend is single commit
-- [08-03]: Portable file size detection using wc -c (not stat) for macOS/Linux compatibility
-- [08-04]: PreToolUse hook blocks destructive commands and sensitive file writes (defence-in-depth for buggy settings.json)
-- [08-04]: Independent guards for destructive commands (CLAUDE_HOOK_DESTRUCTIVE_GUARD) and file protection (CLAUDE_HOOK_FILE_PROTECTION)
-- [08-04]: Graceful jq degradation — hook exits silently if jq missing (non-blocking)
-- [08-05]: Git setup wizard shows full hook roster (23 settings) with config file location selection
-- [08-05]: Claude project wizard uses individual CLAUDE_HOOK_* toggles (no profile selection)
-- [08-05]: GIT_HOOK_BRANCH_PROTECTION replaces GIT_HOOK_PREPUSH_PROTECTION
-- [08-05]: Hook configuration files deployed by project commands (git-hooks.conf, claude-hooks.conf)
-- [08-05]: Complete .env.example with 26 GIT_HOOK_* and 3 CLAUDE_HOOK_* variables
-- [08-06]: Metadata-driven roster generation from hook METADATA blocks and command frontmatter
-- [08-06]: Auto-generated ROSTER.md with hooks, commands, and config reference tables
-- [08-06]: Configuration hierarchy documented in README (three-tier model with precedence)
-- [08-06]: Plugin config ownership documented (git-hooks.conf vs claude-hooks.conf)
-- [09-02]: Colour badge helpers for G/L provenance (cyan Global, green Local, dim not-managed)
-- [09-02]: Wizard helpers for opt-in category menus and config toggles
-- [09-02]: Complete settings-template.json with all common rules (Python/Node/git/docker/hooks)
-- [09-02]: Root settings.json gitignored to prevent committing personal config
-- [09-03]: Category-based opt-in wizard for Claude global-configs (3 categories: Deploy targets, Content, Behaviour)
-- [09-03]: Edit mode on re-run with numbered config list and [not managed] indicators
-- [09-03]: Git identity removed from Claude wizard (responsibility moved to git plugin)
-- [09-03]: Opt-in save logic — only writes non-empty config values to .env
-- [09-04]: Git wizard rewritten with 4-category opt-in model (Identity, Workflow, Aliases, Hooks)
-- [09-04]: All select loops replaced with read-based numbered prompts (UX consistency)
-- [09-04]: Edit mode detection via presence of GIT_* keys in .env
-- [09-04]: Summary shows [not managed] for unselected configs (opt-in transparency)
-- [09-05]: Project-configs wizards show G/L provenance indicators (cyan [G] for global, green [L] for local)
-- [09-05]: CLAUDE.md exclusion applied during deploy (reads from .env, writes to .git/info/exclude)
-- [09-05]: Settings.json assembled from templates during deploy with language rule selection (Python/Node)
-- [09-05]: Select loop eliminated from claude project.sh (replaced with read prompt)
-- [09-06]: Boolean opt-out uses unset instead of setting to 'false' to ensure save logic skips them
-- [09-06]: First-run sections and skills start empty (opt-in) rather than pre-selected (opt-out)
-- [09-06]: Default detection logic changed from checking for 'false' to checking for 'true'
-- [09-07]: .env format retained — JSON migration deferred to v3 (quoting bug fixed in quick-002, not symptomatic of format issues)
-- [09-07]: Legacy githooks/ directory removed — plugins/git/hooks/ is sole source of truth for git hooks
-- [09-07]: Orphaned discovery functions cleaned up (discover_githooks, discover_settings_templates, discover_hooks_conf_profiles)
-- [003-01]: GSD install removed from Claude wizard — npm handles installation independently
-- [003-01]: Content previews added before section/skill toggle menus — shows first line from templates
-- [003-01]: Settings.json assembly simplified to single-template copy — no jq/python3 dependencies
-- [003-01]: CLAUDE.md exclusion offers 'both' pattern option in first-run flow
-- [003-03]: Edit mode uses indexed eval access for bash 3.2 compatibility (prevents garbled display)
-- [003-03]: Edit mode labels descriptive without redundant 'enabled' suffix
-- [003-03]: 'Rerun as new' option added before entering edit mode (unsets all CLAUDE_* vars)
-- [004-02]: Array-based plugin collection in cmd_project_configs to preserve stdin for interactive prompts
-- [004-02]: Separate discovery (stdin-consuming) from execution (interactive) phases
+### Pending Todos
 
-### Pending Todos (3 in .planning/todos/pending/)
-
-- [ ] **GSD framework**: Add Explore agent to model profile lookup table (GSD PR, not this repo)
-- [x] **README**: Add brief mention of GSD framework — DONE in 08-06
-- [ ] **Wizard UX**: Unify rerun/edit-mode logic between Claude and Git wizards (currently different flows)
-- [ ] **Wizard UX**: Improve toggle menu previews (inline first-line for hooks, richer formatting)
-- [ ] **Architecture**: Rethink global vs project-level interaction model (see todos/pending/)
-- [ ] **Testing**: Test project-init on brownfield project and ds01 server
+- [ ] **Phase 12**: VS Code plugin + .env migration + CLI cleanup
+- [ ] **Phase 13**: Documentation
+- [ ] **v4+**: Deployment scan/status report command (`dotconfigs scan`)
 
 ### Blockers/Concerns
 
-- Hook symlink manually fixed after 05-01 asset move — `dotconfigs deploy claude` will handle this automatically in future
-
 **Resolved:**
-- Pre-commit hook COMMIT_EDITMSG timing bug — FIXED in v1.0 03-03
-- v1 CLI design mismatches (subcommands vs flags) — accepted as-is, cleaner design
-- Settings.json deny rules bug (Claude Code #6699, #8961) — WORKAROUND: PreToolUse hook provides defence-in-depth (08-04)
+- Global hooks only work from dotconfigs repo — FIXED in 10-01
+- Over-engineered wizard-driven deployment — RESOLVED by v3 simplification
+- Project scaffolding (project.sh) bugs — REPLACED by JSON-based project config commands in 11-03
 
-### Quick Tasks Completed
+**Active:**
+- .env quoting bugs — will be eliminated by JSON migration in Phase 12
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 001 | Fix milestone audit critical bugs (colour_cyan, PLUGIN_DIR) | 2026-02-07 | 1bd83e4 | [001-fix-milestone-audit-critical-bugs](./quick/001-fix-milestone-audit-critical-bugs/) |
-| 002 | Rename CLI to 'dots', restructure commands, add CLAUDE.md exclusion | 2026-02-09 | 683ace8 | [002-fix-git-wizard-bug-restructure-cli-setup](./quick/002-fix-git-wizard-bug-restructure-cli-setup/) |
-| 003-01 | Claude wizard UX improvements (remove GSD, add previews, simplify settings) | 2026-02-09 | b36d8d0 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
-| 003-02 | Fix Git wizard UX issues (prompt format, config path labels) | 2026-02-09 | 46d9d79 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
-| 003-03 | Fix edit mode (selection logic, display, labels, rerun option) | 2026-02-09 | 9140124 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
-| 003-04 | Polish setup command one-time init | 2026-02-09 | e0d75d2 | [003-fix-uat-open-issues](./quick/003-fix-uat-open-issues/) |
-| 004-01 | Add deploy source provenance | 2026-02-09 | a461bbc | [004-fix-uat-deploy-provenance-project-wizard](./quick/004-fix-uat-deploy-provenance-project-wizard/) |
-| 004-02 | Fix project-configs wizard (stdin consumption, CLAUDE.md, hooks.json) | 2026-02-09 | 5be5c68 | [004-fix-uat-deploy-provenance-project-wizard](./quick/004-fix-uat-deploy-provenance-project-wizard/) |
+### Backup Reference
 
-### Roadmap Evolution
-
-- Phase 9 added: Config UX Redesign — opt-in config selection, project-configs wizard, CLAUDE.md exclusion, bug fixes (from UAT findings + quick task 002 gaps)
-- Phase 10 added: Per-Hook Scope Granularity — per-hook global/project deployment (v3 priority, deferred from UAT test 6c)
+Original v3 plans (wizard refactor, CLI restructure) backed up to `.planning/v4-v3-backup/`.
+Wizard code (setup.sh files, lib/wizard.sh) preserved in codebase — shelved, not deleted.
 
 ## Session Continuity
 
-Last session: 2026-02-09 19:05:53 UTC
-Stopped at: Completed 004-02-PLAN.md (fix project-configs wizard)
+Last session: 2026-02-11 15:15:20Z
+Stopped at: Completed 11-04-PLAN.md (gap closure for UAT Test 5)
 Resume file: None
-
----
-
-**Phase 8 Status:** COMPLETE (6/6 plans). Hooks architecture and CLI integration complete.
-**Quick Task 002:** COMPLETE. CLI renamed to `dots`, commands restructured, .env quoting fixed.
-**Phase 9 Status:** COMPLETE (9/9 plans). Config UX redesign with opt-in wizards, G/L provenance, CLAUDE.md exclusion, and gap closure complete.

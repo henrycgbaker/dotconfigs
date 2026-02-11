@@ -1,0 +1,31 @@
+# Git configuration — managed by dotconfigs
+# Symlinked to ~/.gitconfig
+# Edit this file directly; changes are visible in git diff.
+
+[user]
+	name = henrycgbaker
+	email = henry.c.g.baker@gmail.com
+
+[core]
+	pager = cat
+	excludesFile = ~/.config/git/ignore
+
+[init]
+	defaultBranch = main
+
+[pull]
+	rebase = true
+
+[fetch]
+	prune = true
+
+[push]
+	default = simple
+
+[alias]
+	unstage = reset HEAD --
+	last = log -1 HEAD
+	lg = log --oneline --graph --all --decorate
+	amend = commit --amend --no-edit
+	undo = reset HEAD~1 --mixed
+	wip = commit -am WIP

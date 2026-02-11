@@ -26,13 +26,44 @@
 
 **Last phase number:** 3
 
+### v2.0: Plugin Architecture
+
+**Completed:** 2026-02-10
+**Phases:** 6 (phases 4-9, 44 plans) + 8 quick tasks
+**Duration:** ~75min execution
+
+**Goal:** Transform dotclaude into dotconfigs — extensible plugin-based configuration manager with `claude` and `git` plugins, shared library layer, and unified `dotconfigs` CLI.
+
+**Delivered:**
+- Phase 4: Core Infrastructure — dotconfigs entry point, lib/ shared libraries, filesystem-based plugin discovery
+- Phase 5: Claude Plugin Extraction — setup wizard, deploy logic, project scaffolding migrated from monolithic deploy.sh
+- Phase 6: Git Plugin — hooks, identity, workflow, aliases with full wizard and deploy flow
+- Phase 7: Integration & Polish — status/list, drift detection, deploy flags, README, PATH symlink
+- Phase 8: Hooks & Workflows Review — unified variable naming, PreToolUse guard, full hook roster, auto-generated ROSTER.md
+- Phase 9: Config UX Redesign — opt-in wizards, G/L provenance badges, CLAUDE.md exclusion, settings assembly
+
+**Requirements:** 32/32 satisfied (100%)
+
+**Key decisions that carry forward:**
+- Three-tier config hierarchy: hardcoded default → .env → project config
+- Plugin interface: plugin_{name}_{setup|deploy|project|status}()
+- Opt-in config model (unset = unmanaged)
+- File-level symlinks with ownership tracking
+- Bash 3.2 compatibility (macOS requirement)
+- Phase 10 (per-hook scope) not started — absorbed into v3.0
+
+**Last phase number:** 9
+
 ---
 
 ## Active Milestone
 
-### v2.0: Plugin Architecture
+### v3.0: Explicit Config MVP
+
+**Goal:** Replace wizard-driven .env with explicit JSON config (global.json + project.json). Generic file deployer: source→target mappings, symlinks files. Add VS Code plugin. Wizards deferred to v4.
 
 See PROJECT.md and ROADMAP.md for current milestone details.
+Original v3 plans (wizard refactor) backed up to `.planning/v4-v3-backup/`.
 
 ---
-*Last updated: 2026-02-07*
+*Last updated: 2026-02-11*

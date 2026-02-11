@@ -2,114 +2,96 @@
 
 ## What This Is
 
-An extensible, plugin-based configuration manager for developer tools. Clone onto any machine (local Mac, remote servers, Docker, CI/CD) to get a consistent development environment. Currently manages Claude Code and Git configuration, with a plugin architecture that supports adding new config domains (shell, editors, etc.) without restructuring.
+A generic file deployer for developer tool configuration. Clone onto any machine, define source→target mappings in JSON, run `dotconfigs deploy`. Currently manages Claude Code, Git, VS Code, and shell configuration.
 
 ## Core Value
 
-Single source of truth for all personal dev configuration — one repo, one CLI, one `.env`, deployed everywhere with minimal context footprint.
+Single source of truth for all personal dev configuration — one repo, one JSON config, deployed everywhere via symlinks. No magic, no wizards, no intermediary formats. The user has total manual control.
 
-## Current Milestone: v2.0 Plugin Architecture
+## Current Milestone: v3.0 Explicit Config MVP
 
-**Goal:** Transform dotclaude into dotconfigs — an extensible plugin-based configuration manager with `claude` and `git` plugins, shared library layer, and unified `dotconfigs` CLI.
+**Goal:** Replace the wizard-driven .env approach with an explicit JSON config that maps source files to deployment targets. Every module has a `source` (where to read) and `target` (where to deploy). The tool is a generic file deployer — it doesn't know about Claude, Git, or VS Code. It just reads source→target pairs and symlinks files.
 
 **Target features:**
-- Plugin architecture (`plugins/claude/`, `plugins/git/`, shared `lib/`)
-- Unified CLI: `dotconfigs setup [plugin]`, `dotconfigs deploy [plugin]`
-- Migrate existing Claude config into `plugins/claude/`
-- New git plugin: hooks, identity, gitconfig workflow settings
-- Bash 3.2 compatibility fixes
-- Wizard always runs with pre-filled defaults from previous `.env`
-- CLI entry point restructure with lib file split
+- `global.json` in dotconfigs repo root — defines all global deployments
+- `.dotconfigs/project.json` per-repo — defines per-project deployments
+- `dotconfigs deploy` reads JSON, symlinks files. Idempotent. No questions asked.
+- `dotconfigs status` checks symlink health against config.
+- `dotconfigs migrate` one-time .env → global.json conversion
+- Git identity/workflow/aliases as a gitconfig include file (Git's native INI format, not commands)
+- VS Code plugin (settings, keybindings, snippets, extensions list)
+- Shell plugin (zsh/bash init, aliases)
+- Wizards deferred to v4 — users edit JSON directly
+- Repo is archive of all modules; `include` field selects what's deployed
+
+**Design principles:**
+- Explicit over magic — every deployment path visible in the config
+- Thin layer — leverage underlying tools' native formats (gitconfig, settings.json)
+- Generic — top-level keys are arbitrary labels, tool doesn't care about plugin names
+- File-based — everything is a file operation (symlink, copy, append)
 
 ## Requirements
 
 ### Validated
 
-*Shipped and confirmed in v1.0:*
+*Shipped and confirmed in v1.0 + v2.0:*
 
-- ✓ Global CLAUDE.md reduced to 41 lines (CTXT-01) — v1.0
-- ✓ Rules/ directory eliminated (CTXT-02) — v1.0
-- ✓ Context burn reduced (CTXT-03) — v1.0
-- ✓ Global settings.json with allow/deny/ask (SETT-01) — v1.0
-- ✓ Project settings.json templates (SETT-02) — v1.0
-- ✓ Settings layering: global → project (SETT-03) — v1.0
-- ✓ Sensitive file protection (SETT-04) — v1.0
-- ✓ block-sensitive.py removed (SETT-05) — v1.0
-- ✓ Ruff auto-format hook (HOOK-01) — v1.0
-- ✓ Conventional commits hook (HOOK-02) — v1.0
-- ✓ AI attribution blocking (HOOK-03) — v1.0
-- ✓ Layered branch protection (HOOK-04) — v1.0
-- ✓ Hooks deployed as local-only (HOOK-05) — v1.0
-- ✓ Configurable deploy.sh (DEPL-01) — v1.0
-- ✓ Interactive wizard (DEPL-02) — v1.0
-- ✓ Non-interactive deploy (DEPL-03) — v1.0
-- ✓ Project scaffolding (DEPL-04) — v1.0
-- ✓ Remote deployment (DEPL-06) — v1.0
-- ✓ Git identity configurable (DEPL-07) — v1.0
-- ✓ GSD installation option (DEPL-08) — v1.0
-- ✓ .env.example (DEPL-09) — v1.0
-- ✓ AI artefacts via .git/info/exclude (GHYG-01) — v1.0
-- ✓ Hooks source of truth in repo (GHYG-02) — v1.0
-- ✓ Over-engineering prevention in CLAUDE.md (QUAL-01) — v1.0
-- ✓ /simplicity-check skill (QUAL-02) — v1.0
-- ✓ /commit skill (SKIL-01) — v1.0
-- ✓ /squash-merge skill (SKIL-02) — v1.0
-- ✓ Registry scanning script (RGST-01) — v1.0
+See MILESTONES.md for full v1.0 (29 req) and v2.0 (32 req) summaries.
 
 ### Active
 
-See REQUIREMENTS.md for v2.0 requirements.
+See REQUIREMENTS.md for v3.0 requirements.
 
 ### Future Milestones
 
-- Explore agent hook (sonnet model for explore agents)
-- README rewrite with latest usage workflows
-- Shell plugin (`plugins/shell/` — aliases, zshrc, env vars)
-- GitHub Actions template for claude-code-action integration
-- CLAUDE.md starter template for new projects
+- v4.0: Wizard UX layer — interactive wizards that generate the same JSON configs
+- v5.0+: Explore agent hook, GitHub Actions template, VS Code extension auto-install
 
 ### Out of Scope
 
-- GSD agents and commands — GSD framework ships its own, no duplication
+- GSD agents and commands — GSD framework ships its own
 - Docker-specific rules/skills — not needed for current workflow
-- Security-focused agents — overkill for solo dev
 - Windows support — macOS/Linux only
 - Team collaboration features — personal configuration
-- Full dotfiles manager (vim, tmux, etc.) — only dev-tool configs that benefit from SSOT management
+- Full dotfiles manager (vim, tmux, etc.) — only dev-tool configs that benefit from SSOT
+- Interactive wizards — deferred to v4.0 (see .planning/v4-v3-backup/)
 
 ## Context
 
-**Current state (post-v1):** ~30 files, lean CLAUDE.md (41 lines), working deploy.sh with wizard, settings.json, hooks, skills. All v1 requirements complete. Ready for architectural expansion.
+**Current state (post-v2):** Plugin architecture working with claude + git plugins, shared lib/, unified CLI. Wizards, deploy, status all functional. ~40 files. v2.0 shipped 32/32 requirements.
 
-**v1 tech debt:** deploy.sh uses subcommand design (not flag design per original spec) — accepted, cleaner. Bash 3.2 incompatibilities on macOS (${var,,}, local -n). Wizard skips on re-run when .env exists.
+**v2 problem:** The wizard-driven .env approach became the primary interface. Users can't easily hand-edit .env because the format is fragile (space-separated arrays, quoting issues). The wizard tail is wagging the config dog. Project scaffolding has 3 critical bugs (wizard functions unavailable in project.sh context). Global hooks had path resolution bugs (fixed in Phase 10).
 
-**Key insight:** The wizard/setup and deploy operations are conceptually separate. Setup writes config (.env), deploy reads config and acts. Separating these enables the plugin architecture — each plugin provides its own setup wizard and deploy logic.
+**Key insight for v3:** Strip back to the simplest correct architecture: a JSON config with explicit source→target mappings, and a deploy command that reads it. No wizard, no .env, no intermediary. Get this working robustly, then layer wizard UX on top in v4.
 
-**GSD relationship:** GSD is an external framework. dotconfigs provides the personal configuration layer underneath. GSD installation remains an optional deploy step.
+**GSD relationship:** GSD is an external framework. dotconfigs provides the personal configuration layer underneath.
 
 ## Constraints
 
+- **Bash 3.2**: macOS ships bash 3.2 — no bash 4+ features (nameref, ${var,,}, associative arrays)
+- **jq dependency**: Required for JSON parsing. Checked at setup time.
+- **Plugin isolation**: Plugins must not import from each other, only from shared `lib/`
+- **Portability**: Must work on macOS (bash 3.2+) and Linux without manual adjustment
 - **Context budget**: Global CLAUDE.md must stay under ~100 lines
 - **Deterministic-first**: If a tool/hook can enforce something, don't put it in CLAUDE.md
-- **GSD compatibility**: Must not conflict with or duplicate GSD framework components
-- **Portability**: Must work on macOS (bash 3.2+) and Linux without manual adjustment
-- **Bash 3.2**: macOS ships bash 3.2 — no bash 4+ features (nameref, ${var,,}, associative arrays)
-- **Plugin isolation**: Plugins must not import from each other, only from shared `lib/`
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Rename dotclaude → dotconfigs | Scope expanding beyond Claude to git + shell configs | v2.0 |
-| Plugin architecture (plugins/claude/, plugins/git/) | Extensible SSOT — adding config domains = adding dirs, not forking | v2.0 |
-| `dotconfigs` as CLI name | Matches repo name, unique, clear purpose | v2.0 |
-| Separate setup from deploy | Setup writes .env, deploy reads .env — clean separation of concerns | v2.0 |
-| Git plugin: hooks + identity + workflow | Git config is useful independently, deserves its own namespace | v2.0 |
-| Shell plugin deferred to v3 | Focus v2 on restructure + 2 plugins, avoid scope creep | v2.0 |
-| Full plugin system in v2 (not incremental) | Doing rename + restructure + plugin arch together avoids double-touching paths | v2.0 |
-| .env files as "ask" not "deny" | Strict deny was annoying — Claude often needs .env for context | ✓ Good |
-| File-level symlinks for GSD coexistence | Directory-level clobbers GSD; file-level lets both tools share dirs | ✓ Good |
-| Subcommand CLI design (not flag-based) | `dotconfigs setup claude` reads better than `dotconfigs --setup --plugin=claude` | ✓ Good |
+| Rename dotclaude → dotconfigs | Scope expanding beyond Claude | v2.0 |
+| Plugin architecture (plugins/claude/, plugins/git/) | Extensible SSOT — adding config domains = adding dirs | v2.0 |
+| Separate setup from deploy | Clean separation of concerns | v2.0 |
+| .env → JSON config (global.json) | .env quoting issues, need for structured config, user editability | v3.0 |
+| Explicit source→target mappings | No magic — user sees exactly what goes where | v3.0 |
+| Generic file deployer | Tool doesn't know about plugins — just reads source/target pairs | v3.0 |
+| Git config as gitconfig include file | Consistent file model, native format, auditable | v3.0 |
+| CLAUDE.md as single file (not assembled) | Simplicity — edit directly, no template fragments | v3.0 |
+| Wizards deferred to v4 | Get manual mechanics right first | v3.0 |
+| VS Code plugin in v3 | Simple file deployer makes adding plugins trivial | v3.0 |
+| Shell plugin in v3 | Same deployer model — zsh config files symlinked | v3.0 |
+| Extensions list capture (not install) | Capture via `code --list-extensions`, install deferred to v4 | v3.0 |
+| Git config in native INI (not JSON) | No translation layer — user edits gitconfig directly | v3.0 |
 
 ---
-*Last updated: 2026-02-07 after v2.0 milestone definition*
+*Last updated: 2026-02-11 after v3.0 simplification*

@@ -1,162 +1,122 @@
-# Requirements: dotconfigs (formerly dotclaude)
+# Requirements: dotconfigs
 
-**Defined:** 2026-02-06
-**Core Value:** Single source of truth for all personal dev configuration — one repo, one CLI, one `.env`, deployed everywhere with minimal context footprint.
+**Defined:** 2026-02-06 (v1), 2026-02-07 (v2), 2026-02-11 (v3 rewrite)
+**Core Value:** Single source of truth for all personal dev configuration — one repo, one JSON config, deployed everywhere via symlinks.
 
 ## v1.0 Requirements (Complete)
 
-All 29 v1.0 requirements delivered. See MILESTONES.md for summary.
+All 29 v1.0 requirements delivered. See MILESTONES.md.
 
-<details>
-<summary>v1.0 requirement list (archived)</summary>
+## v2.0 Requirements (Complete)
 
-### Context Reduction
+All 32 v2.0 requirements delivered. See MILESTONES.md.
 
-- [x] **CTXT-01**: Global CLAUDE.md reduced to <100 lines containing only what Claude can't infer
-- [x] **CTXT-02**: Rules/ directory eliminated -- content condensed to brief CLAUDE.md lines or dropped
-- [x] **CTXT-03**: Session context burn measured and reduced from ~28% to <10%
+## v3.0 Requirements
 
-### Settings & Permissions
+### Hook Path Resolution (Complete)
 
-- [x] **SETT-01**: Global settings.json with clean allow/deny/ask permissions
-- [x] **SETT-02**: Project-level settings.json templates
-- [x] **SETT-03**: Clear layering: global defaults → project overrides
-- [x] **SETT-04**: Sensitive file protection — deny for secrets, ask for .env
-- [x] **SETT-05**: block-sensitive.py hook removed, replaced by settings.json rules
+- [x] **PATH-01**: Global Claude hooks use absolute paths to `~/.claude/hooks/`
+- [x] **PATH-02**: Project Claude hooks use relative `.claude/hooks/` paths
+- [x] **PATH-03**: Deploy bakes all paths at deploy time — no unresolved variables
 
-### Hooks & Enforcement
+### JSON Config Schema (Complete)
 
-- [x] **HOOK-01**: Auto-format hook (Ruff for Python via PostToolUse)
-- [x] **HOOK-02**: Git commit-msg hook for conventional commits
-- [x] **HOOK-03**: Git commit-msg hook blocking AI attribution
-- [x] **HOOK-04**: Layered main branch protection
-- [x] **HOOK-05**: All git hooks deployed as local-only
+- [x] **CONF-01**: `global.json` in dotconfigs repo root with nested group→module→{source, target} structure
+- [x] **CONF-02**: `.dotconfigs/project.json` per-repo with same schema, targets relative to project root
+- [x] **CONF-03**: `source` paths ALWAYS relative to dotconfigs repo root (in both global.json and project.json); `target` paths absolute/tilde-expanded (global) or relative to project root (project)
+- [x] **CONF-04**: Top-level keys are arbitrary labels — tool discovers modules by finding `source`+`target` pairs at any depth. Renaming "claude" to "ai-tools" still works.
+- [x] **CONF-05**: Required `method` field: `symlink`, `copy` (for user-editable files like .gitignore), or `append` (for adding patterns). Always explicit — no implicit defaults.
+- [x] **CONF-06**: Optional `include` field: array of filenames to deploy from a directory source. Omit to deploy all files. Enables repo as archive with selective deployment.
+- [x] **CONF-07**: Directory sources deploy each file individually (not directory symlink — preserves GSD coexistence)
+- [x] **CONF-08**: `jq` dependency checked at setup/deploy time with install instructions
 
-### Deployment
+### Core Deploy (Complete)
 
-- [x] **DEPL-01** through **DEPL-09**: Configurable deploy.sh, wizard, CLI, project scaffolding, remote deployment, git identity, GSD option, .env.example
+- [x] **DEPL-01**: `dotconfigs deploy` reads global.json, symlinks/copies all modules to targets
+- [x] **DEPL-02**: `dotconfigs deploy <group>` filters to a top-level key (e.g., `dotconfigs deploy claude`)
+- [x] **DEPL-03**: Deploy is idempotent — running twice produces same result
+- [x] **DEPL-04**: Deploy reports per-module status: created, updated, unchanged, skipped
+- [x] **DEPL-05**: `--dry-run` flag previews all operations without writing
+- [x] **DEPL-06**: `--force` flag overwrites conflicts without prompting
+- [x] **DEPL-07**: Conflict detection — non-dotconfigs-owned files at target prompt for resolution
 
-### Other
+### Project Deploy (Complete)
 
-- [x] **GHYG-01/02**, **QUAL-01/02**, **SKIL-01/02**, **RGST-01**: Git hygiene, quality guards, skills, registry scanning
+- [x] **PROJ-01**: `dotconfigs project <path>` reads `.dotconfigs/project.json` from target path and deploys
+- [x] **PROJ-02**: Source paths in project.json resolve against dotconfigs repo root
+- [x] **PROJ-03**: `.dotconfigs/` auto-excluded via `.git/info/exclude` when created
+- [x] **PROJ-04**: `dotconfigs project-init <path>` creates `.dotconfigs/project.json` with sensible defaults
 
-</details>
+### Git Config as File (Complete)
 
-## v2.0 Requirements
+- [x] **GITF-01**: Git identity (user.name, user.email), workflow (pull.rebase, etc.), and aliases all maintained in `plugins/git/gitconfig` in Git's native INI format — no translation layer
+- [x] **GITF-02**: Gitconfig symlinked directly to `~/.gitconfig` — no intermediate file, no `[include]` directive needed
+- [x] **GITF-03**: Global excludes deployed directly to `~/.config/git/ignore`, referenced via `core.excludesFile` in gitconfig
+- [x] **GITF-04**: `git config --global` commands write through the symlink back into `plugins/git/gitconfig` in the repo (visible in `git diff`, committable)
 
-### Plugin Infrastructure
+### Migration
 
-- [ ] **PLUG-01**: Plugin discovery via filesystem scan of `plugins/*/` — no hardcoded plugin names in CLI
-- [ ] **PLUG-02**: Plugin interface contract — each plugin provides `setup.sh` and `deploy.sh` with standard function signatures (`plugin_<name>_setup`, `plugin_<name>_deploy`)
-- [ ] **PLUG-03**: Lazy plugin loading — plugins sourced only when invoked, not at startup
-- [ ] **PLUG-04**: Shared library layer — `lib/*.sh` (wizard, symlinks, discovery, validation) sourced by plugins and entry point
-- [ ] **PLUG-05**: Plugin isolation — plugins import only from `lib/`, never from other plugins
+- [ ] **MIGR-01**: `dotconfigs migrate` converts existing `.env` to `global.json` (one-time, with backup)
+- [ ] **MIGR-02**: Migration preserves all user choices from `.env`
+- [ ] **MIGR-03**: Old wizard commands (`global-configs`, `setup <plugin>`) show deprecation message pointing to global.json
 
-### CLI Restructure
+### VS Code Plugin
 
-- [ ] **CLI-01**: Single `dotconfigs` entry point script with subcommand routing
-- [x] **CLI-02**: `dotconfigs setup [plugin]` runs per-plugin interactive wizard
-- [x] **CLI-03**: `dotconfigs deploy [plugin]` performs per-plugin deployment from .env
-- [x] **CLI-04**: `dotconfigs status [plugin]` shows current deployment state
-- [x] **CLI-05**: `dotconfigs list` shows available plugins with status
-- [x] **CLI-06**: Per-command and per-plugin help (`dotconfigs help [command]`)
-- [x] **CLI-07**: `dotconfigs` available on PATH — symlink created during deploy so CLI is callable from any directory
+- [ ] **VSCD-01**: `plugins/vscode/` directory with settings.json, keybindings.json, snippets/
+- [ ] **VSCD-02**: VS Code config files in global.json with correct macOS target paths (`~/Library/Application Support/Code/User/`)
+- [ ] **VSCD-03**: `plugins/vscode/extensions.txt` — list of installed extension IDs, auto-populated by `dotconfigs setup` via `code --list-extensions`
+- [ ] **VSCD-04**: Extensions list deployed as reference file (actual install functionality deferred to v4)
 
-### Claude Plugin (Migration)
+### Shell Plugin
 
-- [x] **CLPL-01**: Wizard code migrated to `plugins/claude/setup.sh` — feature parity with current deploy.sh wizard
-- [x] **CLPL-02**: Deploy code migrated to `plugins/claude/deploy.sh` — CLAUDE.md build, settings.json, hooks, skills deployment
-- [x] **CLPL-03**: Assets moved under `plugins/claude/` (hooks/, commands/, templates/)
-- [x] **CLPL-04**: Project scaffolding preserved (`dotconfigs project .`)
+- [ ] **SHEL-01**: `plugins/shell/` directory with init.zsh, aliases.zsh (user adds `source` line to ~/.zshrc once)
+- [ ] **SHEL-02**: Shell config files in global.json deployed to `~/.dotconfigs/shell/`
 
-### Git Plugin (New)
+### Status & CLI
 
-- [x] **GITP-01**: Git hooks deployment — commit-msg and pre-push from `plugins/git/hooks/` to `.git/hooks/`
-- [x] **GITP-02**: Git identity wizard — configure global user.name and user.email
-- [x] **GITP-03**: Git workflow settings — init.defaultBranch, pull.rebase, push.default
-- [x] **GITP-04**: Git aliases — st, co, br, ci, unstage, last
-- [x] **GITP-05**: Hook scope — per-project deployment by default, opt-in global core.hooksPath with conflict warning
+- [ ] **CLI-01**: `dotconfigs status` checks all symlinks against global.json config
+- [ ] **CLI-02**: `dotconfigs list` shows all groups from global.json with deploy status
+- [ ] **CLI-03**: `dotconfigs help` updated for new command set
+- [ ] **CLI-04**: Simplified command set: `setup`, `deploy`, `project`, `project-init`, `status`, `list`, `migrate`, `help`
 
-### Configuration
+### Documentation
 
-- [x] **CONF-01**: .env namespacing — plugin-prefixed keys (CLAUDE_*, GIT_*)
-- [x] **CONF-02**: Unified .env file across all plugins — single source of config
-- [x] **CONF-03**: Pre-filled wizard defaults from existing .env on re-run (already partially built on branch)
-- [x] **CONF-04**: .env versioning (DOTCONFIGS_VERSION=2.0) written during setup
-
-### Migration & Compatibility
-
-- [x] **MIGR-01**: Strangler fig migration — incremental extraction from deploy.sh into plugins
-- [x] **MIGR-02**: deploy.sh removed (clean break — functionality migrated to `dotconfigs` CLI)
-- [ ] **COMP-01**: Bash 3.2 compatible — no namerefs, associative arrays, or bash 4 string ops
-- [x] **COMP-02**: macOS and Linux portable
-- [x] **COMP-03**: GSD framework coexistence maintained — file-level symlinks
-
-### Quality
-
-- [x] **QUAL-03**: Idempotent deploy — running deploy twice produces same result
-- [x] **QUAL-04**: Conflict detection — warn before overwriting non-owned files
+- [ ] **DOC-01**: Beginner-friendly README: install, first-run, daily usage, adding plugins
+- [ ] **DOC-02**: `global.json` schema reference with examples
+- [ ] **DOC-03**: Architecture diagram: repo structure → config → deploy → targets
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Plugin marketplace/registry | Premature — personal config, not a framework |
-| Cross-plugin dependencies | Breaks isolation; use shared lib instead |
-| Plugin versioning | Plugins ship together in repo — git commit is the version |
-| GUI or TUI interface | Adds complexity, breaks scriptability |
-| Auto-update mechanism | git pull is sufficient |
-| Full dotfiles management (vim, tmux) | Only dev-tool configs that benefit from SSOT |
-| Shell plugin | Deferred to v3 |
-| Conditional git identity switching | Complex (Git 2.36+ includeIf) — deferred to v2.1+ |
-| SSH key per identity | Links to conditional identity — deferred |
-| Rollback capability | Over-engineering for personal config |
+| Interactive wizards | Deferred to v4.0 (see .planning/v4-v3-backup/) |
+| Template assembly (CLAUDE.md fragments) | Deferred to v4.0 — maintain single file for v3 |
+| Per-hook toggle configuration | Deferred — use `include` filter in config instead |
+| Plugin marketplace/registry | Premature — personal config tool |
+| Cross-plugin dependencies | Breaks isolation |
+| GUI or TUI interface | Adds complexity |
 | Windows support | macOS/Linux only |
-| Configuration import from other tools | Scope creep |
-| Team collaboration features | Personal configuration tool |
+| VS Code extension auto-install | Deferred to v4.0 — v3 captures list, v4 installs |
+| Merge method for gitignore | Complex — use copy for v3, merge in v4 |
 
 ## Traceability
 
+### v3.0
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLUG-01 | Phase 4 | Complete |
-| PLUG-02 | Phase 4 | Complete |
-| PLUG-03 | Phase 4 | Complete |
-| PLUG-04 | Phase 4 | Complete |
-| PLUG-05 | Phase 4 | Complete |
-| CLI-01 | Phase 4 | Complete |
-| CLI-02 | Phase 5 | Complete |
-| CLI-03 | Phase 5 | Complete |
-| CLI-04 | Phase 7 | Complete |
-| CLI-05 | Phase 7 | Complete |
-| CLI-06 | Phase 7 | Complete |
-| CLI-07 | Phase 7 | Complete |
-| CLPL-01 | Phase 5 | Complete |
-| CLPL-02 | Phase 5 | Complete |
-| CLPL-03 | Phase 5 | Complete |
-| CLPL-04 | Phase 5 | Complete |
-| GITP-01 | Phase 6 | Complete |
-| GITP-02 | Phase 6 | Complete |
-| GITP-03 | Phase 6 | Complete |
-| GITP-04 | Phase 6 | Complete |
-| GITP-05 | Phase 6 | Complete |
-| CONF-01 | Phase 5 | Complete |
-| CONF-02 | Phase 5 | Complete |
-| CONF-03 | Phase 5 | Complete |
-| CONF-04 | Phase 5 | Complete |
-| MIGR-01 | Phase 5 | Complete |
-| MIGR-02 | Phase 7 | Complete |
-| COMP-01 | Phase 4 | Complete |
-| COMP-02 | Phase 7 | Complete |
-| COMP-03 | Phase 5 | Complete |
-| QUAL-03 | Phase 7 | Complete |
-| QUAL-04 | Phase 7 | Complete |
+| PATH-01..03 | Phase 10 | Complete |
+| CONF-01..08 | Phase 11 | Complete |
+| DEPL-01..07 | Phase 11 | Complete |
+| PROJ-01..04 | Phase 11 | Complete |
+| GITF-01..04 | Phase 11 | Complete |
+| MIGR-01..03 | Phase 12 | Pending |
+| VSCD-01..04 | Phase 12 | Pending |
+| SHEL-01..02 | Phase 12 | Pending |
+| CLI-01..04 | Phase 12 | Pending |
+| DOC-01..03 | Phase 13 | Pending |
 
-**Coverage:**
-- v2.0 requirements: 32 total
-- Mapped to phases: 31
-- Unmapped: 0
+**Coverage:** 37 v3.0 requirements mapped (26 complete, 11 pending)
 
 ---
-*Requirements defined: 2026-02-06 (v1), 2026-02-07 (v2)*
-*Last updated: 2026-02-07*
+*Last updated: 2026-02-11 (v3.0 simplification rewrite)*

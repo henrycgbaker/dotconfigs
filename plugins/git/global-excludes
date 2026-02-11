@@ -1,12 +1,11 @@
-# Global gitignore - installed via setup.sh
-# Git config: git config --global core.excludesfile ~/.gitignore_global
+# Global git excludes — managed by dotconfigs
+# Deployed to ~/.config/git/ignore
+# Applies to all repositories on this machine.
 
 # Claude Code
 .claude/
 .claude-project
-
-# Note: CLAUDE.md and claude_*.md should be added to .git/info/exclude per-project
-# deploy.sh handles this automatically for project deployments
+**/.claude/settings.local.json
 
 # OS files
 .DS_Store

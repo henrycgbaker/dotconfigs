@@ -19,6 +19,15 @@ _claude_assemble_settings() {
     fi
 
     cp "$template" "$output_file"
+
+    # Safety: resolve any $CLAUDE_PROJECT_DIR references to ~/.claude/
+    # (template should already use ~/.claude/ paths, but this catches drift)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' 's|\$CLAUDE_PROJECT_DIR/plugins/claude/hooks/|~/.claude/hooks/|g' "$output_file"
+    else
+        sed -i 's|\$CLAUDE_PROJECT_DIR/plugins/claude/hooks/|~/.claude/hooks/|g' "$output_file"
+    fi
+
     return 0
 }
 
