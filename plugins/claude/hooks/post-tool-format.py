@@ -59,7 +59,30 @@ def format_python_file(file_path: str) -> bool:
         return False
 
 
+def is_ruff_enabled() -> bool:
+    """Check CLAUDE_HOOK_RUFF_FORMAT in config files. Default: true."""
+    import os
+
+    config_paths = [
+        Path(os.environ.get("CLAUDE_PROJECT_DIR", ""))
+        / ".claude"
+        / "claude-hooks.conf",
+        Path.home() / ".claude" / "claude-hooks.conf",
+    ]
+    for config_path in config_paths:
+        if config_path.is_file():
+            for line in config_path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("CLAUDE_HOOK_RUFF_FORMAT="):
+                    value = line.split("=", 1)[1].strip().strip("\"'")
+                    return value.lower() != "false"
+    return True
+
+
 def main() -> int:
+    if not is_ruff_enabled():
+        return 0
+
     try:
         data = json.load(sys.stdin)
     except json.JSONDecodeError:

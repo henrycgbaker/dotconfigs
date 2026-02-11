@@ -32,8 +32,8 @@ dotconfigs — Unified configuration management
 Usage:
   dotconfigs setup                              Initialize tool (PATH symlinks)
   dotconfigs global-configs <plugin>            Configure plugin defaults (.env)
-  dotconfigs project-init <path>                Scaffold per-project config
-  dotconfigs project <path> [options]           Deploy per-project configuration
+  dotconfigs project-init [path]                Scaffold per-project config
+  dotconfigs project [path] [options]           Deploy per-project configuration
   dotconfigs deploy [group] [options]           Deploy configuration to filesystem
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
@@ -120,7 +120,7 @@ EOF
 dotconfigs project-init — Scaffold per-project configuration
 
 Usage:
-  dotconfigs project-init <path>
+  dotconfigs project-init [path]
 
 Description:
   Creates .dotconfigs/project.json at the target project path.
@@ -140,7 +140,7 @@ EOF
 dotconfigs project — Deploy per-project configuration
 
 Usage:
-  dotconfigs project <path> [--dry-run] [--force]
+  dotconfigs project [path] [--dry-run] [--force]
 
 Description:
   Reads .dotconfigs/project.json from the target project and deploys
@@ -253,6 +253,16 @@ cmd_setup() {
     echo "  dotconfigs - First Time Setup"
     echo "========================================================="
     echo ""
+
+    # Initialize global.json from template if it doesn't exist
+    if [[ ! -f "$GLOBAL_CONFIG" ]]; then
+        if [[ -f "$SCRIPT_DIR/global.template.json" ]]; then
+            cp "$SCRIPT_DIR/global.template.json" "$GLOBAL_CONFIG"
+            echo "Created global.json from template"
+        else
+            echo "Warning: global.template.json not found" >&2
+        fi
+    fi
 
     # Save version marker
     wizard_save_env "$ENV_FILE" "DOTCONFIGS_VERSION" "2.0"
@@ -519,7 +529,7 @@ cmd_project() {
                 ;;
             -*)
                 echo "Error: Unknown option '$1'" >&2
-                echo "Usage: dotconfigs project <path> [--dry-run] [--force]" >&2
+                echo "Usage: dotconfigs project [path] [--dry-run] [--force]" >&2
                 exit 1
                 ;;
             *)
@@ -534,11 +544,9 @@ cmd_project() {
         esac
     done
 
-    # Require path
+    # Default to CWD if no path specified
     if [[ -z "$project_path" ]]; then
-        echo "Error: Project path required" >&2
-        echo "Usage: dotconfigs project <path> [--dry-run] [--force]" >&2
-        exit 1
+        project_path="$PWD"
     fi
 
     # Resolve to absolute path
@@ -586,14 +594,14 @@ cmd_project_init() {
         # Check if CWD is the dotconfigs repo itself
         if [[ "$(pwd)" -ef "$SCRIPT_DIR" ]]; then
             echo "Error: Cannot use dotconfigs repo as project target" >&2
-            echo "Specify a path: dotconfigs project-init <path>" >&2
+            echo "Run from a project directory, or specify a path: dotconfigs project-init /path/to/project" >&2
             exit 1
         fi
 
         # Check if CWD is a git repo
         if ! git -C "$PWD" rev-parse --git-dir >/dev/null 2>&1; then
             echo "Error: Current directory is not a git repository" >&2
-            echo "Either run from a git repo or specify path: dotconfigs project-init <path>" >&2
+            echo "Run from a git repo, or specify a path: dotconfigs project-init /path/to/project" >&2
             exit 1
         fi
 
@@ -636,70 +644,51 @@ cmd_project_init() {
     fi
 
     # Use jq to transform global.json into project.json with project-specific overrides
-    jq -n --slurpfile global "$SCRIPT_DIR/global.json" '
-      # Project-specific overrides for known groups
-      {
-        "claude": {
-          "hooks": {
-            "source": "plugins/claude/hooks",
-            "target": ".claude/hooks",
-            "method": "symlink",
-            "include": ["block-destructive.sh"]
-          },
-          "settings": {
-            "source": "plugins/claude/templates/settings/project-template.json",
-            "target": ".claude/settings.json",
-            "method": "copy"
-          }
-        },
-        "git": {
-          "hooks": {
-            "source": "plugins/git/hooks",
-            "target": ".git/hooks",
-            "method": "symlink",
-            "include": ["pre-commit", "commit-msg"]
-          },
-          "exclude-patterns": {
-            "source": "plugins/git/project-exclude-patterns",
-            "target": ".git/info/exclude",
-            "method": "copy"
-          },
-          "gitignore": {
-            "source": "plugins/git/templates/gitignore-default",
-            "target": ".gitignore",
-            "method": "copy"
-          }
-        }
-      } as $overrides |
+    # Generate project.json from global.json (SSOT for include lists).
+    # Only claude and git have project-level configs; vscode/shell are global-only.
+    # Targets and methods are project-specific; include lists inherit from global.
+    # Users customise per-project by adding items to "exclude".
+    if ! command -v jq &>/dev/null; then
+        echo "Error: jq is required but not installed." >&2
+        echo "Install with: brew install jq" >&2
+        exit 1
+    fi
 
-      # Add any groups from global.json that are NOT in overrides
-      $global[0] as $globalConfig |
-      $overrides + (
-        $globalConfig | to_entries | map(
-          select(.key | in($overrides) | not) |
-          {
-            key: .key,
-            value: (
-              .value | to_entries | map(
-                {
-                  key: .key,
-                  value: (
-                    .value |
-                    # Transform target path from global (absolute/tilde) to project-relative
-                    .target |= (
-                      if startswith("~/") then .[2:]
-                      elif startswith("~") then .[1:]
-                      else .
-                      end
-                    )
-                  )
-                }
-              ) | from_entries
-            )
-          }
-        ) | from_entries
-      )
-    ' > "$config_file"
+    jq '{
+      claude: {
+        hooks: {
+          source: .claude.hooks.source,
+          target: ".claude/hooks",
+          method: "symlink",
+          include: .claude.hooks.include,
+          exclude: []
+        },
+        settings: {
+          source: "plugins/claude/templates/settings/project-template.json",
+          target: ".claude/settings.json",
+          method: "copy"
+        }
+      },
+      git: {
+        hooks: {
+          source: .git.hooks.source,
+          target: ".git/hooks",
+          method: "symlink",
+          include: .git.hooks.include,
+          exclude: []
+        },
+        "exclude-patterns": {
+          source: "plugins/git/project-exclude-patterns",
+          target: ".git/info/exclude",
+          method: "copy"
+        },
+        gitignore: {
+          source: "plugins/git/templates/gitignore-default",
+          target: ".gitignore",
+          method: "copy"
+        }
+      }
+    }' "$SCRIPT_DIR/global.json" > "$config_file"
 
     # Auto-exclude .dotconfigs/ in .git/info/exclude
     local exclude_file="$project_path/.git/info/exclude"
@@ -709,10 +698,11 @@ cmd_project_init() {
     fi
 
     echo "Created .dotconfigs/project.json"
+    echo "Added .dotconfigs/ to .git/info/exclude"
     echo ""
     echo "Next steps:"
     echo "  1. Edit $config_file"
-    echo "  2. Run: dotconfigs project $project_path"
+    echo "  2. Run: dotconfigs project          (from the project directory)"
 }
 
 main() {
@@ -737,7 +727,12 @@ main() {
             cmd_project_init "${@:2}"
             ;;
         project)
-            cmd_project "${@:2}"
+            # Support "project init" as alias for "project-init"
+            if [[ "${2:-}" == "init" ]]; then
+                cmd_project_init "${@:3}"
+            else
+                cmd_project "${@:2}"
+            fi
             ;;
         deploy)
             cmd_deploy "${@:2}"

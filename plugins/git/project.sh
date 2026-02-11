@@ -43,6 +43,11 @@ plugin_git_project() {
     fi
     echo ""
 
+    echo "  Hooks are copied from dotconfigs into .git/hooks/ (project-local)."
+    echo "  They enforce commit messages, secrets detection, branch protection, etc."
+    echo "  Each hook reads its config from: ${GIT_HOOK_CONFIG_PATH:-.githooks/config}"
+    echo ""
+
     local hooks_dir="$project_path/.git/hooks"
     local hook_file
     local hook_name
@@ -53,23 +58,9 @@ plugin_git_project() {
             hook_name=$(basename "$hook_file")
             local target_hook="$hooks_dir/$hook_name"
 
-            # Check if hook already exists
-            if [[ -f "$target_hook" ]]; then
-                # Check if it's different (not owned by dotconfigs)
-                if ! is_dotconfigs_owned "$target_hook" "$PLUGIN_DIR"; then
-                    echo "  Hook '$hook_name' already exists in this repo"
-                    if ! wizard_yesno "  Overwrite?" "n"; then
-                        echo "  Skipped $hook_name"
-                        continue
-                    fi
-                fi
+            if backup_and_link "$hook_file" "$target_hook" "$hook_name" "true"; then
+                deployed_count=$((deployed_count + 1))
             fi
-
-            # Copy hook
-            cp "$hook_file" "$target_hook"
-            chmod +x "$target_hook"
-            echo "  ✓ Deployed $hook_name"
-            deployed_count=$((deployed_count + 1))
         fi
     done
 
@@ -148,6 +139,10 @@ plugin_git_project() {
     local config_dir=$(dirname "$config_target")
     local config_template="$PLUGIN_DIR/templates/git-hooks.conf"
 
+    echo "  This is a dotconfigs config file (not a git-native file)."
+    echo "  Your hooks read it at runtime for settings like secrets detection,"
+    echo "  conventional commits, etc. Location: $hook_config_path"
+    echo ""
     if wizard_yesno "Deploy hook configuration to $hook_config_path?" "y"; then
         # Create directory if needed
         mkdir -p "$config_dir"

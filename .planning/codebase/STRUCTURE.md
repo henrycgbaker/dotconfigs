@@ -1,236 +1,296 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-02-06
+**Analysis Date:** 2026-02-10
 
 ## Directory Layout
 
 ```
-dotclaude/
-├── CLAUDE.md                    # Personal Claude policies (symlinked to ~/.claude/CLAUDE.md)
-├── settings.json                # Claude Code settings (copied to ~/.claude/settings.json)
-├── agents/                      # System-wide reusable agents
-│   ├── gsd-*.md                 # GSD orchestration + execution agents
-│   └── [other agents]
-├── commands/                    # User-invoked /commands
-│   └── gsd/                     # GSD command suite (plan-phase, execute-phase, etc.)
-├── rules/                       # Always-loaded behavioral standards
-│   ├── git-commits.md
-│   ├── python-standards.md
-│   ├── git-workflow.md
-│   ├── simplicity-first.md
-│   └── [other rules]
-├── hooks/                       # Pre/post tool-use automation
-│   ├── block-sensitive.py       # PreToolUse: blocks .env, keys, credentials
-│   ├── post-tool-format.py      # PostToolUse: auto-formats Python
-│   ├── gsd-statusline.js        # Status monitoring hook
-│   └── gsd-check-update.js      # Update checking hook
-├── skills/                      # Model-invoked capabilities (currently empty)
-├── githooks/                    # Git hook templates (copied to .git/hooks/ by setup.sh)
-├── project-agents/              # Version-controlled record of project-specific agents
-│   ├── llm-efficiency-measurement-tool/
-│   │   ├── research-pm.md
-│   │   └── research-scientist.md
+dotconfigs/
+├── dotconfigs                      # CLI entry point (primary, executable)
+├── dots                            # Convenience symlink → dotconfigs
+├── .env                            # Configuration store (gitignored, wizard-managed)
+├── .env.example                    # Configuration reference (complete key list)
+├── lib/                            # Shared bash libraries (sourced, no shebangs)
+│   ├── colours.sh                  # TTY-aware colour output, status symbols
+│   ├── config.sh                   # Configuration SSOT, hierarchy documentation
+│   ├── discovery.sh                # Plugin/hook/skill/section discovery
+│   ├── symlinks.sh                 # Symlink management, ownership detection
+│   ├── validation.sh               # Git repo validation helpers
+│   └── wizard.sh                   # Interactive prompts, .env management
+├── plugins/
+│   ├── claude/
+│   │   ├── setup.sh                # Claude setup wizard
+│   │   ├── deploy.sh               # Claude deployment logic (symlinks, assembly)
+│   │   ├── project.sh              # Per-repo scaffolding
+│   │   ├── DESCRIPTION             # Plugin metadata
+│   │   ├── settings.json           # Assembled settings (generated, gitignored)
+│   │   ├── CLAUDE.md               # Assembled CLAUDE.md (generated, gitignored)
+│   │   ├── hooks/
+│   │   │   ├── block-destructive.sh   # PreToolUse guard
+│   │   │   └── post-tool-format.py    # PostToolUse Ruff formatter
+│   │   ├── commands/               # Skills (/commit, /squash-merge, /pr-review, /simplicity-check)
+│   │   │   ├── commit.md
+│   │   │   ├── pr-review.md
+│   │   │   ├── simplicity-check.md
+│   │   │   └── squash-merge.md
+│   │   └── templates/
+│   │       ├── claude-md/          # CLAUDE.md section templates (01-communication.md, etc.)
+│   │       ├── settings/           # settings.json templates (base.json, python.json, node.json, etc.)
+│   │       └── claude-hooks.conf   # Hook configuration template
+│   └── git/
+│       ├── setup.sh                # Git setup wizard
+│       ├── deploy.sh               # Git deployment logic
+│       ├── project.sh              # Per-repo hooks + identity
+│       ├── DESCRIPTION             # Plugin metadata
+│       ├── hooks/                  # Git hooks (commit-msg, pre-commit, pre-push, etc.)
+│       │   ├── commit-msg          # AI attribution blocking, conventional commits
+│       │   ├── post-checkout
+│       │   ├── post-merge
+│       │   ├── post-rewrite
+│       │   ├── pre-commit
+│       │   ├── pre-push
+│       │   └── prepare-commit-msg
+│       └── templates/
+│           └── git-hooks.conf      # Per-project hook config template
+├── scripts/                        # Utility scripts
+│   ├── generate-roster.sh          # Auto-generates docs/ROSTER.md from hook metadata
+│   └── registry-scan.sh            # Registry scanning utility
+├── tests/                          # Test validation
+│   └── test-project-configs.sh     # Comprehensive scaffold validation
+├── docs/                           # User documentation
+│   ├── ROSTER.md                   # Complete hook/command/config reference (generated)
+│   └── usage-guide.md              # Claude Code configuration guide
+├── project-agents/                 # Project-specific agent variants
+│   ├── deep_learning_lab_teaching_2025/
 │   ├── ds01-infra/
-│   │   ├── admin-docs-writer.md
-│   │   ├── cli-ux-designer.md
-│   │   ├── systems-architect.md
-│   │   └── [domain-specific agents]
-│   └── [other projects]
-├── .planning/                   # (Created during setup, not tracked)
-│   ├── codebase/                # Codebase analysis documents
-│   │   ├── ARCHITECTURE.md      # This file's home
-│   │   ├── STRUCTURE.md         # This file
-│   │   ├── CONVENTIONS.md       # (if run with quality focus)
-│   │   └── [other analysis docs]
+│   └── llm-efficiency-measurement-tool/
+├── .planning/                      # GSD planning (created during setup)
+│   ├── codebase/                   # Analysis documents
+│   │   ├── ARCHITECTURE.md         # This file's companion
+│   │   ├── STRUCTURE.md            # This file
+│   │   ├── CONVENTIONS.md
+│   │   ├── CONCERNS.md
+│   │   ├── TESTING.md
+│   │   ├── STACK.md
+│   │   └── INTEGRATIONS.md
 │   └── ...
-├── docs/                        # User documentation
-│   └── usage-guide.md
-├── .claude/                     # Claude Code local state (git-ignored)
-├── .vscode/                     # VSCode settings
-├── .git/                        # Git repository
-├── _archive/                    # Historical agents/configs
-└── README.md
+└── README.md                       # Project overview, quick start
 ```
 
 ## Directory Purposes
 
-**agents/**
-- Purpose: Reusable Claude agent definitions for system-wide use (git, testing, refactoring, domain research)
-- Contains: YAML frontmatter + markdown role definitions for GSD orchestrators and specialized agents
-- Key files: `gsd-planner.md`, `gsd-executor.md`, `gsd-project-researcher.md`, `gsd-plan-checker.md`, `gsd-verifier.md`
-- Symlinked to: `~/.claude/agents/` during setup
+**lib/**
+- Purpose: Shared bash libraries sourced by entry point and all plugins
+- Contains: Reusable abstractions (wizards, symlinks, discovery, colours, validation)
+- Key files: `wizard.sh` (interactive prompts), `symlinks.sh` (deployment), `discovery.sh` (plugin scanning)
 
-**commands/gsd/**
-- Purpose: User-facing command orchestrators that parse arguments, validate state, spawn subagents
-- Contains: Multi-step procedures (Bash-style process flows) with state management and conditional branching
-- Key files: `plan-phase.md` (planning orchestrator), `execute-phase.md` (execution orchestrator), `new-project.md` (project initialization), `verify-work.md` (goal verification)
-- Invoked: User types `/gsd:command-name` in Claude Code chat
+**plugins/claude/**
+- Purpose: Claude Code configuration management
+- Contains: Setup wizard, deployment logic, per-repo scaffolding, hooks, skills, templates
+- Key files: `setup.sh` (interacts with user), `deploy.sh` (applies to ~/.claude/), `project.sh` (per-repo setup)
 
-**rules/**
-- Purpose: Always-loaded behavioral standards that apply to all Claude instances on this machine
-- Contains: Coding conventions, git standards, security policies, documentation principles
-- Key files: `git-commits.md` (conventional commits), `python-standards.md` (type hints, Ruff), `simplicity-first.md` (Occam's razor), `git-workflow.md` (feature branches)
-- Loaded: Globally via `~/.claude/rules/` symlink
+**plugins/git/**
+- Purpose: Git configuration management
+- Contains: Setup wizard, deployment logic, per-repo hooks, git config application
+- Key files: `setup.sh` (wizard), `deploy.sh` (git config writes), `project.sh` (copies hooks)
 
-**hooks/**
-- Purpose: Cross-cutting concerns automated via tool-use hooks
-- Contains: Python scripts for PreToolUse and PostToolUse events, JavaScript hooks for status monitoring
-- Key files: `block-sensitive.py` (blocks .env/keys access), `post-tool-format.py` (auto-formats Python code)
-- Loaded: Specified in `settings.json` hooks section
+**plugins/*/templates/**
+- Purpose: Template sources for assembly or copying
+- Claude: CLAUDE.md sections (markdown), settings.json bases (JSON), hook config (conf)
+- Git: Hook configuration template (conf)
 
-**project-agents/{project-name}/**
-- Purpose: Version-controlled archive of project-specific agent variants
-- Contains: Domain-specialized agents per project (research-scientist for research projects, systems-architect for infrastructure)
-- Used: Projects copy these agents to their `.claude/agents/` during onboarding
-- Pattern: One directory per project, organized by project name
+**plugins/*/hooks/**
+- Purpose: Event-triggered automation
+- Claude: PreToolUse guard (block-destructive.sh), PostToolUse formatter (post-tool-format.py)
+- Git: 7 git hooks for validation, protection, and automation
+
+**plugins/*/commands/**
+- Purpose: Claude Code skills (user-invoked commands)
+- Contains: Markdown-based skill definitions (commit.md, squash-merge.md, etc.)
+
+**scripts/**
+- Purpose: Utility and build scripts
+- generate-roster.sh: Auto-generates docs/ROSTER.md from hook/command metadata
+- registry-scan.sh: Registry introspection utility
 
 **docs/**
-- Purpose: User documentation and guides
-- Contains: Setup instructions, usage patterns, command reference
-- Key files: `usage-guide.md` (comprehensive getting started guide)
+- Purpose: User documentation
+- ROSTER.md: Complete reference of all hooks, commands, and configuration options (generated)
+- usage-guide.md: Guide to Claude Code configuration types and usage patterns
 
-**githooks/**
-- Purpose: Git hook templates applied to project repositories
-- Contains: pre-commit (identity validation, agent sync), commit-msg (blocks AI attribution)
-- Copied to: `.git/hooks/` in any project using dotclaude via setup.sh or deploy-remote.sh
+**project-agents/**
+- Purpose: Version-controlled record of project-specific agent variants
+- Contains: Specialized agents per project domain (research-scientist, systems-architect, etc.)
+
+**.planning/codebase/**
+- Purpose: Analysis documents consumed by GSD planning/execution
+- ARCHITECTURE.md: System pattern, layers, data flow, abstractions
+- STRUCTURE.md: This file - directory layout, naming, where to add code
+- CONVENTIONS.md: Coding style, naming patterns, import organization
+- TESTING.md: Test framework, structure, common patterns
+- CONCERNS.md: Technical debt, known issues, scalability limits
 
 ## Key File Locations
 
 **Entry Points:**
-- `commands/gsd/new-project.md`: Initialize a new GSD project (creates .planning/, runs research, generates ROADMAP.md)
-- `commands/gsd/plan-phase.md`: Create execution plan for a phase (spawns researcher → planner → checker)
-- `commands/gsd/execute-phase.md`: Execute all plans in a phase (spawns executors in waves, verifies results)
-- `commands/gsd/help.md`: Display available GSD commands and usage
+- `dotconfigs`: Main CLI script, routes to command handlers
+- `plugins/claude/setup.sh`: Claude wizard entry (sourced by dotconfigs)
+- `plugins/git/setup.sh`: Git wizard entry (sourced by dotconfigs)
 
 **Configuration:**
-- `CLAUDE.md`: Personal policies, communication style, autonomy, documentation guidelines
-- `settings.json`: Claude Code permissions (allow/deny/ask), hooks configuration, sandbox settings
-- `rules/*.md`: All behavior standards (loaded globally)
+- `.env`: Single source of truth for all user preferences (gitignored)
+- `.env.example`: Reference of all available configuration keys
+- `lib/config.sh`: Documents configuration hierarchy and variable naming
 
-**Core Logic:**
-- `agents/gsd-planner.md`: Plan creation logic with task decomposition, dependency analysis, goal-backward verification
-- `agents/gsd-executor.md`: Plan execution with atomic commits, checkpoint handling, state management
-- `agents/gsd-verifier.md`: Goal verification by checking actual codebase, not SUMMARY claims
-- `agents/gsd-project-researcher.md`: Domain ecosystem research before roadmap creation
+**Global Deployment:**
+- `plugins/claude/deploy.sh`: Claude global deployment (symlinks to ~/.claude/)
+- `plugins/git/deploy.sh`: Git deployment (git config --global writes)
 
-**Project State (in .planning/ - created during /gsd:new-project):**
-- `.planning/STATE.md`: Current execution position, accumulated decisions, blockers
-- `.planning/ROADMAP.md`: Master phase breakdown (all phases, descriptions, must-haves)
-- `.planning/config.json`: Model profile (quality/balanced/budget), workflow settings (research enabled, verifier enabled)
-- `.planning/codebase/ARCHITECTURE.md`: Codebase architecture analysis
-- `.planning/codebase/STRUCTURE.md`: Codebase file structure and naming conventions
-- `.planning/phases/{PHASE}/*.md`: Phase-specific files (CONTEXT, PLAN, SUMMARY, VERIFICATION)
+**Per-Project Setup:**
+- `plugins/claude/project.sh`: Scaffolds .claude/ in projects
+- `plugins/git/project.sh`: Copies hooks and optional identity to projects
+
+**Hooks:**
+- `plugins/claude/hooks/block-destructive.sh`: PreToolUse guard
+- `plugins/claude/hooks/post-tool-format.py`: PostToolUse Ruff formatter
+- `plugins/git/hooks/commit-msg`: Conventional commit validation
+- `plugins/git/hooks/pre-push`: Branch protection (main/master)
+
+**Templates:**
+- `plugins/claude/templates/claude-md/`: CLAUDE.md sections (01-communication.md, etc.)
+- `plugins/claude/templates/settings/`: settings.json templates (base.json, python.json, etc.)
+- `plugins/git/templates/git-hooks.conf`: Hook configuration template
 
 ## Naming Conventions
 
 **Files:**
 
-- **Agents:** `gsd-{purpose}.md` (e.g., `gsd-planner.md`, `gsd-project-researcher.md`) or `{role}-{context}.md` in project-agents
-- **Commands:** `{command-name}.md` (e.g., `plan-phase.md`, `execute-phase.md`)
-- **Rules:** `{concern}.md` (e.g., `git-commits.md`, `python-standards.md`)
-- **Hooks:** `{trigger}-{purpose}.py` (e.g., `block-sensitive.py`, `post-tool-format.py`)
-- **Analysis docs:** `{CONCERN}.md` in UPPERCASE (e.g., `ARCHITECTURE.md`, `STRUCTURE.md`, `CONVENTIONS.md`)
-- **Project state:** `STATE.md`, `ROADMAP.md`, `CONTEXT.md` (root); `{PHASE}-*.md` in phase directories
+- **Plugin scripts:** `{command}.sh` (setup.sh, deploy.sh, project.sh)
+- **Hooks:** `{trigger}[-purpose]` (block-destructive.sh, post-tool-format.py, commit-msg)
+- **Skills/Commands:** `{skill-name}.md` (commit.md, squash-merge.md)
+- **Templates:** `{number}-{name}.md` for sections (01-communication.md), `base.json` or `{lang}.json` for settings
+- **Lib files:** `{concern}.sh` (wizard.sh, symlinks.sh, discovery.sh)
+- **Config:** `.env` (gitignored), `.env.example` (reference)
 
 **Directories:**
 
-- **Agents:** lowercase with dashes (`gsd-planner`, `project-agents/llm-efficiency-measurement-tool`)
-- **Commands:** logical grouping by system (`gsd/`, `other-commands/`)
-- **Rules:** standalone files in `rules/` root
-- **Project agents:** `project-agents/{project-slug}/` where slug uses hyphens and lowercase
-- **Phases:** `.planning/phases/{PHASE}-{slug}` where PHASE is zero-padded (`01-setup`, `02-core-features`, `02.1-subphase`)
+- **Plugins:** `plugins/{plugin-name}/` (claude, git)
+- **Plugin subdirs:** `setup.sh` + `deploy.sh` + `project.sh` (no dirs)
+- **Templates:** `templates/{type}/` (claude-md/, settings/)
+- **Hooks:** `hooks/` (flat directory)
+- **Commands:** `commands/` (flat directory)
+- **Shared libs:** `lib/` with individual `{concern}.sh` files
 
 ## Where to Add New Code
 
-**New GSD Agent:**
-- Primary code: `agents/gsd-{purpose}.md` (e.g., `agents/gsd-integration-checker.md`)
-- Pattern: YAML frontmatter with name/description/tools, then <role>, <execution_flow>, return structured results
-- Reference: See `agents/gsd-executor.md` or `agents/gsd-planner.md` for full examples
+**New Plugin:**
+- Primary code: `plugins/{plugin-name}/setup.sh`, `deploy.sh`, `project.sh`
+- Plugin discovery: Entry point scans `plugins/*/` for both files
+- Pattern: Functions named `plugin_{plugin_name}_{command}()` (e.g., `plugin_myapp_setup()`)
+- Reference: See `plugins/claude/setup.sh` and `plugins/git/setup.sh` for patterns
 
-**New GSD Command:**
-- Primary code: `commands/gsd/{command-name}.md` (e.g., `commands/gsd/debug-phase.md`)
-- Pattern: YAML frontmatter with argument-hint and agent assignment, then <objective>, <context>, <process> with numbered steps
-- Reference: See `commands/gsd/plan-phase.md` for orchestration pattern
+**New Claude Hook:**
+- Primary code: `plugins/claude/hooks/{trigger}-{purpose}.{sh|py}`
+- Registration: Add to wizard option in `plugins/claude/setup.sh` and list in DESCRIPTION
+- Pattern: Hooks are copied/symlinked to ~/.claude/hooks/ by deploy
+- Example: `block-destructive.sh` (PreToolUse), `post-tool-format.py` (PostToolUse)
 
-**New Behavior Rule:**
-- Primary code: `rules/{concern}.md` (e.g., `rules/docker-practices.md`)
-- Pattern: Markdown with clear guidelines, examples (code blocks), decision tables
-- Load: Add symlink in `~/.claude/rules/` during manual setup, or run setup.sh to symlink entire rules/ directory
+**New Claude Skill/Command:**
+- Primary code: `plugins/claude/commands/{skill-name}.md`
+- Registration: Add to wizard and hooks config template
+- Pattern: Markdown files defining /command capabilities for Claude Code
+- Example: `commit.md`, `squash-merge.md`, `pr-review.md`
 
-**New Project-Specific Agent:**
-- Primary code: `project-agents/{project-slug}/{agent-role}.md`
-- Pattern: Same as GSD agents, but domain-specialized for the project
-- Usage: Projects copy to their `.claude/agents/` during onboarding; updated via sync-project-agents.sh
+**New Claude CLAUDE.md Section:**
+- Primary code: `plugins/claude/templates/claude-md/{number}-{section-name}.md`
+- Numbering: Continue existing sequence (01-communication, 02-simplicity, etc.)
+- Registration: Discovered automatically via `discover_claude_sections()`
+- Pattern: User toggles in wizard, sections assembled in order
 
-**New Hook:**
-- Primary code: `hooks/{trigger}-{purpose}.{py|js}` (e.g., `hooks/pre-tool-analyze.py`)
-- Pattern: Takes stdin JSON, exits with 0 (allow) or 2 (block), writes to stderr on block
-- Registration: Add to `settings.json` hooks section under PreToolUse or PostToolUse
+**New Git Hook:**
+- Primary code: `plugins/git/hooks/{hook-name}` (no extension)
+- Hook types: commit-msg, pre-commit, pre-push, prepare-commit-msg, post-merge, post-checkout, post-rewrite
+- Pattern: Executables copied to .git/hooks/ by project setup
+- Reference: See existing hooks for config file discovery pattern
+
+**New Settings.json Template:**
+- Primary code: `plugins/claude/templates/settings/{type}.json` (e.g., rust.json, go.json)
+- Base: All extend `settings-template.json`
+- Pattern: Language-specific permission/hook overrides
+- Examples: `base.json`, `python.json`, `node.json`
+
+**New Lib Function:**
+- Primary code: `lib/{concern}.sh`
+- Sourced by: Entry point (eager load of all lib/*.sh) and all plugins
+- Pattern: Functions, no shebangs, designed for bash 3.2 compatibility
+- Examples: `wizard_prompt()`, `backup_and_link()`, `discover_plugins()`
+
+**New Test:**
+- Primary code: `tests/{test-purpose}.sh`
+- Pattern: Bash script that validates deployments and configuration
+- Example: `test-project-configs.sh` validates scaffold creation
 
 ## Special Directories
 
-**_archive/**
-- Purpose: Historical agents and configs (no longer in use but kept for reference)
-- Generated: No
-- Committed: Yes (preserved history)
+**.env (gitignored)**
+- Purpose: Runtime configuration store (user preferences)
+- Generated: Yes (created by setup wizard)
+- Committed: No (per-machine, gitignored)
+- Sourced by: All plugins to read configuration
 
-**.planning/ (created during /gsd:new-project)**
-- Purpose: Project planning artifacts (state, roadmap, phase files, analysis)
-- Generated: Yes (created by orchestrators)
+**.planning/ (created during setup, may be committed)**
+- Purpose: GSD framework artifacts (planning, execution, analysis)
+- Generated: Yes (created by GSD framework)
 - Committed: Usually yes (tracked in project's git)
-- Config: Determined by `.planning/config.json` `commit_docs` field or git's `check-ignore .planning`
+- Contents: STATE.md, ROADMAP.md, phases/, codebase/ analysis
 
-**.git/info/exclude (local, not committed)**
-- Purpose: Local-only exclusions (CLAUDE.md, personal notes)
-- Generated: No (manually edited per project)
-- Committed: No (local-only)
-- Pattern: Add `CLAUDE.md` and `claude_*.md` entries here per rules/git-exclude.md
+**plugins/*/settings.json (gitignored)**
+- Purpose: Generated Claude Code settings (assembled from templates)
+- Generated: Yes (assembled by deploy)
+- Committed: No (gitignored, user-edited after generation)
+- Use: Copy to ~/.claude/settings.json via symlink
 
-**.ruff_cache/**
-- Purpose: Ruff formatter cache
-- Generated: Yes (auto-created on first run)
-- Committed: No (.gitignore)
+**plugins/*/CLAUDE.md (gitignored)**
+- Purpose: Generated Claude Code instructions (assembled from section templates)
+- Generated: Yes (assembled from enabled sections)
+- Committed: No (gitignored, user-edited after generation)
+- Use: Symlinked to ~/.claude/CLAUDE.md
 
-**.claude/ (symlinked during setup)**
-- Purpose: Claude Code local state
-- Generated: Yes (Claude Code creates runtime state)
-- Committed: No (.gitignore)
+## Conventions for Plugin Development
 
-## Frontmatter Patterns
+**Function Naming:**
+- Plugin functions: `plugin_{name}_{command}()` (e.g., `plugin_claude_setup()`, `plugin_git_deploy()`)
+- Internal functions: `_{name}_{function}()` (e.g., `_claude_load_config()`, `_git_detect_drift()`)
+- Shared lib functions: `{verb}_{noun}()` (e.g., `wizard_prompt()`, `backup_and_link()`)
 
-**Agent Frontmatter:**
-```yaml
----
-name: gsd-{purpose}
-description: One-line description of agent purpose
-tools: Read, Write, Bash, Grep, Glob, Task, WebFetch  # Tools agent is allowed to use
-color: cyan  # Color for orchestrator display
----
-```
+**Variable Naming:**
+- Plugin config: `{PLUGIN_UPPERCASE}_*` (e.g., `CLAUDE_DEPLOY_TARGET`, `GIT_USER_NAME`)
+- Internal vars: `lowercase_with_underscores`
+- Constants: `UPPERCASE_WITH_UNDERSCORES`
 
-**Command Frontmatter:**
-```yaml
----
-name: gsd:command-name
-description: One-line description of command
-argument-hint: "[phase] [--flag]"  # Usage hint
-agent: gsd-{subagent}  # Which agent handles this command
-allowed-tools: [Read, Write, Bash, Task]  # Tools available in orchestrator
----
-```
+**Error Handling:**
+- Exit code 1 on failure
+- Error messages to stderr with `>&2`
+- Use validation functions: `plugin_exists()`, `validate_git_repo()` before proceeding
 
-**Plan Frontmatter (created by planner):**
-```yaml
----
-phase: 02
-plan: 01
-type: feature|refactor|bugfix|docs|testing
-autonomous: true|false  # Whether executor can proceed without checkpoints
-wave: 1  # Execution wave (all wave 1 tasks run in parallel)
-depends_on: []  # Other plans that must complete first
----
-```
+**Bash Compatibility:**
+- Bash 3.2 compatible (macOS requirement)
+- Avoid bash 4+ features like nameref variables (`local -n`)
+- Use `perl` fallback for `readlink -f` on macOS
+
+## Bash 3.2 Compatibility Notes
+
+**Incompatible constructs to avoid:**
+- `local -n` (namerefs) - bash 4+
+- `declare -n` (namerefs) - bash 4+
+- `${var/pattern/replace}` (pattern expansion edge cases) - use `sed` instead
+- Arithmetic via bash `$(())` works but use with caution
+
+**Working alternatives:**
+- Nameref workaround: `eval "var=\$((\$$var + 1))"` for counter increment
+- Use `sed` or `tr` for string manipulation
+- Use `perl` for path resolution (readlink -f fallback)
 
 ---
 
-*Structure analysis: 2026-02-06*
+*Structure analysis: 2026-02-10*

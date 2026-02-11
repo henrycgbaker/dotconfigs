@@ -32,7 +32,7 @@ parse_modules() {
     local config_file="$1"
 
     # Use jq recursive descent to find all objects with source+target
-    jq -r '.. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (.include // [] | join(","))] | @tsv' "$config_file" 2>/dev/null || true
+    jq -r '.. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, ((.include // []) - (.exclude // []) | join(","))] | @tsv' "$config_file" 2>/dev/null || true
 }
 
 # Parse modules from a specific group in JSON config
@@ -49,7 +49,7 @@ parse_modules_in_group() {
     fi
 
     # Filter to specific group first, then recursive descent
-    jq -r --arg group "$group_key" '.[$group] | .. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (.include // [] | join(","))] | @tsv' "$config_file" 2>/dev/null || true
+    jq -r --arg group "$group_key" '.[$group] | .. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, ((.include // []) - (.exclude // []) | join(","))] | @tsv' "$config_file" 2>/dev/null || true
 }
 
 # Deploy files from a directory source

@@ -106,7 +106,7 @@ if [[ "$GIT_HOOK_SECRETS_CHECK" == "true" ]]; then
         fi
 
         # Google API keys
-        if echo "$STAGED_DIFF" | grep -qE 'AIza[0-9A-Za-z\-_]{35}'; then
+        if echo "$STAGED_DIFF" | grep -qE 'AIza[0-9A-Za-z_-]{35}'; then
             echo "❌ ERROR: Google API key detected in staged changes"
             echo ""
             echo "Found pattern: AIza..."
@@ -119,8 +119,8 @@ if [[ "$GIT_HOOK_SECRETS_CHECK" == "true" ]]; then
             exit 1
         fi
 
-        # Private keys
-        if echo "$STAGED_DIFF" | grep -qE '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'; then
+        # Private keys (-- stops BSD grep parsing dashes as flags)
+        if echo "$STAGED_DIFF" | grep -qE -- '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'; then
             echo "❌ ERROR: Private key detected in staged changes"
             echo ""
             echo "Found pattern: -----BEGIN PRIVATE KEY-----"

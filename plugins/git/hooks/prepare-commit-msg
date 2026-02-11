@@ -72,9 +72,9 @@ fi
 # SKIP CONDITIONS
 # ============================================================================
 
-# Skip if commit source is non-empty (merge, squash, amend, etc.)
-# These commits already have messages or user is crafting manually
-if [[ -n "$COMMIT_SOURCE" ]]; then
+# Skip for merge, squash, or amend — these already have messages
+# Note: "message" source (from -m flag) should NOT be skipped
+if [[ "$COMMIT_SOURCE" == "merge" || "$COMMIT_SOURCE" == "squash" || "$COMMIT_SOURCE" == "commit" ]]; then
     exit 0
 fi
 

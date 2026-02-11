@@ -1,0 +1,76 @@
+{
+  "claude": {
+    "hooks": {
+      "source": "plugins/claude/hooks",
+      "target": "~/.claude/hooks",
+      "method": "symlink",
+      "include": ["block-destructive.sh", "post-tool-format.py"]
+    },
+    "settings": {
+      "source": "plugins/claude/settings.json",
+      "target": "~/.claude/settings.json",
+      "method": "symlink"
+    },
+    "skills": {
+      "source": "plugins/claude/commands",
+      "target": "~/.claude/commands",
+      "method": "symlink",
+      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md"]
+    },
+    "claude-md": {
+      "source": "plugins/claude/CLAUDE.md",
+      "target": "~/.claude/CLAUDE.md",
+      "method": "symlink"
+    }
+  },
+  "git": {
+    "hooks": {
+      "source": "plugins/git/hooks",
+      "target": "~/.dotconfigs/git-hooks",
+      "method": "symlink",
+      "available": ["pre-commit", "commit-msg", "prepare-commit-msg", "pre-push"],
+      "included_global": ["pre-commit", "commit-msg", "prepare-commit-msg", "pre-push"],
+      "include_project": ["pre-commit", "commit-msg", "prepare-commit-msg", "pre-push"],
+      "exclude_project": []
+    },
+    "config": {
+      "source": "plugins/git/gitconfig",
+      "target": "~/.gitconfig",
+      "method": "symlink"
+    },
+    "global-excludes": {
+      "source": "plugins/git/global-excludes",
+      "target": "~/.config/git/ignore",
+      "method": "symlink"
+    }
+  },
+  "vscode": {
+    "settings": {
+      "source": "plugins/vscode/settings.json",
+      "target": "~/Library/Application Support/Code/User/settings.json",
+      "method": "symlink"
+    },
+    "keybindings": {
+      "source": "plugins/vscode/keybindings.json",
+      "target": "~/Library/Application Support/Code/User/keybindings.json",
+      "method": "symlink"
+    },
+    "snippets": {
+      "source": "plugins/vscode/snippets",
+      "target": "~/Library/Application Support/Code/User/snippets",
+      "method": "symlink"
+    }
+  },
+  "shell": {
+    "init": {
+      "source": "plugins/shell/init.zsh",
+      "target": "~/.dotconfigs/shell/init.zsh",
+      "method": "symlink"
+    },
+    "aliases": {
+      "source": "plugins/shell/aliases.zsh",
+      "target": "~/.dotconfigs/shell/aliases.zsh",
+      "method": "symlink"
+    }
+  }
+}

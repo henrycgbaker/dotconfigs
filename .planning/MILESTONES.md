@@ -58,9 +58,12 @@
 
 ## Active Milestone
 
-### v3.0: Architecture Rethink + Shell Plugin
+### v3.0: Explicit Config MVP
+
+**Goal:** Replace wizard-driven .env with explicit JSON config (global.json + project.json). Generic file deployer: source→target mappings, symlinks files. Add VS Code plugin. Wizards deferred to v4.
 
 See PROJECT.md and ROADMAP.md for current milestone details.
+Original v3 plans (wizard refactor) backed up to `.planning/v4-v3-backup/`.
 
 ---
-*Last updated: 2026-02-10*
+*Last updated: 2026-02-11*

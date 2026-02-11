@@ -34,6 +34,13 @@ stdin_data=$(cat)
 tool_name=$(echo "$stdin_data" | jq -r '.tool_name // empty')
 tool_input=$(echo "$stdin_data" | jq -c '.tool_input // {}')
 
+# Deny helper — outputs new-format PreToolUse deny decision
+deny() {
+    local reason="$1"
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"$reason\"}}"
+    exit 0
+}
+
 # -----------------------------------------------------------------------------
 # Destructive Command Guard (Bash tool)
 # -----------------------------------------------------------------------------
@@ -43,33 +50,27 @@ if [[ "$CLAUDE_HOOK_DESTRUCTIVE_GUARD" == "true" ]] && [[ "$tool_name" == "Bash"
 
     # Check for destructive patterns
     if echo "$command" | grep -qE 'rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+)?(-[a-zA-Z]*f[a-zA-Z]*\s+)?(/\s*$|~/\s*$)'; then
-        echo '{"decision": "block", "reason": "Destructive command blocked: rm -rf / or rm -rf ~ (deletes entire filesystem)"}'
-        exit 0
+        deny "Destructive command blocked: rm -rf / or rm -rf ~ (deletes entire filesystem)"
     fi
 
     if echo "$command" | grep -qE 'git\s+push.*--force(\s|$)' && ! echo "$command" | grep -qE '--force-with-lease'; then
-        echo '{"decision": "block", "reason": "Destructive command blocked: git push --force without --force-with-lease (can overwrite others work)"}'
-        exit 0
+        deny "Destructive command blocked: git push --force without --force-with-lease (can overwrite others work)"
     fi
 
     if echo "$command" | grep -qE 'git\s+reset\s+--hard'; then
-        echo '{"decision": "block", "reason": "Destructive command blocked: git reset --hard (discards uncommitted work)"}'
-        exit 0
+        deny "Destructive command blocked: git reset --hard (discards uncommitted work)"
     fi
 
     if echo "$command" | grep -qE 'git\s+clean\s+-[a-zA-Z]*f[a-zA-Z]*[a-zA-Z]*d'; then
-        echo '{"decision": "block", "reason": "Destructive command blocked: git clean -fd (deletes untracked files)"}'
-        exit 0
+        deny "Destructive command blocked: git clean -fd (deletes untracked files)"
     fi
 
     if echo "$command" | grep -qiE 'DROP\s+(TABLE|DATABASE)'; then
-        echo '{"decision": "block", "reason": "Destructive command blocked: DROP TABLE/DATABASE (deletes database objects)"}'
-        exit 0
+        deny "Destructive command blocked: DROP TABLE/DATABASE (deletes database objects)"
     fi
 
     if echo "$command" | grep -qE 'chmod\s+-R\s+777'; then
-        echo '{"decision": "block", "reason": "Destructive command blocked: chmod -R 777 (creates security vulnerability)"}'
-        exit 0
+        deny "Destructive command blocked: chmod -R 777 (creates security vulnerability)"
     fi
 fi
 
@@ -82,23 +83,19 @@ if [[ "$CLAUDE_HOOK_FILE_PROTECTION" == "true" ]] && [[ "$tool_name" == "Write" 
 
     # Check for sensitive file patterns
     if [[ "$file_path" =~ \.pem$ ]]; then
-        echo '{"decision": "block", "reason": "File protection: Cannot write to .pem files (private keys)"}'
-        exit 0
+        deny "File protection: Cannot write to .pem files (private keys)"
     fi
 
     if [[ "$file_path" =~ credentials ]]; then
-        echo '{"decision": "block", "reason": "File protection: Cannot write to files containing credentials"}'
-        exit 0
+        deny "File protection: Cannot write to files containing credentials"
     fi
 
     if [[ "$file_path" == *".env.production"* ]]; then
-        echo '{"decision": "block", "reason": "File protection: Cannot write to .env.production (production secrets)"}'
-        exit 0
+        deny "File protection: Cannot write to .env.production (production secrets)"
     fi
 
     if [[ "$file_path" =~ id_rsa$ || "$file_path" =~ id_ed25519$ ]]; then
-        echo '{"decision": "block", "reason": "File protection: Cannot write to SSH private keys"}'
-        exit 0
+        deny "File protection: Cannot write to SSH private keys"
     fi
 fi
 

@@ -353,13 +353,11 @@ _git_deploy_hooks_global() {
     # Create target directory
     mkdir -p "$target_dir"
 
-    # Copy all hooks from plugin hooks directory
+    # Symlink all hooks from plugin hooks directory
     for hook_file in "$PLUGIN_DIR/hooks/"*; do
         if [[ -f "$hook_file" ]]; then
             local hook_name=$(basename "$hook_file")
-            cp "$hook_file" "$target_dir/$hook_name"
-            chmod +x "$target_dir/$hook_name"
-            echo "  ✓ Copied $hook_name to global hooks directory"
+            backup_and_link "$hook_file" "$target_dir/$hook_name" "$hook_name" "force"
         fi
     done
 
@@ -385,15 +383,15 @@ _git_deploy_hooks_global_with_tracking() {
     if [[ "$dry_run" == "true" ]]; then
         echo "  Would deploy hooks to: $target_dir"
 
-        # Check which hooks would be copied
+        # Check which hooks would be linked
         for hook_file in "$PLUGIN_DIR/hooks/"*; do
             if [[ -f "$hook_file" ]]; then
                 local hook_name=$(basename "$hook_file")
-                if [[ -f "$target_dir/$hook_name" ]]; then
+                if [[ -e "$target_dir/$hook_name" || -L "$target_dir/$hook_name" ]]; then
                     echo "  Would update: $hook_name"
                     eval "$_updated_var=\$(( \$$_updated_var + 1 ))"
                 else
-                    echo "  Would copy: $hook_name"
+                    echo "  Would link: $hook_name"
                     eval "$_created_var=\$(( \$$_created_var + 1 ))"
                 fi
             fi
@@ -418,19 +416,18 @@ _git_deploy_hooks_global_with_tracking() {
         # Create target directory
         mkdir -p "$target_dir"
 
-        # Copy all hooks from plugin hooks directory
+        # Symlink all hooks from plugin hooks directory
         for hook_file in "$PLUGIN_DIR/hooks/"*; do
             if [[ -f "$hook_file" ]]; then
                 local hook_name=$(basename "$hook_file")
-                if [[ -f "$target_dir/$hook_name" ]]; then
-                    cp "$hook_file" "$target_dir/$hook_name"
-                    chmod +x "$target_dir/$hook_name"
-                    echo "  ✓ Updated $hook_name"
+                local is_update=false
+                [[ -e "$target_dir/$hook_name" || -L "$target_dir/$hook_name" ]] && is_update=true
+
+                backup_and_link "$hook_file" "$target_dir/$hook_name" "$hook_name" "force"
+
+                if [[ "$is_update" == "true" ]]; then
                     eval "$_updated_var=\$(( \$$_updated_var + 1 ))"
                 else
-                    cp "$hook_file" "$target_dir/$hook_name"
-                    chmod +x "$target_dir/$hook_name"
-                    echo "  ✓ Copied $hook_name to global hooks directory"
                     eval "$_created_var=\$(( \$$_created_var + 1 ))"
                 fi
             fi
@@ -841,6 +838,19 @@ plugin_git_deploy() {
         echo "    post-checkout      - branch info"
         echo "    post-rewrite       - dependency changes (rebase)"
     else
+        # Clean up stale core.hooksPath from a previous global deployment
+        local stale_hooks_path=$(git config --global --get core.hooksPath 2>/dev/null || echo "")
+        if [[ -n "$stale_hooks_path" ]]; then
+            if [[ "$dry_run" == "true" ]]; then
+                echo "  Would unset stale core.hooksPath: $stale_hooks_path"
+            else
+                git config --global --unset core.hooksPath
+                echo "  ✓ Unset stale core.hooksPath: $stale_hooks_path"
+                echo "    (was overriding per-project hooks in .git/hooks/)"
+            fi
+            echo ""
+        fi
+
         echo "  Hooks configured for per-project deployment."
         echo "  Run 'dotconfigs project-configs git <path>' to deploy hooks to a specific repo."
         echo ""
