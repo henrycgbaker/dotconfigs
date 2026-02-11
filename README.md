@@ -8,37 +8,105 @@ Single source of truth for dev configuration -- one repo, one CLI, deployed ever
 
 ## Architecture
 
-Plugin manifests (`plugins/*/manifest.json`) are the single source of truth. Each manifest declares modules with source paths, deploy targets, and include/exclude lists. Two scopes:
+### Single Source of Truth
 
-- **Global** (`global.json`) -- machine-wide config (gitconfig, claude settings, shell init)
-- **Project** (`.dotconfigs/project.json`) -- per-repo config (git hooks, claude hooks/skills)
+Plugin manifests are the SSOT. Everything flows from them:
 
 ```
-dotconfigs CLI
-     |
-     |--- setup              One-time init (PATH, scaffold global.json from manifests)
-     |--- deploy [group]     Deploy global.json to filesystem (symlinks)
-     |--- project-init       Scaffold .dotconfigs/project.json from manifests
-     |--- project [path]     Deploy project.json to .git/hooks, .claude/, etc.
-     |
-     |--- global-configs     Interactive wizard (legacy, writes .env)
-     |--- status             Deployment status + drift detection
-     |--- list               Available plugins
-
-Plugins:
-  claude/    hooks, settings, skills, CLAUDE.md
-  git/       hooks (7), gitconfig, global-excludes
-  shell/     init.zsh, aliases.zsh
-  vscode/    settings.json
+                        SSOT: Plugin Manifests
+                     plugins/*/manifest.json
+                               |
+            +------------------+------------------+
+            |                                     |
+            v                                     v
+     .global sections                      .project sections
+            |                                     |
+            v                                     v
+  +-------------------+                +------------------------+
+  |    global.json    |                | .dotconfigs/project.json|
+  | (machine-wide)    |                | (per-repo)             |
+  +-------------------+                +------------------------+
+            |                                     |
+   dotconfigs deploy                     dotconfigs project
+            |                                     |
+            v                                     v
+  +-------------------+                +------------------------+
+  | ~/.claude/        |                | .git/hooks/            |
+  | ~/.gitconfig      |                | .claude/hooks/         |
+  | ~/.dotconfigs/    |                | .claude/commands/      |
+  | ~/Library/...     |                | .git/info/exclude      |
+  +-------------------+                +------------------------+
+     Filesystem (symlinks)                Filesystem (symlinks)
 ```
 
-**Data flow:**
-1. `dotconfigs setup` -- scaffolds `global.json` from plugin manifests, adds CLI to PATH
-2. Edit `global.json` to customise (or use as-is for opinionated defaults)
-3. `dotconfigs deploy` -- symlinks everything in `global.json` to the filesystem
-4. `dotconfigs project-init <path>` -- scaffolds `.dotconfigs/project.json` for a repo
-5. Edit `project.json` exclude lists to customise per-project
-6. `dotconfigs project <path>` -- deploys project config (hooks, skills) as symlinks
+Each manifest declares modules with `source`, `target`, `method`, and `include`/`exclude` lists:
+
+```
+plugins/claude/manifest.json            plugins/git/manifest.json
++----------------------------------+    +----------------------------------+
+| global:                          |    | global:                          |
+|   hooks    -> ~/.claude/hooks/   |    |   hooks  -> ~/.dotconfigs/git-hooks/
+|   settings -> ~/.claude/settings |    |   config -> ~/.gitconfig         |
+|   skills   -> ~/.claude/commands/|    |   excludes -> ~/.config/git/ignore
+|   claude-md -> ~/.claude/CLAUDE.md    | project:                         |
+| project:                         |    |   hooks  -> .git/hooks/          |
+|   hooks    -> .claude/hooks/     |    |   excludes -> .git/info/exclude  |
+|   skills   -> .claude/commands/  |    |   gitignore -> .gitignore        |
++----------------------------------+    +----------------------------------+
+
+plugins/shell/manifest.json             plugins/vscode/manifest.json
++----------------------------------+    +----------------------------------+
+| global:                          |    | global:                          |
+|   init    -> ~/.dotconfigs/shell/|    |   settings -> ~/Library/.../     |
+|   aliases -> ~/.dotconfigs/shell/|    |              Code/User/settings  |
++----------------------------------+    +----------------------------------+
+```
+
+### Data Flow
+
+```
+First-time setup:
+
+  1. dotconfigs setup
+     +-- scaffolds global.json from manifests (if not exists)
+     +-- creates PATH symlinks (dotconfigs, dots)
+
+  2. dotconfigs deploy
+     +-- reads global.json
+     +-- for each module: symlink source -> target
+     +-- conflict resolution: overwrite / skip / backup / diff
+
+Per-project setup:
+
+  3. dotconfigs project-init <path>
+     +-- reads .project from each manifest
+     +-- assembles .dotconfigs/project.json
+     +-- seeds .git/info/exclude
+
+  4. (optional) edit project.json exclude lists
+     +-- e.g. exclude: ["post-tool-format.py"]
+
+  5. dotconfigs project <path>
+     +-- reads .dotconfigs/project.json
+     +-- for each module: symlink source -> target
+     +-- respects include/exclude lists
+```
+
+### Symlink Ownership
+
+dotconfigs uses per-file symlinks (not directory-level), tracked by target resolution:
+
+```
+~/.claude/
+  hooks/
+    block-destructive.sh  --> dotconfigs/plugins/claude/hooks/...  (ours)
+    some-other-hook.sh    --> /other/tool/...                      (foreign, untouched)
+  commands/
+    commit.md             --> dotconfigs/plugins/claude/commands/.. (ours)
+    other-skill.md        --> /other/tool/...                      (foreign, untouched)
+```
+
+Deploy only touches files it owns. Foreign files are never overwritten without prompting.
 
 ## Installation
 
