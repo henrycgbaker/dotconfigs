@@ -3,20 +3,23 @@
 # NAME: pre-commit
 # TYPE: git-hook
 # PLUGIN: git
-# DESCRIPTION: Pre-commit validation — secrets detection, large file check, debug statement detection
-# CONFIGURABLE: GIT_HOOK_SECRETS_CHECK, GIT_HOOK_LARGE_FILE_CHECK, GIT_HOOK_LARGE_FILE_THRESHOLD, GIT_HOOK_DEBUG_CHECK, GIT_HOOK_DEBUG_CHECK_STRICT, GIT_HOOK_PRE_COMMIT_ENABLED
+# DESCRIPTION: Pre-commit validation — identity, branch protection, secrets, large files, debug statements, python lint
+# CONFIGURABLE: GIT_HOOK_PRE_COMMIT_ENABLED, GIT_HOOK_IDENTITY_CHECK, GIT_HOOK_EXPECTED_NAME, GIT_HOOK_EXPECTED_EMAIL, GIT_HOOK_BRANCH_PROTECTION_COMMIT, GIT_HOOK_SECRETS_CHECK, GIT_HOOK_LARGE_FILE_CHECK, GIT_HOOK_LARGE_FILE_THRESHOLD, GIT_HOOK_DEBUG_CHECK, GIT_HOOK_DEBUG_CHECK_STRICT, GIT_HOOK_PYTHON_LINT
 # ================
 
 # ============================================================================
 # PRE-COMMIT HOOK
 # ============================================================================
-# Runs before commit is created. Validates staged changes for:
+# Runs before commit is created. Validates:
+# - Identity (user.name/email match expected values)
+# - Branch protection (block direct commits to main/master)
 # - Secrets (API keys, private keys, AWS credentials)
 # - Large files (warns if > threshold)
 # - Debug statements (console.log, debugger, pdb, etc.)
+# - Python lint (ruff format + check)
 #
 # Source of truth: plugins/git/hooks/pre-commit
-# Deployed to: ~/.dotconfigs/git-hooks/pre-commit
+# Deployed to: .git/hooks/pre-commit (via project deploy)
 # ============================================================================
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
@@ -38,11 +41,16 @@ done
 
 # Set defaults
 GIT_HOOK_PRE_COMMIT_ENABLED="${GIT_HOOK_PRE_COMMIT_ENABLED:-true}"
+GIT_HOOK_IDENTITY_CHECK="${GIT_HOOK_IDENTITY_CHECK:-true}"
+GIT_HOOK_EXPECTED_NAME="${GIT_HOOK_EXPECTED_NAME:-}"
+GIT_HOOK_EXPECTED_EMAIL="${GIT_HOOK_EXPECTED_EMAIL:-}"
+GIT_HOOK_BRANCH_PROTECTION_COMMIT="${GIT_HOOK_BRANCH_PROTECTION_COMMIT:-true}"
 GIT_HOOK_SECRETS_CHECK="${GIT_HOOK_SECRETS_CHECK:-true}"
 GIT_HOOK_LARGE_FILE_CHECK="${GIT_HOOK_LARGE_FILE_CHECK:-true}"
 GIT_HOOK_LARGE_FILE_THRESHOLD="${GIT_HOOK_LARGE_FILE_THRESHOLD:-1048576}"
 GIT_HOOK_DEBUG_CHECK="${GIT_HOOK_DEBUG_CHECK:-true}"
 GIT_HOOK_DEBUG_CHECK_STRICT="${GIT_HOOK_DEBUG_CHECK_STRICT:-false}"
+GIT_HOOK_PYTHON_LINT="${GIT_HOOK_PYTHON_LINT:-true}"
 
 # Load config file if found (overrides env vars and defaults)
 if [[ -n "$HOOK_CONFIG" ]]; then
@@ -55,7 +63,75 @@ if [[ "$GIT_HOOK_PRE_COMMIT_ENABLED" != "true" ]]; then
 fi
 
 # ============================================================================
-# SECTION 1: Secrets Detection (hard block)
+# SECTION 1: Identity Check (hard block)
+# ============================================================================
+# Verifies git user.name/email match expected values.
+# Expected values: config file > global gitconfig > skip
+
+if [[ "$GIT_HOOK_IDENTITY_CHECK" == "true" ]]; then
+    # Resolve expected values: explicit config > global gitconfig
+    EXPECTED_NAME="$GIT_HOOK_EXPECTED_NAME"
+    EXPECTED_EMAIL="$GIT_HOOK_EXPECTED_EMAIL"
+    if [[ -z "$EXPECTED_NAME" ]]; then
+        EXPECTED_NAME=$(git config --global user.name 2>/dev/null)
+    fi
+    if [[ -z "$EXPECTED_EMAIL" ]]; then
+        EXPECTED_EMAIL=$(git config --global user.email 2>/dev/null)
+    fi
+
+    if [[ -z "$EXPECTED_NAME" || -z "$EXPECTED_EMAIL" ]]; then
+        echo "⚠️  WARNING: Identity check enabled but expected values not set"
+        echo "Set GIT_HOOK_EXPECTED_NAME and GIT_HOOK_EXPECTED_EMAIL in .claude/git-hooks.conf"
+        echo "Or ensure ~/.gitconfig has [user] name and email configured"
+    else
+        ACTUAL_NAME=$(git config user.name 2>/dev/null)
+        ACTUAL_EMAIL=$(git config user.email 2>/dev/null)
+
+        if [[ "$ACTUAL_NAME" != "$EXPECTED_NAME" ]]; then
+            echo "❌ ERROR: Git user.name is '$ACTUAL_NAME', expected '$EXPECTED_NAME'"
+            echo "Fix with: git config user.name '$EXPECTED_NAME'"
+            echo ""
+            echo "To disable: Set GIT_HOOK_IDENTITY_CHECK=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+
+        if [[ "$ACTUAL_EMAIL" != "$EXPECTED_EMAIL" ]]; then
+            echo "❌ ERROR: Git user.email is '$ACTUAL_EMAIL', expected '$EXPECTED_EMAIL'"
+            echo "Fix with: git config user.email '$EXPECTED_EMAIL'"
+            echo ""
+            echo "To disable: Set GIT_HOOK_IDENTITY_CHECK=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+    fi
+fi
+
+# ============================================================================
+# SECTION 2: Branch Protection (hard block)
+# ============================================================================
+# Blocks direct commits to main/master. Allows squash merges (SQUASH_MSG).
+
+if [[ "$GIT_HOOK_BRANCH_PROTECTION_COMMIT" == "true" ]]; then
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+    if echo "$CURRENT_BRANCH" | grep -qE '^(main|master)$'; then
+        if [[ ! -f "$REPO_ROOT/.git/SQUASH_MSG" ]]; then
+            echo "❌ ERROR: Direct commits to '$CURRENT_BRANCH' are not allowed"
+            echo ""
+            echo "Workflow: Create a branch, commit freely, then squash merge when complete"
+            echo ""
+            echo "To fix:"
+            echo "  1. Create a branch:          git checkout -b <branch-name>"
+            echo "  2. Commit your changes:      git commit"
+            echo "  3. When done, squash merge:  Use /squash-merge command"
+            echo ""
+            echo "To disable: Set GIT_HOOK_BRANCH_PROTECTION_COMMIT=false in .claude/git-hooks.conf"
+            exit 1
+        fi
+    fi
+fi
+
+# ============================================================================
+# SECTION 3: Secrets Detection (hard block)
 # ============================================================================
 
 if [[ "$GIT_HOOK_SECRETS_CHECK" == "true" ]]; then
@@ -136,7 +212,7 @@ if [[ "$GIT_HOOK_SECRETS_CHECK" == "true" ]]; then
 fi
 
 # ============================================================================
-# SECTION 2: Large File Detection (warn only)
+# SECTION 4: Large File Detection (warn only)
 # ============================================================================
 
 if [[ "$GIT_HOOK_LARGE_FILE_CHECK" == "true" ]]; then
@@ -169,7 +245,7 @@ if [[ "$GIT_HOOK_LARGE_FILE_CHECK" == "true" ]]; then
 fi
 
 # ============================================================================
-# SECTION 3: Debug Statement Detection (configurable block/warn)
+# SECTION 5: Debug Statement Detection (configurable block/warn)
 # ============================================================================
 
 if [[ "$GIT_HOOK_DEBUG_CHECK" == "true" ]]; then
@@ -221,6 +297,41 @@ if [[ "$GIT_HOOK_DEBUG_CHECK" == "true" ]]; then
             else
                 echo "To block: Set GIT_HOOK_DEBUG_CHECK_STRICT=true in .claude/git-hooks.conf"
             fi
+        fi
+    fi
+fi
+
+# ============================================================================
+# SECTION 6: Python Lint & Format (ruff)
+# ============================================================================
+
+if [[ "$GIT_HOOK_PYTHON_LINT" == "true" ]]; then
+    STAGED_PYTHON_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+    if [[ -n "$STAGED_PYTHON_FILES" ]]; then
+        echo "🔍 Checking Python files with Ruff..."
+
+        if command -v ruff &>/dev/null; then
+            # shellcheck disable=SC2086
+            ruff format $STAGED_PYTHON_FILES
+            RUFF_FMT_EXIT=$?
+
+            # shellcheck disable=SC2086
+            ruff check --fix $STAGED_PYTHON_FILES
+            RUFF_CHK_EXIT=$?
+
+            # Re-stage any fixes
+            # shellcheck disable=SC2086
+            git add $STAGED_PYTHON_FILES 2>/dev/null || true
+
+            if [[ $RUFF_FMT_EXIT -ne 0 ]] || [[ $RUFF_CHK_EXIT -ne 0 ]]; then
+                echo "⚠️  Ruff made fixes. Review changes and commit again."
+                exit 1
+            fi
+            echo "✅ Python files passed Ruff checks"
+        else
+            echo "⚠️  Ruff not installed. Skipping Python linting."
+            echo "To disable: Set GIT_HOOK_PYTHON_LINT=false in .claude/git-hooks.conf"
         fi
     fi
 fi

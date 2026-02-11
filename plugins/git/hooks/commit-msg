@@ -11,10 +11,10 @@
 # COMMIT-MSG HOOK
 # ============================================================================
 # Validates commit messages: AI attribution blocking + conventional commits
-# Deployed globally via core.hooksPath. Config-driven via project config.
+# Config-driven via project config.
 #
 # Source of truth: plugins/git/hooks/commit-msg
-# Deployed to: ~/.dotconfigs/git-hooks/commit-msg
+# Deployed to: .git/hooks/commit-msg (via project deploy)
 # ============================================================================
 
 COMMIT_MSG_FILE=$1

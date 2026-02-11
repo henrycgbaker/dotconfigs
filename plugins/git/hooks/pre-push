@@ -14,7 +14,7 @@
 # Configurable protection level: block, warn, off
 #
 # Source of truth: plugins/git/hooks/pre-push
-# Deployed to: ~/.dotconfigs/git-hooks/pre-push
+# Deployed to: .git/hooks/pre-push (via project deploy)
 # ============================================================================
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"

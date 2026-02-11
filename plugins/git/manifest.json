@@ -1,11 +1,5 @@
 {
   "global": {
-    "hooks": {
-      "source": "plugins/git/hooks",
-      "target": "~/.dotconfigs/git-hooks",
-      "method": "symlink",
-      "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "prepare-commit-msg"]
-    },
     "config": {
       "source": "plugins/git/templates/gitconfig",
       "target": "~/.gitconfig",

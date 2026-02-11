@@ -24,7 +24,7 @@
 #   style/*   → style:
 #
 # Source of truth: plugins/git/hooks/prepare-commit-msg
-# Deployed to: ~/.dotconfigs/git-hooks/prepare-commit-msg
+# Deployed to: .git/hooks/prepare-commit-msg (via project deploy)
 # ============================================================================
 
 COMMIT_MSG_FILE=$1
