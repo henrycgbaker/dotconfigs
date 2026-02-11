@@ -24,6 +24,7 @@ source "$SCRIPT_DIR/lib/validation.sh"
 source "$SCRIPT_DIR/lib/colours.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/deploy.sh"
+source "$SCRIPT_DIR/lib/init.sh"
 
 show_usage() {
     cat <<EOF
@@ -254,13 +255,13 @@ cmd_setup() {
     echo "========================================================="
     echo ""
 
-    # Initialize global.json from template if it doesn't exist
+    # Scaffold global.json from manifests if it doesn't exist
     if [[ ! -f "$GLOBAL_CONFIG" ]]; then
-        if [[ -f "$SCRIPT_DIR/global.template.json" ]]; then
-            cp "$SCRIPT_DIR/global.template.json" "$GLOBAL_CONFIG"
-            echo "Created global.json from template"
+        if command -v jq &>/dev/null; then
+            assemble_from_manifests "global" > "$GLOBAL_CONFIG"
+            echo "Created global.json from plugin manifests"
         else
-            echo "Warning: global.template.json not found" >&2
+            echo "Warning: jq not installed, skipping global.json scaffold" >&2
         fi
     fi
 
@@ -626,79 +627,28 @@ cmd_project_init() {
         exit 1
     fi
 
-    # Check if project.json already exists
+    if ! command -v jq &>/dev/null; then
+        echo "Error: jq is required but not installed." >&2
+        echo "Install with: brew install jq" >&2
+        exit 1
+    fi
+
     local config_file="$project_path/.dotconfigs/project.json"
-    if [[ -f "$config_file" ]]; then
-        echo "Project config already exists at $config_file"
-        exit 0
+    local json
+    json=$(assemble_from_manifests "project")
+
+    if ! write_with_overwrite_protection "$config_file" "$json"; then
+        return 0
     fi
-
-    # Create .dotconfigs directory
-    mkdir -p "$project_path/.dotconfigs"
-
-    # Generate project.json dynamically from global.json
-    if ! command -v jq &>/dev/null; then
-        echo "Error: jq is required but not installed." >&2
-        echo "Install with: brew install jq" >&2
-        exit 1
-    fi
-
-    # Use jq to transform global.json into project.json with project-specific overrides
-    # Generate project.json from global.json (SSOT for include lists).
-    # Only claude and git have project-level configs; vscode/shell are global-only.
-    # Targets and methods are project-specific; include lists inherit from global.
-    # Users customise per-project by adding items to "exclude".
-    if ! command -v jq &>/dev/null; then
-        echo "Error: jq is required but not installed." >&2
-        echo "Install with: brew install jq" >&2
-        exit 1
-    fi
-
-    jq '{
-      claude: {
-        hooks: {
-          source: .claude.hooks.source,
-          target: ".claude/hooks",
-          method: "symlink",
-          include: .claude.hooks.include,
-          exclude: []
-        },
-        settings: {
-          source: "plugins/claude/templates/settings/project-template.json",
-          target: ".claude/settings.json",
-          method: "copy"
-        }
-      },
-      git: {
-        hooks: {
-          source: .git.hooks.source,
-          target: ".git/hooks",
-          method: "symlink",
-          include: .git.hooks.include,
-          exclude: []
-        },
-        "exclude-patterns": {
-          source: "plugins/git/project-exclude-patterns",
-          target: ".git/info/exclude",
-          method: "copy"
-        },
-        gitignore: {
-          source: "plugins/git/templates/gitignore-default",
-          target: ".gitignore",
-          method: "copy"
-        }
-      }
-    }' "$SCRIPT_DIR/global.json" > "$config_file"
 
     # Auto-exclude .dotconfigs/ in .git/info/exclude
     local exclude_file="$project_path/.git/info/exclude"
     if ! grep -qxF ".dotconfigs/" "$exclude_file" 2>/dev/null; then
         mkdir -p "$(dirname "$exclude_file")"
         echo ".dotconfigs/" >> "$exclude_file"
+        echo "Added .dotconfigs/ to .git/info/exclude"
     fi
 
-    echo "Created .dotconfigs/project.json"
-    echo "Added .dotconfigs/ to .git/info/exclude"
     echo ""
     echo "Next steps:"
     echo "  1. Edit $config_file"
@@ -726,7 +676,7 @@ main() {
         project-configs|project-init)
             cmd_project_init "${@:2}"
             ;;
-        project)
+        project|project-deploy)
             # Support "project init" as alias for "project-init"
             if [[ "${2:-}" == "init" ]]; then
                 cmd_project_init "${@:3}"
@@ -734,7 +684,7 @@ main() {
                 cmd_project "${@:2}"
             fi
             ;;
-        deploy)
+        deploy|global-deploy)
             cmd_deploy "${@:2}"
             ;;
         status)

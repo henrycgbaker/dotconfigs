@@ -1,0 +1,42 @@
+{
+  "global": {
+    "hooks": {
+      "source": "plugins/claude/hooks",
+      "target": "~/.claude/hooks",
+      "method": "symlink",
+      "include": ["block-destructive.sh", "post-tool-format.py"]
+    },
+    "settings": {
+      "source": "plugins/claude/settings.json",
+      "target": "~/.claude/settings.json",
+      "method": "symlink"
+    },
+    "skills": {
+      "source": "plugins/claude/commands",
+      "target": "~/.claude/commands",
+      "method": "symlink",
+      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md"]
+    },
+    "claude-md": {
+      "source": "plugins/claude/CLAUDE.md",
+      "target": "~/.claude/CLAUDE.md",
+      "method": "symlink"
+    }
+  },
+  "project": {
+    "hooks": {
+      "source": "plugins/claude/hooks",
+      "target": ".claude/hooks",
+      "method": "symlink",
+      "include": ["block-destructive.sh", "post-tool-format.py"],
+      "exclude": []
+    },
+    "skills": {
+      "source": "plugins/claude/commands",
+      "target": ".claude/commands",
+      "method": "symlink",
+      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md"],
+      "exclude": []
+    }
+  }
+}

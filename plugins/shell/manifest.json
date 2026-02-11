@@ -1,0 +1,14 @@
+{
+  "global": {
+    "init": {
+      "source": "plugins/shell/init.zsh",
+      "target": "~/.dotconfigs/shell/init.zsh",
+      "method": "symlink"
+    },
+    "aliases": {
+      "source": "plugins/shell/aliases.zsh",
+      "target": "~/.dotconfigs/shell/aliases.zsh",
+      "method": "symlink"
+    }
+  }
+}

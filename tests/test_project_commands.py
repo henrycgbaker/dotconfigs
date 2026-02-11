@@ -10,35 +10,45 @@ pytestmark = pytest.mark.e2e
 
 
 # ---------------------------------------------------------------------------
-# project-init — SSOT generation from global.json
+# project-init — SSOT from plugin manifests
 # ---------------------------------------------------------------------------
 
 
 class TestProjectInitSSOT:
-    """project-init generates project.json with include lists from global.json."""
+    """project-init generates project.json from manifest .project sections."""
 
-    def test_include_lists_match_global(
+    def test_include_lists_match_manifests(
         self, run_dotconfigs, project_dir, dotconfigs_root
     ):
-        """Include lists in project.json must match global.json exactly."""
+        """Include lists in project.json must match manifest .project section."""
         result = run_dotconfigs(["project-init", str(project_dir)])
         assert result.returncode == 0
 
         project_json = project_dir / ".dotconfigs" / "project.json"
         assert project_json.exists()
         project = json.loads(project_json.read_text())
-        global_cfg = json.loads((dotconfigs_root / "global.json").read_text())
 
-        # Claude hooks include must match global.json
+        # Claude hooks/skills must match manifest's project section
+        claude_manifest = json.loads(
+            (dotconfigs_root / "plugins/claude/manifest.json").read_text()
+        )
         assert (
             project["claude"]["hooks"]["include"]
-            == global_cfg["claude"]["hooks"]["include"]
+            == claude_manifest["project"]["hooks"]["include"]
         )
-        # Git hooks: global.json uses "include" under git.hooks if present,
-        # otherwise project-init reads .git.hooks.include which is null.
-        # The jq template inherits whatever key exists.
-        global_git_include = global_cfg["git"]["hooks"].get("include")
-        assert project["git"]["hooks"]["include"] == global_git_include
+        assert (
+            project["claude"]["skills"]["include"]
+            == claude_manifest["project"]["skills"]["include"]
+        )
+
+        # Git hooks must match manifest's project section
+        git_manifest = json.loads(
+            (dotconfigs_root / "plugins/git/manifest.json").read_text()
+        )
+        assert (
+            project["git"]["hooks"]["include"]
+            == git_manifest["project"]["hooks"]["include"]
+        )
 
     @pytest.mark.parametrize(
         "plugin,group",
@@ -65,20 +75,29 @@ class TestProjectInitSSOT:
                         f"Target contains ~: {module_data['target']}"
                     )
 
-    def test_source_paths_preserved_from_global(
+    def test_source_paths_match_manifests(
         self, run_dotconfigs, project_dir, dotconfigs_root
     ):
-        """Source paths should match global.json (they resolve against dotconfigs root)."""
+        """Source paths should match manifest .project section."""
         run_dotconfigs(["project-init", str(project_dir)])
         project_json = project_dir / ".dotconfigs" / "project.json"
         project = json.loads(project_json.read_text())
-        global_cfg = json.loads((dotconfigs_root / "global.json").read_text())
 
+        claude_manifest = json.loads(
+            (dotconfigs_root / "plugins/claude/manifest.json").read_text()
+        )
         assert (
             project["claude"]["hooks"]["source"]
-            == global_cfg["claude"]["hooks"]["source"]
+            == claude_manifest["project"]["hooks"]["source"]
         )
-        assert project["git"]["hooks"]["source"] == global_cfg["git"]["hooks"]["source"]
+
+        git_manifest = json.loads(
+            (dotconfigs_root / "plugins/git/manifest.json").read_text()
+        )
+        assert (
+            project["git"]["hooks"]["source"]
+            == git_manifest["project"]["hooks"]["source"]
+        )
 
 
 # ---------------------------------------------------------------------------

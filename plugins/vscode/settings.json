@@ -1,0 +1,11 @@
+{
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "python.defaultInterpreterPath": "/Users/henrybaker/miniconda3",
+    "python.createEnvironment.trigger": "off",
+    "makefile.configureOnOpen": true,
+    "terminal.integrated.inheritEnv": false,
+    "git.autofetch": true,
+    "python.analysis.typeCheckingMode": "standard",
+    "claudeCode.preferredLocation": "panel",
+    "claudeCode.selectedModel": "sonnet"
+}

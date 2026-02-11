@@ -115,8 +115,20 @@ backup_and_link() {
         return 0
     fi
 
-    # If dest exists and is owned by dotconfigs, overwrite silently
+    # If dest exists and is owned by dotconfigs, check if already correct
     if is_dotconfigs_owned "$dest" "$dotconfigs_root"; then
+        local resolved_dest resolved_src
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            resolved_dest=$(perl -MCwd -le 'print Cwd::abs_path(shift)' "$dest" 2>/dev/null)
+            resolved_src=$(perl -MCwd -le 'print Cwd::abs_path(shift)' "$src" 2>/dev/null)
+        else
+            resolved_dest=$(readlink -f "$dest" 2>/dev/null)
+            resolved_src=$(readlink -f "$src" 2>/dev/null)
+        fi
+        if [[ "$resolved_dest" == "$resolved_src" ]]; then
+            echo "  Unchanged: $rel_src -> $dest"
+            return 2
+        fi
         link_file "$src" "$dest"
         echo "  ✓ Updated $rel_src -> $dest"
         return 0

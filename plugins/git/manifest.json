@@ -1,0 +1,39 @@
+{
+  "global": {
+    "hooks": {
+      "source": "plugins/git/hooks",
+      "target": "~/.dotconfigs/git-hooks",
+      "method": "symlink",
+      "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "prepare-commit-msg"]
+    },
+    "config": {
+      "source": "plugins/git/templates/gitconfig",
+      "target": "~/.gitconfig",
+      "method": "symlink"
+    },
+    "global-excludes": {
+      "source": "plugins/git/templates/global-excludes",
+      "target": "~/.config/git/ignore",
+      "method": "symlink"
+    }
+  },
+  "project": {
+    "hooks": {
+      "source": "plugins/git/hooks",
+      "target": ".git/hooks",
+      "method": "symlink",
+      "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "prepare-commit-msg"],
+      "exclude": []
+    },
+    "exclude-patterns": {
+      "source": "plugins/git/templates/project-exclude-patterns",
+      "target": ".git/info/exclude",
+      "method": "copy"
+    },
+    "gitignore": {
+      "source": "plugins/git/templates/gitignore-default",
+      "target": ".gitignore",
+      "method": "copy"
+    }
+  }
+}

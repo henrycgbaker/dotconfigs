@@ -1,0 +1,27 @@
+# Project-local git excludes — managed by dotconfigs
+# Deployed to .git/info/exclude (not tracked, per-machine)
+#
+# Use for patterns that are personal or machine-specific.
+# Unlike .gitignore, this file is NOT tracked in the repo.
+# Global patterns (OS, editor, language) belong in ~/.config/git/ignore.
+
+# dotconfigs project config (machine-specific)
+.dotconfigs/
+
+# Claude Code (local settings, memory, agents)
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+
+# Editor / IDE (if not in global excludes)
+.idea/
+.vscode/
+*.code-workspace
+
+# Local environment
+.env
+.env.local
+.env.*.local
+
+# GSD planning artifacts
+.planning/
