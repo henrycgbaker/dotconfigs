@@ -64,6 +64,7 @@ Decisions logged in PROJECT.md Key Decisions table.
 
 - [ ] **Phase 12**: VS Code plugin + .env migration + CLI cleanup
 - [ ] **Phase 13**: Documentation
+- [ ] **v4+**: Deployment scan/status report command (`dotconfigs scan`)
 
 ### Blockers/Concerns
 
