@@ -147,7 +147,7 @@ backup_and_link() {
             echo "    Source: $rel_src"
             echo "    Target: $dest"
             echo "    Options: [o]verwrite, [s]kip, [b]ackup, [d]iff"
-            read -p "    Choice: " choice
+            read -p "    Choice: " choice </dev/tty
             choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
             case "$choice" in
                 d|diff)
