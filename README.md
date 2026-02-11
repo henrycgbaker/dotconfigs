@@ -1,6 +1,6 @@
 # dotconfigs
 
-Single source of truth for dev configuration -- one repo, one CLI, deployed everywhere.
+My personal SSOT for dev configurations (no secrets, but various hooks and other that I've setup) - deployable across machines, configurable both globally & per-project.
 
 **dotconfigs** is a plugin-based configuration manager. Clone onto any machine to get a consistent development environment. Manages Claude Code, Git, shell, and VS Code configuration through a manifest-driven architecture with per-file symlink tracking.
 

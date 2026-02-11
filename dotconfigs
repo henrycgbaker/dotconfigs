@@ -288,12 +288,11 @@ cmd_setup() {
     echo ""
     echo "Setup complete."
     echo ""
-    echo "Next steps — configure your plugins:"
-    while IFS= read -r p; do
-        echo "  dotconfigs global-configs $p"
-    done < <(discover_plugins "$PLUGINS_DIR")
-    echo ""
-    echo "Then deploy with: dotconfigs deploy"
+    echo "Next steps:"
+    echo "  1. (optional) Edit global.json to customise"
+    echo "  2. dotconfigs deploy              Deploy all global config"
+    echo "  3. dotconfigs project-init .      Scaffold per-project config"
+    echo "  4. dotconfigs project .           Deploy project config"
     echo ""
 }
 
