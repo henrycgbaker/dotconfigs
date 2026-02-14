@@ -1,339 +1,61 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # === METADATA ===
 # NAME: pre-commit
 # TYPE: git-hook
 # PLUGIN: git
-# DESCRIPTION: Pre-commit validation — identity, branch protection, secrets, large files, debug statements, python lint
-# CONFIGURABLE: GIT_HOOK_PRE_COMMIT_ENABLED, GIT_HOOK_IDENTITY_CHECK, GIT_HOOK_EXPECTED_NAME, GIT_HOOK_EXPECTED_EMAIL, GIT_HOOK_BRANCH_PROTECTION_COMMIT, GIT_HOOK_SECRETS_CHECK, GIT_HOOK_LARGE_FILE_CHECK, GIT_HOOK_LARGE_FILE_THRESHOLD, GIT_HOOK_DEBUG_CHECK, GIT_HOOK_DEBUG_CHECK_STRICT, GIT_HOOK_PYTHON_LINT
+# DESCRIPTION: Branch-aware pre-commit — identity check, secrets scan, main-branch warning, Ruff format on main
+# CONFIGURABLE: none
 # ================
 
-# ============================================================================
-# PRE-COMMIT HOOK
-# ============================================================================
-# Runs before commit is created. Validates:
-# - Identity (user.name/email match expected values)
-# - Branch protection (block direct commits to main/master)
-# - Secrets (API keys, private keys, AWS credentials)
-# - Large files (warns if > threshold)
-# - Debug statements (console.log, debugger, pdb, etc.)
-# - Python lint (ruff format + check)
-#
-# Source of truth: plugins/git/hooks/pre-commit
-# Deployed to: .git/hooks/pre-commit (via project deploy)
-# ============================================================================
+set -e
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-# --- Load configuration with hierarchy ---
-# Priority: config file > env var > hardcoded default
-# Try multiple config file locations (first found wins)
-HOOK_CONFIG=""
-for config_path in \
-    "$REPO_ROOT/.githooks/config" \
-    "$REPO_ROOT/.claude/git-hooks.conf" \
-    "$REPO_ROOT/.git/hooks/hooks.conf" \
-    "$REPO_ROOT/.claude/hooks.conf"; do
-    if [[ -f "$config_path" ]]; then
-        HOOK_CONFIG="$config_path"
-        break
-    fi
-done
+# ALWAYS: Identity check (~10ms)
+EXPECTED_NAME="henrycgbaker"
+EXPECTED_EMAIL="henry.c.g.baker@gmail.com"
+ACTUAL_NAME=$(git config user.name)
+ACTUAL_EMAIL=$(git config user.email)
 
-# Set defaults
-GIT_HOOK_PRE_COMMIT_ENABLED="${GIT_HOOK_PRE_COMMIT_ENABLED:-true}"
-GIT_HOOK_IDENTITY_CHECK="${GIT_HOOK_IDENTITY_CHECK:-true}"
-GIT_HOOK_EXPECTED_NAME="${GIT_HOOK_EXPECTED_NAME:-}"
-GIT_HOOK_EXPECTED_EMAIL="${GIT_HOOK_EXPECTED_EMAIL:-}"
-GIT_HOOK_BRANCH_PROTECTION_COMMIT="${GIT_HOOK_BRANCH_PROTECTION_COMMIT:-true}"
-GIT_HOOK_SECRETS_CHECK="${GIT_HOOK_SECRETS_CHECK:-true}"
-GIT_HOOK_LARGE_FILE_CHECK="${GIT_HOOK_LARGE_FILE_CHECK:-true}"
-GIT_HOOK_LARGE_FILE_THRESHOLD="${GIT_HOOK_LARGE_FILE_THRESHOLD:-1048576}"
-GIT_HOOK_DEBUG_CHECK="${GIT_HOOK_DEBUG_CHECK:-true}"
-GIT_HOOK_DEBUG_CHECK_STRICT="${GIT_HOOK_DEBUG_CHECK_STRICT:-false}"
-GIT_HOOK_PYTHON_LINT="${GIT_HOOK_PYTHON_LINT:-true}"
-
-# Load config file if found (overrides env vars and defaults)
-if [[ -n "$HOOK_CONFIG" ]]; then
-    source "$HOOK_CONFIG"
+if [ "$ACTUAL_NAME" != "$EXPECTED_NAME" ] || [ "$ACTUAL_EMAIL" != "$EXPECTED_EMAIL" ]; then
+    echo "❌ ERROR: Git identity mismatch"
+    echo "Expected: $EXPECTED_NAME <$EXPECTED_EMAIL>"
+    echo "Actual: $ACTUAL_NAME <$ACTUAL_EMAIL>"
+    exit 1
 fi
 
-# Check if hook is enabled
-if [[ "$GIT_HOOK_PRE_COMMIT_ENABLED" != "true" ]]; then
-    exit 0
+# ALWAYS: Warn on direct main commits
+if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
+    echo "⚠️  WARNING: Committing directly to $BRANCH"
 fi
 
-# ============================================================================
-# SECTION 1: Identity Check (hard block)
-# ============================================================================
-# Verifies git user.name/email match expected values.
-# Expected values: config file > global gitconfig > skip
-
-if [[ "$GIT_HOOK_IDENTITY_CHECK" == "true" ]]; then
-    # Resolve expected values: explicit config > global gitconfig
-    EXPECTED_NAME="$GIT_HOOK_EXPECTED_NAME"
-    EXPECTED_EMAIL="$GIT_HOOK_EXPECTED_EMAIL"
-    if [[ -z "$EXPECTED_NAME" ]]; then
-        EXPECTED_NAME=$(git config --global user.name 2>/dev/null)
-    fi
-    if [[ -z "$EXPECTED_EMAIL" ]]; then
-        EXPECTED_EMAIL=$(git config --global user.email 2>/dev/null)
-    fi
-
-    if [[ -z "$EXPECTED_NAME" || -z "$EXPECTED_EMAIL" ]]; then
-        echo "⚠️  WARNING: Identity check enabled but expected values not set"
-        echo "Set GIT_HOOK_EXPECTED_NAME and GIT_HOOK_EXPECTED_EMAIL in .claude/git-hooks.conf"
-        echo "Or ensure ~/.gitconfig has [user] name and email configured"
-    else
-        ACTUAL_NAME=$(git config user.name 2>/dev/null)
-        ACTUAL_EMAIL=$(git config user.email 2>/dev/null)
-
-        if [[ "$ACTUAL_NAME" != "$EXPECTED_NAME" ]]; then
-            echo "❌ ERROR: Git user.name is '$ACTUAL_NAME', expected '$EXPECTED_NAME'"
-            echo "Fix with: git config user.name '$EXPECTED_NAME'"
-            echo ""
-            echo "To disable: Set GIT_HOOK_IDENTITY_CHECK=false in .claude/git-hooks.conf"
+# ALWAYS: Lightweight secrets scan on staged diffs
+STAGED_DIFF=$(git diff --cached --diff-filter=ACM 2>/dev/null || true)
+if [ -n "$STAGED_DIFF" ]; then
+    for pattern in 'AKIA[0-9A-Z]{16}' '(sk|pk)_(test|live)_[a-zA-Z0-9]{24,}' 'AIza[0-9A-Za-z_-]{35}' '-----BEGIN .* PRIVATE KEY-----'; do
+        if echo "$STAGED_DIFF" | grep -qE "$pattern"; then
+            echo "❌ ERROR: Possible secret detected in staged changes"
+            echo "Pattern: $pattern"
             exit 1
-        fi
-
-        if [[ "$ACTUAL_EMAIL" != "$EXPECTED_EMAIL" ]]; then
-            echo "❌ ERROR: Git user.email is '$ACTUAL_EMAIL', expected '$EXPECTED_EMAIL'"
-            echo "Fix with: git config user.email '$EXPECTED_EMAIL'"
-            echo ""
-            echo "To disable: Set GIT_HOOK_IDENTITY_CHECK=false in .claude/git-hooks.conf"
-            exit 1
-        fi
-    fi
-fi
-
-# ============================================================================
-# SECTION 2: Branch Protection (hard block)
-# ============================================================================
-# Blocks direct commits to main/master. Allows squash merges (SQUASH_MSG).
-
-if [[ "$GIT_HOOK_BRANCH_PROTECTION_COMMIT" == "true" ]]; then
-    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-
-    if echo "$CURRENT_BRANCH" | grep -qE '^(main|master)$'; then
-        if [[ ! -f "$REPO_ROOT/.git/SQUASH_MSG" ]]; then
-            echo "❌ ERROR: Direct commits to '$CURRENT_BRANCH' are not allowed"
-            echo ""
-            echo "Workflow: Create a branch, commit freely, then squash merge when complete"
-            echo ""
-            echo "To fix:"
-            echo "  1. Create a branch:          git checkout -b <branch-name>"
-            echo "  2. Commit your changes:      git commit"
-            echo "  3. When done, squash merge:  Use /squash-merge command"
-            echo ""
-            echo "To disable: Set GIT_HOOK_BRANCH_PROTECTION_COMMIT=false in .claude/git-hooks.conf"
-            exit 1
-        fi
-    fi
-fi
-
-# ============================================================================
-# SECTION 3: Secrets Detection (hard block)
-# ============================================================================
-
-if [[ "$GIT_HOOK_SECRETS_CHECK" == "true" ]]; then
-    # Get staged diff
-    STAGED_DIFF=$(git diff --cached --diff-filter=ACM)
-
-    if [[ -n "$STAGED_DIFF" ]]; then
-        # AWS access keys
-        if echo "$STAGED_DIFF" | grep -qE 'AKIA[0-9A-Z]{16}'; then
-            echo "❌ ERROR: AWS access key detected in staged changes"
-            echo ""
-            echo "Found pattern: AKIA[0-9A-Z]{16}"
-            echo ""
-            echo "Remove sensitive data before committing."
-            echo "Use environment variables or config files (gitignored) for credentials."
-            echo ""
-            echo "To bypass: git commit --no-verify"
-            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
-            exit 1
-        fi
-
-        # API key assignments
-        if echo "$STAGED_DIFF" | grep -qE '["\'"'"']?[Aa]pi[_-]?[Kk]ey["\'"'"']?\s*[:=]\s*["\'"'"'][^"'"'"']{8,}["\'"'"']'; then
-            echo "❌ ERROR: API key assignment detected in staged changes"
-            echo ""
-            echo "Found pattern: api_key = \"...\""
-            echo ""
-            echo "Remove sensitive data before committing."
-            echo "Use environment variables or config files (gitignored) for credentials."
-            echo ""
-            echo "To bypass: git commit --no-verify"
-            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
-            exit 1
-        fi
-
-        # Stripe keys
-        if echo "$STAGED_DIFF" | grep -qE '(sk|pk)_(test|live)_[a-zA-Z0-9]{24,}'; then
-            echo "❌ ERROR: Stripe API key detected in staged changes"
-            echo ""
-            echo "Found pattern: sk_test_... or pk_live_..."
-            echo ""
-            echo "Remove sensitive data before committing."
-            echo "Use environment variables or config files (gitignored) for credentials."
-            echo ""
-            echo "To bypass: git commit --no-verify"
-            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
-            exit 1
-        fi
-
-        # Google API keys
-        if echo "$STAGED_DIFF" | grep -qE 'AIza[0-9A-Za-z_-]{35}'; then
-            echo "❌ ERROR: Google API key detected in staged changes"
-            echo ""
-            echo "Found pattern: AIza..."
-            echo ""
-            echo "Remove sensitive data before committing."
-            echo "Use environment variables or config files (gitignored) for credentials."
-            echo ""
-            echo "To bypass: git commit --no-verify"
-            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
-            exit 1
-        fi
-
-        # Private keys (-- stops BSD grep parsing dashes as flags)
-        if echo "$STAGED_DIFF" | grep -qE -- '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'; then
-            echo "❌ ERROR: Private key detected in staged changes"
-            echo ""
-            echo "Found pattern: -----BEGIN PRIVATE KEY-----"
-            echo ""
-            echo "Remove sensitive data before committing."
-            echo "Use secure key storage (SSH agent, keychain, etc.)."
-            echo ""
-            echo "To bypass: git commit --no-verify"
-            echo "To disable: Set GIT_HOOK_SECRETS_CHECK=false in .claude/git-hooks.conf"
-            exit 1
-        fi
-    fi
-fi
-
-# ============================================================================
-# SECTION 4: Large File Detection (warn only)
-# ============================================================================
-
-if [[ "$GIT_HOOK_LARGE_FILE_CHECK" == "true" ]]; then
-    # Get list of staged files (not deleted)
-    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
-
-    for file in $STAGED_FILES; do
-        if [[ -f "$file" ]]; then
-            # Get file size in bytes (portable way)
-            FILE_SIZE=$(wc -c < "$file" | tr -d ' ')
-
-            if [[ "$FILE_SIZE" -ge "$GIT_HOOK_LARGE_FILE_THRESHOLD" ]]; then
-                # Convert to human-readable
-                FILE_SIZE_MB=$((FILE_SIZE / 1048576))
-                THRESHOLD_MB=$((GIT_HOOK_LARGE_FILE_THRESHOLD / 1048576))
-
-                echo "⚠️  WARNING: Large file detected"
-                echo "File: $file"
-                echo "Size: ${FILE_SIZE_MB}MB (threshold: ${THRESHOLD_MB}MB)"
-                echo ""
-                echo "Consider:"
-                echo "  - Use Git LFS for large binary files"
-                echo "  - Add to .gitignore if not needed in repo"
-                echo "  - Compress if possible"
-                echo ""
-                echo "To adjust threshold: Set GIT_HOOK_LARGE_FILE_THRESHOLD=<bytes> in .claude/git-hooks.conf"
-            fi
         fi
     done
 fi
 
-# ============================================================================
-# SECTION 5: Debug Statement Detection (configurable block/warn)
-# ============================================================================
-
-if [[ "$GIT_HOOK_DEBUG_CHECK" == "true" ]]; then
-    # Get staged diff
-    STAGED_DIFF=$(git diff --cached --diff-filter=ACM)
-
-    if [[ -n "$STAGED_DIFF" ]]; then
-        DEBUG_FOUND=false
-
-        # JavaScript/TypeScript: console.log, console.debug, debugger
-        if echo "$STAGED_DIFF" | grep -qE 'console\.(log|debug)'; then
-            echo "⚠️  DEBUG: console.log or console.debug found in staged changes"
-            DEBUG_FOUND=true
-        fi
-
-        if echo "$STAGED_DIFF" | grep -qE 'debugger;'; then
-            echo "⚠️  DEBUG: debugger statement found in staged changes"
-            DEBUG_FOUND=true
-        fi
-
-        # Python: pdb.set_trace, breakpoint()
-        if echo "$STAGED_DIFF" | grep -qE 'pdb\.set_trace'; then
-            echo "⚠️  DEBUG: pdb.set_trace() found in staged changes"
-            DEBUG_FOUND=true
-        fi
-
-        if echo "$STAGED_DIFF" | grep -qE 'breakpoint\(\)'; then
-            echo "⚠️  DEBUG: breakpoint() found in staged changes"
-            DEBUG_FOUND=true
-        fi
-
-        # Ruby: binding.pry
-        if echo "$STAGED_DIFF" | grep -qE 'binding\.pry'; then
-            echo "⚠️  DEBUG: binding.pry found in staged changes"
-            DEBUG_FOUND=true
-        fi
-
-        if [[ "$DEBUG_FOUND" == "true" ]]; then
-            echo ""
-            echo "Remove debug statements before committing."
-            echo ""
-
-            if [[ "$GIT_HOOK_DEBUG_CHECK_STRICT" == "true" ]]; then
-                echo "❌ BLOCKED: Debug statements not allowed (strict mode)"
-                echo ""
-                echo "To allow: Set GIT_HOOK_DEBUG_CHECK_STRICT=false in .claude/git-hooks.conf"
-                echo "To bypass: git commit --no-verify"
-                exit 1
-            else
-                echo "To block: Set GIT_HOOK_DEBUG_CHECK_STRICT=true in .claude/git-hooks.conf"
+# MAIN ONLY: Ruff format + check
+if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
+    STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+    if [ -n "$STAGED_PY" ] && command -v ruff &> /dev/null; then
+        for file in $STAGED_PY; do
+            if [ -f "$file" ]; then
+                ruff format "$file"
+                ruff check --fix "$file" || true
+                git add "$file"
             fi
-        fi
+        done
     fi
 fi
 
-# ============================================================================
-# SECTION 6: Python Lint & Format (ruff)
-# ============================================================================
-
-if [[ "$GIT_HOOK_PYTHON_LINT" == "true" ]]; then
-    STAGED_PYTHON_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
-
-    if [[ -n "$STAGED_PYTHON_FILES" ]]; then
-        echo "🔍 Checking Python files with Ruff..."
-
-        if command -v ruff &>/dev/null; then
-            # shellcheck disable=SC2086
-            ruff format $STAGED_PYTHON_FILES
-            RUFF_FMT_EXIT=$?
-
-            # shellcheck disable=SC2086
-            ruff check --fix $STAGED_PYTHON_FILES
-            RUFF_CHK_EXIT=$?
-
-            # Re-stage any fixes
-            # shellcheck disable=SC2086
-            git add $STAGED_PYTHON_FILES 2>/dev/null || true
-
-            if [[ $RUFF_FMT_EXIT -ne 0 ]] || [[ $RUFF_CHK_EXIT -ne 0 ]]; then
-                echo "⚠️  Ruff made fixes. Review changes and commit again."
-                exit 1
-            fi
-            echo "✅ Python files passed Ruff checks"
-        else
-            echo "⚠️  Ruff not installed. Skipping Python linting."
-            echo "To disable: Set GIT_HOOK_PYTHON_LINT=false in .claude/git-hooks.conf"
-        fi
-    fi
-fi
+# Project-specific hook
+[ -x .git/hooks/pre-commit.local ] && .git/hooks/pre-commit.local
 
 exit 0

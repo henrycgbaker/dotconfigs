@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
 PLUGINS_DIR="$SCRIPT_DIR/plugins"
 ENV_FILE="$SCRIPT_DIR/.env"
-GLOBAL_CONFIG="$SCRIPT_DIR/global.json"
+GLOBAL_CONFIG="$SCRIPT_DIR/.dotconfigs/global.json"
 
 # Source shared libraries eagerly (small files)
 source "$SCRIPT_DIR/lib/wizard.sh"
@@ -22,7 +22,6 @@ source "$SCRIPT_DIR/lib/symlinks.sh"
 source "$SCRIPT_DIR/lib/discovery.sh"
 source "$SCRIPT_DIR/lib/validation.sh"
 source "$SCRIPT_DIR/lib/colours.sh"
-source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/deploy.sh"
 source "$SCRIPT_DIR/lib/init.sh"
 
@@ -300,7 +299,7 @@ cmd_setup() {
     echo ""
     echo "Next steps:"
     echo "  1. dotconfigs global-init          Scaffold global.json from manifests"
-    echo "  2. (optional) Edit global.json to customise"
+    echo "  2. (optional) Edit .dotconfigs/global.json to customise"
     echo "  3. dotconfigs deploy               Deploy all global config"
     echo "  4. dotconfigs project-init .       Scaffold per-project config"
     echo "  5. dotconfigs project .            Deploy project config"
@@ -322,7 +321,7 @@ cmd_global_init() {
 
     echo ""
     echo "Next steps:"
-    echo "  1. (optional) Edit global.json to customise"
+    echo "  1. (optional) Edit .dotconfigs/global.json to customise"
     echo "  2. dotconfigs deploy              Deploy all global config"
 }
 

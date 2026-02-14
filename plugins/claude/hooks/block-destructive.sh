@@ -5,7 +5,8 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: PreToolUse hook to block destructive commands and protect sensitive files
-# CONFIGURABLE: CLAUDE_HOOK_DESTRUCTIVE_GUARD, CLAUDE_HOOK_FILE_PROTECTION
+# CONFIG: CLAUDE_HOOK_DESTRUCTIVE_GUARD=true  Guard against destructive commands
+# CONFIG: CLAUDE_HOOK_FILE_PROTECTION=true  Protect critical files
 # ================
 
 # Config loading with hierarchy: defaults → env vars → config file

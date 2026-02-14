@@ -11,9 +11,7 @@
 
 # Environment configuration (machine-specific)
 .env
-global.json
 
 # Generated/assembled files (machine-specific, not tracked)
-settings.json
 plugins/claude/settings.json
 plugins/claude/CLAUDE.md

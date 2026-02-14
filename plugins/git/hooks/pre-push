@@ -1,113 +1,47 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # === METADATA ===
 # NAME: pre-push
 # TYPE: git-hook
 # PLUGIN: git
-# DESCRIPTION: Protects main/master branches from force-push operations
-# CONFIGURABLE: GIT_HOOK_BRANCH_PROTECTION, GIT_HOOK_PRE_PUSH_ENABLED
+# DESCRIPTION: Code quality validation (pytest + ruff + mypy) and force-push protection
+# CONFIGURABLE: none
 # ================
 
-# ============================================================================
-# PRE-PUSH HOOK
-# ============================================================================
-# Protects main/master branches from force-push operations
-# Configurable protection level: block, warn, off
-#
-# Source of truth: plugins/git/hooks/pre-push
-# Deployed to: .git/hooks/pre-push (via project deploy)
-# ============================================================================
+set -e
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
-
-# --- Load configuration with hierarchy ---
-# Priority: config file > env var > hardcoded default
-# Try multiple config file locations (first found wins)
-HOOK_CONFIG=""
-for config_path in \
-    "$REPO_ROOT/.githooks/config" \
-    "$REPO_ROOT/.claude/git-hooks.conf" \
-    "$REPO_ROOT/.git/hooks/hooks.conf" \
-    "$REPO_ROOT/.claude/hooks.conf"; do
-    if [[ -f "$config_path" ]]; then
-        HOOK_CONFIG="$config_path"
-        break
+# Read ref info and block force push to protected branches
+while read local_ref local_oid remote_ref remote_oid; do
+    if [[ "$remote_ref" =~ refs/heads/(main|master) ]]; then
+        if [[ "$remote_oid" != "0000000000000000000000000000000000000000" ]] && \
+           [[ "$local_oid" != "0000000000000000000000000000000000000000" ]] && \
+           ! git merge-base --is-ancestor "$remote_oid" "$local_oid" 2>/dev/null; then
+            echo "❌ ERROR: Force push to main/master is blocked"
+            exit 1
+        fi
     fi
 done
 
-# Set defaults
-GIT_HOOK_PRE_PUSH_ENABLED="${GIT_HOOK_PRE_PUSH_ENABLED:-true}"
-GIT_HOOK_BRANCH_PROTECTION="${GIT_HOOK_BRANCH_PROTECTION:-warn}"
+# Code quality validation
+echo "🔒 Validating push..."
 
-# Load config file if found (overrides env vars and defaults)
-if [[ -n "$HOOK_CONFIG" ]]; then
-    source "$HOOK_CONFIG"
+if command -v pytest &> /dev/null; then
+    echo "  → Running tests..."
+    pytest -x || { echo "❌ Tests failed"; exit 1; }
 fi
 
-# Check if hook is enabled
-if [[ "$GIT_HOOK_PRE_PUSH_ENABLED" != "true" ]]; then
-    exit 0
+if command -v ruff &> /dev/null; then
+    echo "  → Checking lint..."
+    ruff check . || { echo "❌ Lint failed"; exit 1; }
 fi
 
-# Exit early if protection is off
-if [[ "$GIT_HOOK_BRANCH_PROTECTION" == "off" ]]; then
-    exit 0
+if command -v mypy &> /dev/null; then
+    echo "  → Type checking..."
+    mypy . || { echo "❌ Type check failed"; exit 1; }
 fi
 
-# Get current branch
-CURRENT_BRANCH=$(git symbolic-ref HEAD 2>/dev/null | sed 's/refs\/heads\///')
-if [[ -z "$CURRENT_BRANCH" ]]; then
-    # Detached HEAD or error - allow push
-    exit 0
-fi
+echo "✅ All checks passed"
 
-# Protected branches regex
-PROTECTED_BRANCHES="^(main|master)$"
+# Project-specific hook
+[ -x .git/hooks/pre-push.local ] && .git/hooks/pre-push.local
 
-# Check if current branch is protected
-if ! echo "$CURRENT_BRANCH" | grep -qE "$PROTECTED_BRANCHES"; then
-    # Not a protected branch - allow push
-    exit 0
-fi
-
-# Detect force push by checking parent process for force flags
-PARENT_CMD=$(ps -ocommand= -p $PPID 2>/dev/null || echo "")
-IS_FORCE_PUSH=false
-
-if echo "$PARENT_CMD" | grep -qE '(--force|-f|--force-with-lease)'; then
-    IS_FORCE_PUSH=true
-fi
-
-# Also check stdin for ref deletion (local sha is all zeros)
-while read local_ref local_sha remote_ref remote_sha; do
-    if [[ "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
-        IS_FORCE_PUSH=true
-        break
-    fi
-done
-
-# If not a force push, allow
-if [[ "$IS_FORCE_PUSH" == "false" ]]; then
-    exit 0
-fi
-
-# Force push detected on protected branch
-if [[ "$GIT_HOOK_BRANCH_PROTECTION" == "block" ]]; then
-    echo "❌ ERROR: Force push to $CURRENT_BRANCH is blocked"
-    echo ""
-    echo "Protected branches: main, master"
-    echo "Force push protection: block"
-    echo ""
-    echo "To change: Set GIT_HOOK_BRANCH_PROTECTION=warn or =off in .claude/git-hooks.conf"
-    exit 1
-elif [[ "$GIT_HOOK_BRANCH_PROTECTION" == "warn" ]]; then
-    echo "⚠️  WARNING: Force pushing to $CURRENT_BRANCH"
-    echo ""
-    echo "Protected branches should not be force-pushed."
-    echo "Consider using a feature branch or regular push."
-    echo ""
-    echo "Proceeding with force push..."
-    exit 0
-fi
-
-# Default: allow
 exit 0

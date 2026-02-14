@@ -172,19 +172,14 @@ class TestProjectDeployExclude:
     @pytest.mark.parametrize(
         "exclude,deployed,absent",
         [
-            ([], ["block-destructive.sh", "post-tool-format.py"], []),
+            ([], ["block-destructive.sh"], []),
             (
-                ["post-tool-format.py"],
                 ["block-destructive.sh"],
-                ["post-tool-format.py"],
-            ),
-            (
-                ["block-destructive.sh", "post-tool-format.py"],
                 [],
-                ["block-destructive.sh", "post-tool-format.py"],
+                ["block-destructive.sh"],
             ),
         ],
-        ids=["no-exclude", "exclude-one", "exclude-all"],
+        ids=["no-exclude", "exclude-all"],
     )
     def test_exclude_mechanism(
         self,

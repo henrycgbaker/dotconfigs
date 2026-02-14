@@ -1,0 +1,207 @@
+# Project: [PROJECT_NAME]
+
+> Template for per-project Claude Code instructions. Copy to project root as `CLAUDE.md` or `.claude/CLAUDE.md`.
+> See: `~/.claude/hooks/templates/CLAUDE.md.template`
+
+## Project Overview
+
+**Type**: [Python/JavaScript/Mixed/etc.]
+**Primary Framework**: [e.g., FastAPI, Django, React, etc.]
+**Purpose**: [Brief project description]
+
+---
+
+## Architecture
+
+### Key Patterns
+- [e.g., Repository pattern, Service layer, MVC, etc.]
+- [e.g., Async/await throughout]
+- [e.g., Event-driven architecture]
+
+### Tech Stack
+- **Backend**: [Framework + version]
+- **Database**: [e.g., PostgreSQL 15, SQLite]
+- **Testing**: [e.g., pytest, Jest]
+- **Other**: [Key libraries/tools]
+
+### Directory Structure
+```
+project/
+├── src/           # [Description]
+├── tests/         # [Description]
+├── docs/          # [Description]
+└── scripts/       # [Description]
+```
+
+---
+
+## Coding Standards
+
+### General Rules
+- [e.g., All public functions must have docstrings]
+- [e.g., Use type hints for function signatures]
+- [e.g., Maximum line length: 88 characters]
+
+### Python-Specific (if applicable)
+- Prefer `pathlib.Path` over `os.path`
+- Use `X | None` over `Optional[X]`
+- f-strings for string formatting
+- Async/await for I/O operations
+
+### Project-Specific Conventions
+- [e.g., Database queries go in repositories, not endpoints]
+- [e.g., Use Pydantic models for all API validation]
+- [e.g., Error handling via custom exception classes]
+
+---
+
+## Testing Requirements
+
+### Coverage Requirements
+- **Minimum coverage**: [e.g., 80% for new code]
+- **Required tests**: [e.g., Unit tests for business logic, integration tests for APIs]
+
+### Test Organization
+- Unit tests: `tests/unit/`
+- Integration tests: `tests/integration/`
+- E2E tests: `tests/e2e/`
+
+### Running Tests
+```bash
+# All tests
+pytest -v
+
+# Specific test file
+pytest tests/unit/test_models.py
+
+# Specific test
+pytest tests/unit/test_models.py::test_user_creation
+
+# With coverage
+pytest --cov=src --cov-report=html
+```
+
+---
+
+## Common Commands
+
+### Development
+```bash
+# Start dev server
+[command]
+
+# Run linter
+ruff check .
+
+# Format code
+ruff format .
+
+# Type check
+mypy .
+```
+
+### Database (if applicable)
+```bash
+# Migrations
+[command]
+
+# Seed data
+[command]
+```
+
+### Build & Deploy
+```bash
+# Build
+[command]
+
+# Deploy to staging
+[command]
+
+# Deploy to production
+[command]
+```
+
+---
+
+## Git Workflow
+
+### Branch Naming
+- Feature: `feature/[ticket-id]-[description]`
+- Bug fix: `fix/[ticket-id]-[description]`
+- Refactor: `refactor/[description]`
+
+### Commit Conventions
+- Follow conventional commits: `type(scope): description`
+- Types: feat, fix, docs, refactor, test, chore
+- Max 72 characters in subject line
+
+### Hooks Installed
+Run `dotconfigs project .` to install, or manually:
+`cp ~/.dotconfigs/git-hooks/{pre-commit,commit-msg,pre-push} .git/hooks/ && chmod +x .git/hooks/*`
+- **Pre-commit**: Identity check always, Ruff format on main only
+- **Commit-msg**: Blocks AI attribution
+- **Pre-push**: Tests + lint + type check
+
+---
+
+## Dependencies
+
+### Installing
+```bash
+# Python
+pip install -r requirements.txt
+
+# JavaScript (if applicable)
+npm install
+```
+
+### Updating
+```bash
+# Update specific package
+pip install -U [package]
+
+# Update all (caution)
+pip install -U -r requirements.txt
+```
+
+### Special Notes
+- [e.g., Package X requires system dependency Y]
+- [e.g., Don't upgrade package Z above version N]
+
+---
+
+## Environment Variables
+
+Required environment variables (see `.env.example`):
+- `DATABASE_URL`: [Description]
+- `API_KEY`: [Description]
+- `DEBUG`: [Description]
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue**: [Description]
+**Solution**: [How to fix]
+
+**Issue**: [Description]
+**Solution**: [How to fix]
+
+### Debug Mode
+```bash
+# Enable verbose logging
+[command]
+
+# Run with debugger
+[command]
+```
+
+---
+
+## Additional Notes
+
+- [Any project-specific quirks]
+- [Important context for new contributors]
+- [Links to detailed documentation]

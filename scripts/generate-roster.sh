@@ -1,12 +1,21 @@
 #!/bin/bash
-# Generate ROSTER.md from hook/command metadata
-# Reads METADATA blocks from plugin files and builds comprehensive reference
+# Generate ROSTER.md from plugin manifests and hook METADATA
+#
+# SSOT chain: manifests → hook files → this script → ROSTER.md
+# - Discovers hooks/commands via manifest.json (not filesystem find)
+# - Reads descriptions and config from hook METADATA blocks (# CONFIG: lines)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_FILE="$REPO_ROOT/docs/ROSTER.md"
+
+# Ensure jq is available (manifests are JSON)
+if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq is required to parse manifests" >&2
+    exit 1
+fi
 
 # Ensure output directory exists
 mkdir -p "$(dirname "$OUTPUT_FILE")"
@@ -22,7 +31,7 @@ This document lists all available hooks, commands, and configuration options in 
 HEADER
 
 # ============================================================================
-# Git Hooks Section
+# Git Hooks Section — discovered via plugins/git/manifest.json
 # ============================================================================
 
 echo "" >> "$OUTPUT_FILE"
@@ -33,24 +42,25 @@ echo "" >> "$OUTPUT_FILE"
 echo "| Hook | Description | Configuration Keys |" >> "$OUTPUT_FILE"
 echo "|------|-------------|-------------------|" >> "$OUTPUT_FILE"
 
-# Find all git hooks with metadata
-while IFS= read -r hook_file; do
+GIT_MANIFEST="$REPO_ROOT/plugins/git/manifest.json"
+
+while IFS= read -r hook_name; do
+    hook_file="$REPO_ROOT/plugins/git/hooks/$hook_name"
     if [[ -f "$hook_file" ]]; then
-        # Extract metadata fields
         name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //')
         desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //')
-        config=$(grep "^# CONFIGURABLE:" "$hook_file" | head -1 | sed 's/^# CONFIGURABLE: //')
+
+        # Extract config key names from CONFIG lines
+        config=$(grep "^# CONFIG:" "$hook_file" 2>/dev/null | sed 's/^# CONFIG: //' | cut -d= -f1 | paste -sd',' - | sed 's/,/, /g' || true)
 
         if [[ -n "$name" ]]; then
-            # Format config keys as comma-separated list
-            config_display="${config//, /, }"
-            echo "| $name | $desc | $config_display |" >> "$OUTPUT_FILE"
+            echo "| $name | $desc | $config |" >> "$OUTPUT_FILE"
         fi
     fi
-done < <(find "$REPO_ROOT/plugins/git/hooks" -type f ! -name "*.md" | sort)
+done < <(jq -r '.global.hooks.include[]' "$GIT_MANIFEST" | sort)
 
 # ============================================================================
-# Claude Hooks Section
+# Claude Hooks Section — discovered via plugins/claude/manifest.json
 # ============================================================================
 
 echo "" >> "$OUTPUT_FILE"
@@ -61,23 +71,25 @@ echo "" >> "$OUTPUT_FILE"
 echo "| Hook | Description | Configuration Keys |" >> "$OUTPUT_FILE"
 echo "|------|-------------|-------------------|" >> "$OUTPUT_FILE"
 
-# Find all claude hooks with metadata
-while IFS= read -r hook_file; do
+CLAUDE_MANIFEST="$REPO_ROOT/plugins/claude/manifest.json"
+
+while IFS= read -r hook_name; do
+    hook_file="$REPO_ROOT/plugins/claude/hooks/$hook_name"
     if [[ -f "$hook_file" ]]; then
-        # Extract metadata fields (works for both bash # and python # comments)
         name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //')
         desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //')
-        config=$(grep "^# CONFIGURABLE:" "$hook_file" | head -1 | sed 's/^# CONFIGURABLE: //')
+
+        # Extract config key names from CONFIG lines
+        config=$(grep "^# CONFIG:" "$hook_file" 2>/dev/null | sed 's/^# CONFIG: //' | cut -d= -f1 | paste -sd',' - | sed 's/,/, /g' || true)
 
         if [[ -n "$name" ]]; then
-            config_display="${config//, /, }"
-            echo "| $name | $desc | $config_display |" >> "$OUTPUT_FILE"
+            echo "| $name | $desc | $config |" >> "$OUTPUT_FILE"
         fi
     fi
-done < <(find "$REPO_ROOT/plugins/claude/hooks" -type f ! -name "*.md" | sort)
+done < <(jq -r '.global.hooks.include[]' "$CLAUDE_MANIFEST" | sort)
 
 # ============================================================================
-# Commands Section
+# Commands Section — discovered via plugins/claude/manifest.json
 # ============================================================================
 
 echo "" >> "$OUTPUT_FILE"
@@ -88,23 +100,23 @@ echo "" >> "$OUTPUT_FILE"
 echo "| Command | Description |" >> "$OUTPUT_FILE"
 echo "|---------|-------------|" >> "$OUTPUT_FILE"
 
-# Find all command .md files and extract description from frontmatter
-while IFS= read -r cmd_file; do
+while IFS= read -r cmd_file_name; do
+    cmd_file="$REPO_ROOT/plugins/claude/commands/$cmd_file_name"
     if [[ -f "$cmd_file" ]]; then
         # Extract command name from filename (remove .md extension)
         cmd_name=$(basename "$cmd_file" .md)
 
-        # Extract description from YAML frontmatter (more robust awk)
+        # Extract description from YAML frontmatter
         desc=$(awk '/^---$/ {p=1; next} p && /^---$/ {p=0} p && /^description:/ {sub(/^description: */, ""); print; exit}' "$cmd_file")
 
         if [[ -n "$desc" ]]; then
             echo "| /$cmd_name | $desc |" >> "$OUTPUT_FILE"
         fi
     fi
-done < <(find "$REPO_ROOT/plugins/claude/commands" -type f -name "*.md" | sort)
+done < <(jq -r '.global.skills.include[]' "$CLAUDE_MANIFEST" | sort)
 
 # ============================================================================
-# Configuration Reference
+# Configuration Reference — parsed from hook CONFIG lines (not lib/config.sh)
 # ============================================================================
 
 echo "" >> "$OUTPUT_FILE"
@@ -123,21 +135,26 @@ echo "" >> "$OUTPUT_FILE"
 echo "| Variable | Default | Description |" >> "$OUTPUT_FILE"
 echo "|----------|---------|-------------|" >> "$OUTPUT_FILE"
 
-# Parse lib/config.sh for GIT_HOOK_* variable documentation
-while IFS= read -r line; do
-    if [[ "$line" =~ ^#\ GIT_HOOK_ ]]; then
-        # Extract variable=default and description
-        var_line=$(echo "$line" | sed 's/^# //')
-        var_name=$(echo "$var_line" | cut -d= -f1)
-        var_default=$(echo "$var_line" | cut -d= -f2 | awk '{print $1}')
-        var_desc=$(echo "$var_line" | cut -d= -f2- | sed "s/^[^ ]* *//")
+# Collect CONFIG lines from all git hooks declared in manifest, deduplicate
+{
+    while IFS= read -r hook_name; do
+        hook_file="$REPO_ROOT/plugins/git/hooks/$hook_name"
+        if [[ -f "$hook_file" ]]; then
+            grep "^# CONFIG:" "$hook_file" 2>/dev/null || true
+        fi
+    done < <(jq -r '.global.hooks.include[]' "$GIT_MANIFEST")
+} | sort -u | while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    # Parse: # CONFIG: VAR_NAME=default  Description
+    config_def=$(echo "$line" | sed 's/^# CONFIG: //')
+    var_name=$(echo "$config_def" | cut -d= -f1)
+    rest=$(echo "$config_def" | cut -d= -f2-)
+    var_default=$(echo "$rest" | awk '{print $1}')
+    var_desc=$(echo "$rest" | sed "s/^[^ ]* *//" )
+    var_desc="${var_desc//|/\\|}"
 
-        # Escape pipe characters in description for markdown table
-        var_desc="${var_desc//|/\\|}"
-
-        echo "| \`$var_name\` | \`$var_default\` | $var_desc |" >> "$OUTPUT_FILE"
-    fi
-done < <(grep "^# GIT_HOOK_" "$REPO_ROOT/lib/config.sh")
+    echo "| \`$var_name\` | \`$var_default\` | $var_desc |" >> "$OUTPUT_FILE"
+done
 
 echo "" >> "$OUTPUT_FILE"
 echo "### Claude Hook Configuration" >> "$OUTPUT_FILE"
@@ -145,18 +162,25 @@ echo "" >> "$OUTPUT_FILE"
 echo "| Variable | Default | Description |" >> "$OUTPUT_FILE"
 echo "|----------|---------|-------------|" >> "$OUTPUT_FILE"
 
-# Parse lib/config.sh for CLAUDE_HOOK_* variable documentation
-while IFS= read -r line; do
-    if [[ "$line" =~ ^#\ CLAUDE_HOOK_ ]]; then
-        var_line=$(echo "$line" | sed 's/^# //')
-        var_name=$(echo "$var_line" | cut -d= -f1)
-        var_default=$(echo "$var_line" | cut -d= -f2 | awk '{print $1}')
-        var_desc=$(echo "$var_line" | cut -d= -f2- | sed "s/^[^ ]* *//")
-        var_desc="${var_desc//|/\\|}"
+# Collect CONFIG lines from all claude hooks declared in manifest
+{
+    while IFS= read -r hook_name; do
+        hook_file="$REPO_ROOT/plugins/claude/hooks/$hook_name"
+        if [[ -f "$hook_file" ]]; then
+            grep "^# CONFIG:" "$hook_file" 2>/dev/null || true
+        fi
+    done < <(jq -r '.global.hooks.include[]' "$CLAUDE_MANIFEST")
+} | sort -u | while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    config_def=$(echo "$line" | sed 's/^# CONFIG: //')
+    var_name=$(echo "$config_def" | cut -d= -f1)
+    rest=$(echo "$config_def" | cut -d= -f2-)
+    var_default=$(echo "$rest" | awk '{print $1}')
+    var_desc=$(echo "$rest" | sed "s/^[^ ]* *//" )
+    var_desc="${var_desc//|/\\|}"
 
-        echo "| \`$var_name\` | \`$var_default\` | $var_desc |" >> "$OUTPUT_FILE"
-    fi
-done < <(grep "^# CLAUDE_HOOK_" "$REPO_ROOT/lib/config.sh")
+    echo "| \`$var_name\` | \`$var_default\` | $var_desc |" >> "$OUTPUT_FILE"
+done
 
 # ============================================================================
 # Config File Locations

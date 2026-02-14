@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import run_bash, run_bash_function
+from tests.conftest import run_bash, run_bash_function
 
 pytestmark = pytest.mark.unit
 
@@ -238,7 +238,6 @@ echo "CREATED=$created"
         result = run_bash(script)
         assert result.returncode == 0
         assert (target / "block-destructive.sh").is_symlink()
-        assert (target / "post-tool-format.py").is_symlink()
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +338,6 @@ deploy_from_json "/nonexistent/config.json" "{dotconfigs_root}" "" "false" "fals
                     "method": "symlink",
                     "include": [
                         "block-destructive.sh",
-                        "post-tool-format.py",
                         "nonexistent.sh",
                     ],
                 }
@@ -357,5 +355,5 @@ deploy_from_json "{config_file}" "{root}" "" "false" "true"
 """
         result = run_bash(script)
         assert result.returncode == 0
-        assert "Updated:   2" in result.stdout
+        assert "Updated:   1" in result.stdout
         assert "Skipped:   1" in result.stdout

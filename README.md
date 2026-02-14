@@ -2,41 +2,51 @@
 
 My personal registry for dev configurations (no secrets, but various hooks and other that I've setup) - deployable across machines, configurable both globally & per-project.
 
+> See [Quickstart](docs/QUICKSTART.md) to get going fast.
+
 **dotconfigs** is a plugin-based configuration manager. Clone onto any machine to get a consistent development environment. Extensible 'plugins' (i.e. tools I use a lot and want to replicate my setup acorss machines) configuration through a manifest-driven architecture with per-file symlink tracking.
 
-**Note:** `dots` is a convenience alias for `dotconfigs`.
+**Note:** `dots` is a convenience alias for `dotconfigs`. 
+
+> See [Quickstart](docs/QUICKSTART.md) to get going fast.
 
 ## Architecture
 
 ### Single Source of Truth
 
-Plugin manifests are the SSOT. Everything flows from them:
+Plugin manifests (`plugins/*/manifest.json`) are the SSOT for each plugin. They declare all available functionality — what files exist and where they deploy. Everything downstream derives from manifests:
+
+- **Manifests** represent all available functionality in a plugin
+- **`.dotconfigs/global.json`** / **`.dotconfigs/project.json`** control what's actually deployed (assembled from manifests, user-editable include/exclude)
+- **Hook METADATA** blocks (`# CONFIG:` lines) are the SSOT for hook descriptions and configuration variables
+- **`generate-roster.sh`** reads manifests (to discover hooks/commands) and hook METADATA (for descriptions/config) to produce `docs/ROSTER.md`
 
 ```
                          SSOT: Plugin Manifests
                       plugins/*/manifest.json
                                 │
-             ┌──────────────────┴──────────────────┐
-             │                                     │
-             ▼                                     ▼
-      .global sections                      .project sections
-             │                                     │
-             ▼                                     ▼
-   ┌───────────────────┐              ┌─────────────────────────┐
-   │    global.json    │              │ .dotconfigs/project.json │
-   │  (machine-wide)   │              │ (per-repo)              │
-   └────────┬──────────┘              └────────────┬────────────┘
-            │                                      │
-    dotconfigs deploy                      dotconfigs project
-            │                                      │
-            ▼                                      ▼
-   ┌───────────────────┐              ┌─────────────────────────┐
-   │ ~/.claude/        │              │ .git/hooks/             │
-   │ ~/.gitconfig      │              │ .claude/hooks/          │
-   │ ~/.dotconfigs/    │              │ .claude/commands/       │
-   │ ~/Library/...     │              │ .git/info/exclude       │
-   └───────────────────┘              └─────────────────────────┘
-     Filesystem (symlinks)              Filesystem (symlinks)
+          ┌─────────────────────┼─────────────────────┐
+          │                     │                     │
+          ▼                     ▼                     ▼
+   .global sections      .project sections     Hook METADATA
+          │                     │              (# CONFIG: lines)
+          ▼                     ▼                     │
+   ┌──────────────────┐ ┌────────────────────┐        ▼
+   │ .dotconfigs/     │ │ .dotconfigs/       │ generate-roster.sh
+   │  global.json     │ │  project.json      │        │
+   └──────┬───────────┘ └───────┬────────────┘        ▼
+          │                     │              ┌────────────────┐
+  dotconfigs deploy    dotconfigs project      │ docs/ROSTER.md │
+          │                     │              └────────────────┘
+          ▼                     ▼
+   ┌──────────────┐    ┌────────────────┐
+   │ ~/.claude/   │    │ .git/hooks/    │
+   │ ~/.gitconfig │    │ .claude/hooks/ │
+   │ ~/.dotconfigs│    │ .claude/cmds/  │
+   │ ~/Library/   │    │ .git/info/excl │
+   └──────────────┘    └────────────────┘
+    Filesystem             Filesystem
+    (symlinks)             (symlinks)
 ```
 
 Each manifest declares modules with `source`, `target`, `method`, and `include`/`exclude` lists:
@@ -71,11 +81,11 @@ Each manifest declares modules with `source`, `target`, `method`, and `include`/
   ─────────────────────────────────────────────────────────────────
 
   1. dotconfigs setup
-     ├── scaffolds global.json from manifests (if not exists)
+     ├── scaffolds .dotconfigs/global.json from manifests (if not exists)
      └── creates PATH symlinks (dotconfigs, dots)
 
   2. dotconfigs deploy
-     ├── reads global.json
+     ├── reads .dotconfigs/global.json
      ├── for each module: symlink source → target
      └── conflict resolution: overwrite / skip / backup / diff
 
@@ -88,7 +98,7 @@ Each manifest declares modules with `source`, `target`, `method`, and `include`/
      └── seeds .git/info/exclude
 
   4. (optional) edit project.json exclude lists
-     └── e.g. exclude: ["post-tool-format.py"]
+     └── e.g. exclude: ["prepare-commit-msg"]
 
   5. dotconfigs project <path>
      ├── reads .dotconfigs/project.json
@@ -125,7 +135,7 @@ cd ~/Repositories/dotconfigs
 ## Quick Start
 
 ```bash
-dotconfigs setup                  # One-time: PATH + scaffold global.json
+dotconfigs setup                  # One-time: PATH + scaffold .dotconfigs/global.json
 dotconfigs deploy                 # Deploy all global config
 dotconfigs project-init ~/myrepo  # Scaffold project config
 dotconfigs project ~/myrepo       # Deploy project hooks + skills
@@ -135,7 +145,7 @@ dotconfigs project ~/myrepo       # Deploy project hooks + skills
 
 ### dotconfigs setup
 
-One-time initialisation. Scaffolds `global.json` from plugin manifests (if it doesn't exist) and creates PATH symlinks for `dotconfigs` and `dots`.
+One-time initialisation. Scaffolds `.dotconfigs/global.json` from plugin manifests (if it doesn't exist) and creates PATH symlinks for `dotconfigs` and `dots`.
 
 ```bash
 dotconfigs setup          # Run once after cloning
@@ -143,7 +153,7 @@ dotconfigs setup          # Run once after cloning
 
 ### dotconfigs deploy [group] [--dry-run] [--force]
 
-Deploys configuration from `global.json` to the filesystem via symlinks. Also ensures `dotconfigs` and `dots` are on PATH.
+Deploys configuration from `.dotconfigs/global.json` to the filesystem via symlinks. Also ensures `dotconfigs` and `dots` are on PATH.
 
 ```bash
 dotconfigs deploy               # Deploy all groups
@@ -185,7 +195,7 @@ Aliases: `project-deploy`
 
 ### dotconfigs global-configs \<plugin\>
 
-Interactive wizard to configure a plugin. Writes to `.env`. This is the legacy configuration path -- the manifest-based system (`global.json`) is the primary approach.
+Interactive wizard to configure a plugin. Writes to `.env`. This is the legacy configuration path -- the manifest-based system (`.dotconfigs/global.json`) is the primary approach.
 
 ```bash
 dotconfigs global-configs claude       # Configure Claude via wizard
@@ -228,7 +238,7 @@ Manages Claude Code configuration via symlinks.
 | skills | `plugins/claude/commands/` | `~/.claude/commands/` (global), `.claude/commands/` (project) |
 | CLAUDE.md | `plugins/claude/CLAUDE.md` | `~/.claude/CLAUDE.md` |
 
-**Hooks:** `block-destructive.sh` (PreToolUse guard), `post-tool-format.py` (PostToolUse Ruff formatter)
+**Hooks:** `block-destructive.sh` (PreToolUse guard — blocks destructive commands and protects sensitive files)
 **Skills:** `/commit`, `/squash-merge`, `/pr-review`, `/simplicity-check`
 
 Project scope supports exclude lists to skip specific hooks or skills per-repo.
@@ -245,17 +255,20 @@ Manages Git configuration: gitconfig, global excludes, and hooks.
 | exclude-patterns | `plugins/git/templates/project-excludes` | `.git/info/exclude` | project |
 | gitignore | `plugins/git/templates/gitignore-default` | `.gitignore` | project |
 
-**7 hooks, all configurable via `.claude/git-hooks.conf`:**
+**8 hooks:**
 
-| Hook | What it does | Key config |
-|------|-------------|------------|
-| `pre-commit` | Identity check, branch protection, secrets detection, large files, debug statements, ruff lint | `GIT_HOOK_IDENTITY_CHECK`, `GIT_HOOK_BRANCH_PROTECTION_COMMIT`, `GIT_HOOK_SECRETS_CHECK`, `GIT_HOOK_PYTHON_LINT` |
-| `commit-msg` | AI attribution blocking, conventional commit enforcement, subject length | `GIT_HOOK_BLOCK_AI_ATTRIBUTION`, `GIT_HOOK_CONVENTIONAL_COMMITS` |
-| `pre-push` | Force push protection on main/master | `GIT_HOOK_BRANCH_PROTECTION` |
-| `prepare-commit-msg` | Auto-prefix from branch name (feature/* -> feat:) | `GIT_HOOK_BRANCH_PREFIX` |
-| `post-merge` | Dependency change detection | |
-| `post-checkout` | Branch info display | |
-| `post-rewrite` | Dependency detection for rebase | |
+| Hook | What it does |
+|------|-------------|
+| `pre-commit` | Identity check always, Ruff format on main only (branch-aware) |
+| `commit-msg` | AI attribution blocking |
+| `pre-push` | Code quality validation (pytest + ruff + mypy) + force-push protection |
+| `pre-rebase` | Blocks rebasing main/master, warns about pushed commits |
+| `prepare-commit-msg` | Auto-prefix from branch name (feature/* -> feat:) |
+| `post-merge` | Dependency change detection and migration reminders |
+| `post-checkout` | Branch info display on switch |
+| `post-rewrite` | Dependency detection for rebase |
+
+`prepare-commit-msg`, `post-merge`, `post-checkout`, and `post-rewrite` are configurable via `.claude/git-hooks.conf` (see [ROSTER.md](docs/ROSTER.md)).
 
 ### shell
 
@@ -282,7 +295,7 @@ Global scope only (macOS path).
 
 ### Hook Configuration
 
-Git hooks are configurable per-project via config files. Place a config file at any of these paths (first found wins):
+The `prepare-commit-msg`, `post-merge`, `post-checkout`, and `post-rewrite` hooks are configurable per-project via config files. Place a config file at any of these paths (first found wins):
 
 1. `.githooks/config`
 2. `.claude/git-hooks.conf`
@@ -291,19 +304,19 @@ Git hooks are configurable per-project via config files. Place a config file at 
 
 Example `.claude/git-hooks.conf`:
 ```bash
-GIT_HOOK_IDENTITY_CHECK=true
-GIT_HOOK_EXPECTED_NAME="henrycgbaker"
-GIT_HOOK_EXPECTED_EMAIL="henry.c.g.baker@gmail.com"
-GIT_HOOK_BRANCH_PROTECTION_COMMIT=true
-GIT_HOOK_PYTHON_LINT=true
-GIT_HOOK_DEBUG_CHECK_STRICT=false
+GIT_HOOK_BRANCH_PREFIX=true
+GIT_HOOK_DEPENDENCY_CHECK=true
+GIT_HOOK_MIGRATION_REMINDER=true
+GIT_HOOK_BRANCH_INFO=true
 ```
+
+The `pre-commit`, `commit-msg`, `pre-push`, and `pre-rebase` hooks are self-contained with no external configuration.
 
 **Precedence:** Config file > environment variable > hardcoded default.
 
 ### Manifest Format
 
-Each plugin has a `manifest.json` with `global` and/or `project` sections:
+Each plugin has a `manifest.json` — the SSOT for all available functionality in that plugin. Manifests declare what exists; `.dotconfigs/global.json` and `.dotconfigs/project.json` (assembled from manifests) control what's actually deployed via include/exclude lists.
 
 ```json
 {
@@ -337,11 +350,12 @@ Each plugin has a `manifest.json` with `global` and/or `project` sections:
 ```
 dotconfigs/
 ├── dotconfigs                    # CLI entry point
-├── global.json                   # Assembled global config (gitignored, from manifests)
+├── .dotconfigs/
+│   ├── global.json               # Assembled global config (gitignored, from manifests)
+│   └── project.json              # Assembled project config (gitignored, from manifests)
 ├── .env                          # Legacy config store (gitignored, wizard-managed)
 ├── lib/
 │   ├── colours.sh                # TTY-aware colour output
-│   ├── config.sh                 # Configuration hierarchy
 │   ├── deploy.sh                 # JSON config deploy engine (include/exclude)
 │   ├── discovery.sh              # Plugin and asset discovery
 │   ├── init.sh                   # Manifest assembly, overwrite protection
@@ -351,17 +365,18 @@ dotconfigs/
 ├── plugins/
 │   ├── claude/
 │   │   ├── manifest.json         # SSOT: global + project module declarations
-│   │   ├── hooks/                # block-destructive.sh, post-tool-format.py
+│   │   ├── hooks/                # block-destructive.sh
 │   │   ├── commands/             # commit.md, squash-merge.md, pr-review.md, simplicity-check.md
+│   │   ├── agents/               # Per-project agent personas (stub, not yet wired)
 │   │   ├── settings.json         # Claude Code settings
 │   │   ├── CLAUDE.md             # Global Claude instructions
-│   │   ├── templates/            # Settings and project templates
+│   │   ├── hooks/templates/      # CLAUDE.md.template for new projects
 │   │   ├── setup.sh              # Interactive wizard (legacy)
 │   │   ├── deploy.sh             # Plugin deploy logic (legacy)
 │   │   └── project.sh            # Plugin project logic (legacy)
 │   ├── git/
 │   │   ├── manifest.json         # SSOT: global + project module declarations
-│   │   ├── hooks/                # 7 hooks (pre-commit, commit-msg, etc.)
+│   │   ├── hooks/                # 8 hooks (pre-commit, commit-msg, pre-push, etc.)
 │   │   ├── templates/
 │   │   │   ├── gitconfig         # Git config (identity, aliases, workflow)
 │   │   │   ├── global-excludes   # Global gitignore patterns

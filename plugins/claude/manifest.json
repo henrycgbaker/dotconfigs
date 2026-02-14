@@ -4,7 +4,7 @@
       "source": "plugins/claude/hooks",
       "target": "~/.claude/hooks",
       "method": "symlink",
-      "include": ["block-destructive.sh", "post-tool-format.py"]
+      "include": ["block-destructive.sh"]
     },
     "settings": {
       "source": "plugins/claude/settings.json",
@@ -28,7 +28,7 @@
       "source": "plugins/claude/hooks",
       "target": ".claude/hooks",
       "method": "symlink",
-      "include": ["block-destructive.sh", "post-tool-format.py"],
+      "include": ["block-destructive.sh"],
       "exclude": []
     },
     "skills": {

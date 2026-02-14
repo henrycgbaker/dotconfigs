@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# === METADATA ===
+# NAME: pre-rebase
+# TYPE: git-hook
+# PLUGIN: git
+# DESCRIPTION: Blocks rebasing main/master and warns about pushed commits
+# CONFIGURABLE: none
+# ================
+
+set -e
+
+# Block rebasing main/master
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
+    echo "❌ ERROR: Cannot rebase main/master branch"
+    exit 1
+fi
+
+# Warn if some commits have been pushed
+UPSTREAM=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null || echo "")
+if [ -n "$UPSTREAM" ]; then
+    UNPUSHED=$(git log "$UPSTREAM..HEAD" --oneline 2>/dev/null | wc -l || echo "0")
+    TOTAL=$(git log HEAD --oneline 2>/dev/null | wc -l || echo "0")
+
+    if [ "$UNPUSHED" -lt "$TOTAL" ]; then
+        echo "⚠️  WARNING: Some commits have been pushed to remote"
+        echo "Rebasing public history is dangerous!"
+        read -p "Continue anyway? (y/N) " -n 1 -r </dev/tty
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    fi
+fi
+
+exit 0

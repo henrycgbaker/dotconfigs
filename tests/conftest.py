@@ -104,7 +104,7 @@ def fake_source_tree(tmp_path: Path):
         (root / "dotconfigs").touch()
 
         plugins = plugins or {
-            "claude": {"hooks": ["block-destructive.sh", "post-tool-format.py"]},
+            "claude": {"hooks": ["block-destructive.sh"]},
             "git": {"hooks": ["pre-commit", "prepare-commit-msg"]},
         }
         for plugin, groups in plugins.items():

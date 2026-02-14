@@ -4,7 +4,8 @@
 # TYPE: git-hook
 # PLUGIN: git
 # DESCRIPTION: Prepares commit message — extracts conventional commit prefix from branch name
-# CONFIGURABLE: GIT_HOOK_BRANCH_PREFIX, GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED
+# CONFIG: GIT_HOOK_BRANCH_PREFIX=true  Auto-prefix commit with branch name
+# CONFIG: GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED=true  Enable prepare-commit-msg hook
 # ================
 
 # ============================================================================

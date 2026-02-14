@@ -3,4 +3,5 @@ testpaths = ["tests"]
 markers = [
     "unit: unit tests (bash function level)",
     "e2e: end-to-end tests (full CLI invocations)",
+    "runtime: runtime integration tests (deploy + validate filesystem)",
 ]

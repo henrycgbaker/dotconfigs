@@ -37,8 +37,8 @@ write_with_overwrite_protection() {
     if [[ -f "$output_file" ]]; then
         echo "$(basename "$output_file") already exists."
         local overwrite_answer="n"
-        if [[ -t 0 ]] || [[ -t 1 ]]; then
-            read -r -p "Overwrite? [y/N] " overwrite_answer
+        if [[ -t 1 ]]; then
+            read -r -p "Overwrite? [y/N] " overwrite_answer </dev/tty
         fi
         case "$overwrite_answer" in
             [yY])
@@ -66,7 +66,7 @@ write_with_overwrite_protection() {
 prompt_deploy() {
     if [[ -t 0 ]] || [[ -t 1 ]]; then
         echo ""
-        read -r -p "Deploy now? [Y/n] " deploy_answer
+        read -r -p "Deploy now? [Y/n] " deploy_answer </dev/tty
         case "$deploy_answer" in
             [nN]) return 1 ;;
             *)

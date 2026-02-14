@@ -4,7 +4,8 @@
 # TYPE: git-hook
 # PLUGIN: git
 # DESCRIPTION: Post-checkout info — displays branch information on checkout
-# CONFIGURABLE: GIT_HOOK_BRANCH_INFO, GIT_HOOK_POST_CHECKOUT_ENABLED
+# CONFIG: GIT_HOOK_BRANCH_INFO=true  Display branch info on checkout
+# CONFIG: GIT_HOOK_POST_CHECKOUT_ENABLED=true  Enable post-checkout hook
 # ================
 
 # ============================================================================

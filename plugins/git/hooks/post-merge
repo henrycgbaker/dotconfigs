@@ -4,7 +4,9 @@
 # TYPE: git-hook
 # PLUGIN: git
 # DESCRIPTION: Post-merge checks — dependency change detection and migration reminders
-# CONFIGURABLE: GIT_HOOK_DEPENDENCY_CHECK, GIT_HOOK_MIGRATION_REMINDER, GIT_HOOK_POST_MERGE_ENABLED
+# CONFIG: GIT_HOOK_DEPENDENCY_CHECK=true  Check for dependency changes
+# CONFIG: GIT_HOOK_MIGRATION_REMINDER=true  Remind about pending migrations
+# CONFIG: GIT_HOOK_POST_MERGE_ENABLED=true  Enable post-merge hook
 # ================
 
 # ============================================================================

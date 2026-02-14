@@ -4,7 +4,7 @@
       "source": "plugins/git/hooks",
       "target": "~/.dotconfigs/git-hooks",
       "method": "symlink",
-      "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "prepare-commit-msg"]
+      "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "pre-rebase", "prepare-commit-msg"]
     },
     "config": {
       "source": "plugins/git/templates/gitconfig",
@@ -22,7 +22,7 @@
       "source": "plugins/git/hooks",
       "target": ".git/hooks",
       "method": "symlink",
-      "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "prepare-commit-msg"],
+      "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "pre-rebase", "prepare-commit-msg"],
       "exclude": [] 
     },
     "project-excludes": {

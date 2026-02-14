@@ -1,41 +1,46 @@
-## Communication Style
+## Project: dotconfigs
 
-- Concise during execution, detailed when asked. Ask questions freely if unclear or better alternatives exist.
-- Brief one-line updates; skip preamble, report results only.
-- Brief error updates, then try alternatives.
-- After completion, explain work and how it fits the wider architecture.
-- Include diagrams where relevant.
+Generic config deployer with plugin architecture. Manages Claude Code, Git, VS Code, and shell configs via JSON manifests and symlinks.
 
-## Language
+## Architecture
 
-- British English (e.g., "colour", "analyse") in prose only. American English in code, variables, functions, APIs.
+- Entry point: `dotconfigs` (no extension)
+- Plugins: `plugins/{claude,git,shell,vscode}/` with `manifest.json` each
+- Shared libs: `lib/` (sourced, not executed -- no shebangs)
 
-## Autonomy & Decision Making
+### SSOT Dataflow
 
-- Always ask when requirements are ambiguous — don't guess on important decisions. For low-stakes work, make reasonable assumptions and mention them.
+Plugin manifests are the upstream SSOT. Everything derives downstream:
 
-## Simplicity First
+- **Manifests** (`plugins/*/manifest.json`) -- declare all available functionality
+- **`.dotconfigs/global.json`** / **`.dotconfigs/project.json`** -- assembled from manifests, control what's deployed (include/exclude)
+- **Hook METADATA** (`# CONFIG:` lines in hook files) -- SSOT for hook descriptions and config variables
+- **`generate-roster.sh`** -- reads manifests + hook METADATA -> produces `docs/ROSTER.md`
 
-- Solve only what was asked -- no premature abstractions (only generalise at 3+ similar implementations)
-- Don't add backwards-compatibility shims when code can just change
-- Don't build for hypothetical future requirements or "just in case" configurability
-- Validate at system edges only -- trust internal code
+Deploy flow: manifests -> `global-init` -> `.dotconfigs/global.json` -> `deploy`
+Project flow: manifests -> `project-init` -> `.dotconfigs/project.json` -> `project`
 
-## Documentation
+## Constraints
 
-- Don't create ad-hoc .md files (NOTES.md, WORK_PLAN.md, etc.) unless explicitly asked
-- Use hierarchical CLAUDE.md files for large project directories
-- Use `.git/info/exclude` for project CLAUDE.md files, not `.gitignore`
+- **Bash 3.2 compat** (macOS) -- no `local -n`, `declare -n`, associative arrays, `${var,,}`
+- **jq required** for JSON parsing
+- No cross-plugin imports -- plugins self-contained
+- No shebangs in `lib/` files (sourced only)
 
-## Git
+## Commands
 
-Workflow: Feature branches (`feature/*`, `fix/*`, `refactor/*`, `docs/*`) + squash merge to main. Commit freely on branches (WIP, notes, experiments fine), squash merge with clean conventional commit, delete branch. Use `/commit` and `/squash-merge`.
+- `dotconfigs setup` -- one-time PATH setup
+- `dotconfigs global-init` -- assemble global.json from manifests
+- `dotconfigs deploy` -- deploy global config (~/.claude/, ~/.gitconfig, etc.)
+- `dotconfigs project-init [path]` -- scaffold project.json for a repo
+- `dotconfigs project [path]` -- deploy project config (.git/hooks/, .claude/, etc.)
+- `dotconfigs status` -- check deployment status
+- `dotconfigs list` -- list available plugins
 
-Commits (main/squash): `type(scope): description` -- types: feat, fix, docs, refactor, test. Subject <72 chars, imperative mood. No AI attribution.
+## Testing
 
-Exclusions: Add CLAUDE.md and .claude/ to `.git/info/exclude` in projects (not .gitignore).
+```bash
+pytest tests/ -v
+```
 
-## Code Style
-
-- Python preferences: `pathlib.Path` over `os.path`, `X | None` over `Optional[X]`, f-strings, 3.10+ type hint syntax
-- Ruff auto-formats via PostToolUse hook -- don't manually review formatting
+Tests use pytest with bash subprocess calls and temp directory fixtures.
