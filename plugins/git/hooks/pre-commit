@@ -29,21 +29,27 @@ if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
     echo "⚠️  WARNING: Committing directly to $BRANCH"
 fi
 
-# ALWAYS: Lightweight secrets scan on staged content (not diff headers)
-STAGED_CONTENT=$(git diff --cached --diff-filter=ACM -U0 2>/dev/null | sed -n '/^+[^+]/p' || true)
-if [ -n "$STAGED_CONTENT" ]; then
-    for pattern in 'AKIA[0-9A-Z]{16}' '(sk|pk)_(test|live)_[a-zA-Z0-9]{24,}' 'AIza[0-9A-Za-z_-]{35}'; do
-        if echo "$STAGED_CONTENT" | grep -qE -- "$pattern"; then
-            echo "❌ ERROR: Possible secret detected in staged changes"
-            echo "Pattern: $pattern"
+# ALWAYS: Secrets scan (gitleaks if available, inline regex fallback)
+if command -v gitleaks &> /dev/null; then
+    gitleaks protect --staged --no-banner -v 2>/dev/null || {
+        echo "❌ ERROR: gitleaks detected secrets in staged changes"
+        exit 1
+    }
+else
+    STAGED_CONTENT=$(git diff --cached --diff-filter=ACM -U0 2>/dev/null | sed -n '/^+[^+]/p' || true)
+    if [ -n "$STAGED_CONTENT" ]; then
+        for pattern in 'AKIA[0-9A-Z]{16}' '(sk|pk)_(test|live)_[a-zA-Z0-9]{24,}' 'AIza[0-9A-Za-z_-]{35}'; do
+            if echo "$STAGED_CONTENT" | grep -qE -- "$pattern"; then
+                echo "❌ ERROR: Possible secret detected in staged changes"
+                echo "Pattern: $pattern"
+                exit 1
+            fi
+        done
+        _pk="-----""BEGIN"
+        if echo "$STAGED_CONTENT" | grep -q -- "$_pk"; then
+            echo "❌ ERROR: Possible private key detected in staged changes"
             exit 1
         fi
-    done
-    # Private key check (split string to avoid self-matching in diffs)
-    _pk="-----""BEGIN"
-    if echo "$STAGED_CONTENT" | grep -q -- "$_pk"; then
-        echo "❌ ERROR: Possible private key detected in staged changes"
-        exit 1
     fi
 fi
 
