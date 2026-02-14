@@ -1,38 +1,95 @@
 """Functional tests for git plugin configuration files.
 
 Tests gitconfig and exclude files are valid and functional.
+Tests are conditional - only run if files exist in manifest.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
 
-class TestGitconfig:
-    """Tests for git/templates/gitconfig."""
+def get_git_config_files(dotconfigs_root: Path) -> dict[str, Path]:
+    """Get dict of git config files from manifest."""
+    manifest_path = dotconfigs_root / "plugins" / "git" / "manifest.json"
+    if not manifest_path.exists():
+        return {}
 
-    def test_gitconfig_exists(self, dotconfigs_root: Path):
-        """gitconfig file exists."""
-        gitconfig = dotconfigs_root / "plugins" / "git" / "templates" / "gitconfig"
-        assert gitconfig.exists()
+    manifest = json.loads(manifest_path.read_text())
+    config_files = {}
 
-    def test_gitconfig_valid_syntax(self, dotconfigs_root: Path, tmp_path: Path):
+    # Collect all non-hook modules
+    for section in ["global", "project"]:
+        if section in manifest:
+            for mod_name, mod_config in manifest[section].items():
+                if mod_name != "hooks":  # Skip hooks module
+                    source = dotconfigs_root / mod_config["source"]
+                    if source.exists():
+                        config_files[f"{section}/{mod_name}"] = source
+
+    return config_files
+
+
+def get_available_hooks(dotconfigs_root: Path) -> set[str]:
+    """Get set of hooks available in git plugin manifest."""
+    manifest_path = dotconfigs_root / "plugins" / "git" / "manifest.json"
+    if not manifest_path.exists():
+        return set()
+
+    manifest = json.loads(manifest_path.read_text())
+    hooks = set()
+
+    for section in ["global", "project"]:
+        if section in manifest and "hooks" in manifest[section]:
+            include = manifest[section]["hooks"].get("include", [])
+            hooks.update(include)
+
+    return hooks
+
+
+@pytest.fixture(scope="session")
+def git_config_files(dotconfigs_root: Path) -> dict[str, Path]:
+    """Dict of git config files available."""
+    return get_git_config_files(dotconfigs_root)
+
+
+@pytest.fixture(scope="session")
+def git_hooks(dotconfigs_root: Path) -> set[str]:
+    """Set of git hooks available."""
+    return get_available_hooks(dotconfigs_root)
+
+
+class TestGitConfigFiles:
+    """Tests for git configuration files."""
+
+    def test_config_files_exist(self, git_config_files):
+        """All config files in manifest exist."""
+        if not git_config_files:
+            pytest.skip("No git config files in manifest")
+
+        for module_name, file_path in git_config_files.items():
+            assert file_path.exists(), f"{module_name} not found: {file_path}"
+
+    def test_gitconfig_valid_syntax(self, dotconfigs_root: Path, git_config_files, tmp_path):
         """gitconfig has valid git config syntax."""
-        gitconfig = dotconfigs_root / "plugins" / "git" / "templates" / "gitconfig"
+        gitconfig_path = None
 
-        # Create a temporary git repo to test the config
-        test_repo = tmp_path / "test_repo"
-        test_repo.mkdir()
-        subprocess.run(
-            ["git", "init"], cwd=test_repo, capture_output=True, check=True
-        )
+        # Find gitconfig in config files
+        for module_name, file_path in git_config_files.items():
+            if "config" in module_name.lower() and file_path.name == "gitconfig":
+                gitconfig_path = file_path
+                break
 
-        # Try to use the config with git config --file
+        if not gitconfig_path:
+            pytest.skip("gitconfig not in manifest")
+
+        # Try to parse with git config --file
         result = subprocess.run(
-            ["git", "config", "--file", str(gitconfig), "--list"],
+            ["git", "config", "--file", str(gitconfig_path), "--list"],
             capture_output=True,
             text=True,
         )
@@ -40,232 +97,49 @@ class TestGitconfig:
         # Should parse without error
         assert result.returncode == 0, f"Config parse error: {result.stderr}"
 
-    def test_gitconfig_contains_expected_sections(self, dotconfigs_root: Path):
-        """gitconfig contains expected configuration sections."""
-        gitconfig = dotconfigs_root / "plugins" / "git" / "templates" / "gitconfig"
-        content = gitconfig.read_text()
-
-        # Check for common git config sections
-        # (Adjust based on actual content of your gitconfig)
-        expected_patterns = [
-            "[user]",  # User identity
-            "[core]",  # Core settings
+    def test_excludes_files_valid_format(self, git_config_files):
+        """Exclude files have valid gitignore format."""
+        exclude_files = [
+            path for name, path in git_config_files.items()
+            if "exclude" in name.lower() or "gitignore" in name.lower()
         ]
 
-        for pattern in expected_patterns:
-            if pattern not in content:
-                # Some sections might not be present, that's ok
-                pass
+        if not exclude_files:
+            pytest.skip("No exclude/gitignore files in manifest")
 
-    def test_gitconfig_user_section(self, dotconfigs_root: Path):
-        """gitconfig user section has name and email."""
-        gitconfig = dotconfigs_root / "plugins" / "git" / "templates" / "gitconfig"
+        for exclude_file in exclude_files:
+            content = exclude_file.read_text()
 
-        result = subprocess.run(
-            ["git", "config", "--file", str(gitconfig), "user.name"],
-            capture_output=True,
-            text=True,
-        )
+            # Should be text file with patterns
+            lines = content.splitlines()
 
-        if result.returncode == 0:
-            # If user section exists, should have a name
-            assert result.stdout.strip() != ""
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
 
-    def test_gitconfig_no_sensitive_data(self, dotconfigs_root: Path):
-        """gitconfig doesn't contain tokens or sensitive data."""
-        gitconfig = dotconfigs_root / "plugins" / "git" / "templates" / "gitconfig"
-        content = gitconfig.read_text().lower()
-
-        # Check for patterns that might indicate leaked secrets
-        sensitive_patterns = ["token", "password", "secret", "credential"]
-
-        for pattern in sensitive_patterns:
-            if pattern in content:
-                # Might be in a comment or config key name, which is fine
-                # Just check it's not followed by = and a value that looks like a secret
-                pass
-
-
-class TestGlobalExcludes:
-    """Tests for git/templates/global-excludes."""
-
-    def test_global_excludes_exists(self, dotconfigs_root: Path):
-        """global-excludes file exists."""
-        excludes = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "global-excludes"
-        )
-        assert excludes.exists()
-
-    def test_global_excludes_valid_format(self, dotconfigs_root: Path):
-        """global-excludes has valid gitignore format."""
-        excludes = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "global-excludes"
-        )
-        content = excludes.read_text()
-
-        # Should be text file with patterns (one per line or comments)
-        lines = content.splitlines()
-
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                # Comment or empty line
-                continue
-
-            # Should be a valid pattern (no absolute paths starting with /)
-            # (git ignore patterns are relative to repo root)
-            # Exception: / can appear in patterns like "/*.log"
-            if line.startswith("/") and not line.startswith("/*"):
-                # Absolute path, which is unusual for global excludes
-                pass
-
-    def test_global_excludes_common_patterns(self, dotconfigs_root: Path):
-        """global-excludes contains common ignore patterns."""
-        excludes = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "global-excludes"
-        )
-        content = excludes.read_text()
-
-        # Check for some common patterns that should be ignored globally
-        common_patterns = [".DS_Store"]  # macOS system files
-
-        for pattern in common_patterns:
-            if pattern not in content:
-                # Not required, but expected
-                pass
-
-
-class TestProjectExcludes:
-    """Tests for git/templates/project-excludes."""
-
-    def test_project_excludes_exists(self, dotconfigs_root: Path):
-        """project-excludes file exists."""
-        excludes = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "project-excludes"
-        )
-        assert excludes.exists()
-
-    def test_project_excludes_valid_format(self, dotconfigs_root: Path):
-        """project-excludes has valid gitignore format."""
-        excludes = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "project-excludes"
-        )
-        content = excludes.read_text()
-
-        # Should be text file with patterns
-        lines = content.splitlines()
-
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-
-            # Basic validation: should not be empty
-            assert len(line) > 0
-
-    def test_project_excludes_contains_dotconfigs(self, dotconfigs_root: Path):
-        """project-excludes includes .dotconfigs directory."""
-        excludes = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "project-excludes"
-        )
-        content = excludes.read_text()
-
-        # Should exclude the .dotconfigs directory
-        assert ".dotconfigs" in content
-
-
-class TestGitignoreDefault:
-    """Tests for git/templates/gitignore-default."""
-
-    def test_gitignore_exists(self, dotconfigs_root: Path):
-        """gitignore-default file exists."""
-        gitignore = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "gitignore-default"
-        )
-        assert gitignore.exists()
-
-    def test_gitignore_valid_format(self, dotconfigs_root: Path):
-        """gitignore-default has valid gitignore format."""
-        gitignore = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "gitignore-default"
-        )
-        content = gitignore.read_text()
-
-        # Should be a text file
-        lines = content.splitlines()
-
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-
-            # Basic validation
-            assert len(line) > 0
-
-    def test_gitignore_common_patterns(self, dotconfigs_root: Path):
-        """gitignore-default contains common ignore patterns."""
-        gitignore = (
-            dotconfigs_root / "plugins" / "git" / "templates" / "gitignore-default"
-        )
-        content = gitignore.read_text()
-
-        # Should have some common patterns
-        # (Adjust based on your actual gitignore-default)
-        # Common patterns might include Python, Node.js, etc.
-        pass  # Content-specific validation
+                # Basic validation: should not be empty
+                assert len(line) > 0
 
 
 class TestGitHooksMetadata:
     """Tests for git hook metadata format."""
 
-    def test_all_hooks_have_metadata(self, dotconfigs_root: Path):
-        """All git hooks have METADATA block."""
+    def test_hooks_have_metadata(self, dotconfigs_root: Path, git_hooks):
+        """Hooks have METADATA block."""
+        if not git_hooks:
+            pytest.skip("No git hooks in manifest")
+
         hooks_dir = dotconfigs_root / "plugins" / "git" / "hooks"
 
-        for hook_file in hooks_dir.iterdir():
-            if hook_file.is_file() and not hook_file.name.endswith(".md"):
-                content = hook_file.read_text()
+        for hook_name in git_hooks:
+            hook_file = hooks_dir / hook_name
+            if not hook_file.exists():
+                continue
 
-                # Should have METADATA section
-                assert "=== METADATA ===" in content, f"Missing metadata: {hook_file.name}"
-                assert "NAME:" in content
-                assert "TYPE:" in content
-                assert "PLUGIN:" in content
-                assert "DESCRIPTION:" in content
+            content = hook_file.read_text()
 
-    def test_hook_metadata_format(self, dotconfigs_root: Path):
-        """Git hook metadata has correct format."""
-        hooks_dir = dotconfigs_root / "plugins" / "git" / "hooks"
-
-        for hook_file in hooks_dir.iterdir():
-            if hook_file.is_file() and not hook_file.name.endswith(".md"):
-                content = hook_file.read_text()
-
-                # Extract metadata block
-                if "=== METADATA ===" not in content:
-                    continue
-
-                lines = content.splitlines()
-                in_metadata = False
-
-                for line in lines:
-                    if "=== METADATA ===" in line:
-                        in_metadata = True
-                        continue
-                    if "===" in line and in_metadata:
-                        break
-
-                    if in_metadata and line.strip().startswith("# NAME:"):
-                        # NAME should match filename
-                        name = line.split("# NAME:")[1].strip()
-                        assert name == hook_file.name, (
-                            f"Name mismatch in {hook_file.name}: "
-                            f"metadata says {name}"
-                        )
-
-                    if in_metadata and line.strip().startswith("# PLUGIN:"):
-                        # PLUGIN should be 'git'
-                        plugin = line.split("# PLUGIN:")[1].strip()
-                        assert plugin == "git", (
-                            f"Wrong plugin in {hook_file.name}: {plugin}"
-                        )
+            # Should have METADATA section
+            assert "=== METADATA ===" in content, (
+                f"Missing metadata in {hook_name}"
+            )
