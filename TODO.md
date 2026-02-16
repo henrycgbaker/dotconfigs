@@ -1,0 +1,13 @@
+- [ ] Fix missing source: `plugins/git/project-exclude-patterns` referenced in `.dotconfigs/project.json` but file does not exist
+- [ ] further research to optimise claude / git
+- [ ] at some point work on rewiring agents workflow back in low priority)_
+- [ ] add more plugins 
+- [ ] vs code: how to manage git extensions (what did i mean by this?)
+- [ ]  when to wizards: give option to delete files (hooks / extensions etc at target dir) - build in prompts for cleanup etc
+- [ ] add explore (i think this is actually supoer painful, so maybe just skip)
+- [ ] make it not my configs but a generic config manager !!!
+- [ ] add to claude plugin to make its CLI / terminal output of its scripts maximally explicit (no magic)
+- [ ] is the 'claude-hooks.conf' and other '--.conf' functionality still implemented? remove that (or reimplement, it's kind of nice being able to toggle it on and off from a project repo? actually i think remove it it's extra layers of abstraction
+
+- [ ] add a hook/async logging in gsd that somehow logs my requirements deterministically so when creating the context.md I can verify it did it (often seems to miss loads)
+- [ ]  set up dotconfig hook to auto amend all my discussion to a log file that gets backup into aw and clean and cleaned up at the end by haiku

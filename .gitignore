@@ -1,17 +1,28 @@
 # OS
 .DS_Store
+Thumbs.db
 
 # Editor
 *.swp
 *.swo
 *~
 
-# Backups created by setup.sh
-*.backup
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
 
-# Environment configuration (machine-specific)
+# Environment
 .env
-
-# Generated/assembled files (machine-specific, not tracked)
-plugins/claude/settings.json
-plugins/claude/CLAUDE.md
+.env.*
+!.env.example
