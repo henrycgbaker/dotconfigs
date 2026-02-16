@@ -7,6 +7,7 @@
 - [ ] add explore (i think this is actually supoer painful, so maybe just skip)
 - [ ] make it not my configs but a generic config manager !!!
 - [ ] add to claude plugin to make its CLI / terminal output of its scripts maximally explicit (no magic)
+- [ ] offer a `dotconfigs undeploy` / delete option for old files under dotconfigs control — e.g. when deploying on a different machine, platform-specific targets (like `~/Library/...` for VS Code on macOS) create dangling symlinks and empty directory trees on Linux; an undeploy command could clean these up by walking global.json targets and removing anything still owned by dotconfigs
 - [ ] is the 'claude-hooks.conf' and other '--.conf' functionality still implemented? remove that (or reimplement, it's kind of nice being able to toggle it on and off from a project repo? actually i think remove it it's extra layers of abstraction
 
 - [ ] add a hook/async logging in gsd that somehow logs my requirements deterministically so when creating the context.md I can verify it did it (often seems to miss loads)

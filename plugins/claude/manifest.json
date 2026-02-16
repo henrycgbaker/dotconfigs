@@ -9,7 +9,7 @@
     "settings": {
       "source": "plugins/claude/settings.json",
       "target": "~/.claude/settings.json",
-      "method": "symlink"
+      "method": "copy"
     },
     "skills": {
       "source": "plugins/claude/commands",

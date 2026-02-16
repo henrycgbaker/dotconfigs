@@ -26,3 +26,6 @@ venv/
 .env
 .env.*
 !.env.example
+
+# Machine-specific assembled configs
+.dotconfigs/

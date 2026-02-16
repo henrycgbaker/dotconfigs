@@ -65,6 +65,8 @@ Decisions logged in PROJECT.md Key Decisions table.
 - [ ] **Phase 12**: VS Code plugin + .env migration + CLI cleanup
 - [ ] **Phase 13**: Documentation
 - [ ] **v4+**: Deployment scan/status report command (`dotconfigs scan`)
+- [ ] **v4+**: Add `deploy` toggle field to global.json/project.json schema (skip entries without deleting)
+- [ ] **v4+**: Build merge-based deploy method for shared config files (settings.json SSOT vs runtime writes)
 
 ### Blockers/Concerns
 
