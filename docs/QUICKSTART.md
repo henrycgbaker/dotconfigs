@@ -13,11 +13,12 @@ cd ~/Repositories/dotconfigs
 ./dotconfigs setup
 ```
 
-`setup` adds `dotconfigs` (and alias `dots`) to your PATH and scaffolds `.dotconfigs/global.json` from plugin manifests.
+`setup` adds `dotconfigs` (and alias `dots`) to your PATH.
 
-## Deploy global config
+## Scaffold and deploy global config
 
 ```bash
+dotconfigs global-init          # Scaffold .dotconfigs/global.json from manifests
 dotconfigs deploy               # Deploy all plugins
 dotconfigs deploy git           # Deploy one plugin
 dotconfigs deploy --dry-run     # Preview first

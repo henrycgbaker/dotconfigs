@@ -81,10 +81,12 @@ Each manifest declares modules with `source`, `target`, `method`, and `include`/
   ─────────────────────────────────────────────────────────────────
 
   1. dotconfigs setup
-     ├── scaffolds .dotconfigs/global.json from manifests (if not exists)
      └── creates PATH symlinks (dotconfigs, dots)
 
-  2. dotconfigs deploy
+  2. dotconfigs global-init
+     └── scaffolds .dotconfigs/global.json from manifests (if not exists)
+
+  3. dotconfigs deploy
      ├── reads .dotconfigs/global.json
      ├── for each module: symlink source → target
      └── conflict resolution: overwrite / skip / backup / diff
@@ -92,15 +94,15 @@ Each manifest declares modules with `source`, `target`, `method`, and `include`/
   Per-project setup
   ─────────────────────────────────────────────────────────────────
 
-  3. dotconfigs project-init <path>
+  4. dotconfigs project-init <path>
      ├── reads .project from each manifest
      ├── assembles .dotconfigs/project.json
      └── seeds .git/info/exclude
 
-  4. (optional) edit project.json exclude lists
+  5. (optional) edit project.json exclude lists
      └── e.g. exclude: ["prepare-commit-msg"]
 
-  5. dotconfigs project <path>
+  6. dotconfigs project <path>
      ├── reads .dotconfigs/project.json
      ├── for each module: symlink source → target
      └── respects include/exclude lists
@@ -135,7 +137,8 @@ cd ~/Repositories/dotconfigs
 ## Quick Start
 
 ```bash
-dotconfigs setup                  # One-time: PATH + scaffold .dotconfigs/global.json
+dotconfigs setup                  # One-time: create PATH symlinks
+dotconfigs global-init            # Scaffold .dotconfigs/global.json from manifests
 dotconfigs deploy                 # Deploy all global config
 dotconfigs project-init ~/myrepo  # Scaffold project config
 dotconfigs project ~/myrepo       # Deploy project hooks + skills
@@ -145,7 +148,7 @@ dotconfigs project ~/myrepo       # Deploy project hooks + skills
 
 ### dotconfigs setup
 
-One-time initialisation. Scaffolds `.dotconfigs/global.json` from plugin manifests (if it doesn't exist) and creates PATH symlinks for `dotconfigs` and `dots`.
+One-time initialisation. Creates PATH symlinks for `dotconfigs` and `dots`. Run `global-init` afterwards to scaffold `.dotconfigs/global.json`.
 
 ```bash
 dotconfigs setup          # Run once after cloning
@@ -342,7 +345,7 @@ Each plugin has a `manifest.json` — the SSOT for all available functionality i
 
 - `include` -- whitelist of files to deploy from a directory source
 - `exclude` -- project-only, user-editable blacklist (empty by default)
-- `method` -- `symlink` or `copy`
+- `method` -- `symlink`, `copy`, or `append`
 - Global targets use `~` (home-relative). Project targets are project-relative.
 
 ## Directory Structure

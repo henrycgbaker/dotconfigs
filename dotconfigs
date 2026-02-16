@@ -249,7 +249,7 @@ Usage:
   dotconfigs list
 
 Description:
-  Lists all available plugins with descriptions.
+  Lists all available plugins with deployment status.
 
 Example:
   dotconfigs list

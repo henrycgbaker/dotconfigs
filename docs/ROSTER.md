@@ -83,8 +83,8 @@ Higher tiers override lower tiers (config file > env var > default).
 
 ### Plugin Configuration Ownership
 
-- **Git plugin** owns `git-hooks.conf` — deployed by `dotconfigs project git`
-- **Claude plugin** owns `claude-hooks.conf` — deployed by `dotconfigs project claude`
+- **Git plugin** owns `git-hooks.conf` — deployed by `dotconfigs project` when project.json includes the git plugin
+- **Claude plugin** owns `claude-hooks.conf` — deployed by `dotconfigs project` when project.json includes the claude plugin
 
 ---
 
