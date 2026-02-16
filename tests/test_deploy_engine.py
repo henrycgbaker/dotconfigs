@@ -357,3 +357,76 @@ deploy_from_json "{config_file}" "{root}" "" "false" "true"
         assert result.returncode == 0
         assert "Updated:   1" in result.stdout
         assert "Skipped:   1" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# deploy preserves foreign files — regression test for directory-wipe bug
+# ---------------------------------------------------------------------------
+
+
+class TestDeployPreservesForeignFiles:
+    """Deploy must not remove files it doesn't own in shared directories."""
+
+    def test_foreign_files_survive_deploy(
+        self, dotconfigs_root: Path, fake_source_tree, tmp_path: Path
+    ):
+        """Pre-existing non-dotconfigs files in target dir must survive deploy."""
+        root = fake_source_tree()
+        source = root / "plugins" / "claude" / "hooks"
+        target = tmp_path / "hooks"
+
+        # Pre-populate target with "foreign" files (e.g. GSD hooks)
+        target.mkdir(parents=True)
+        foreign_file = target / "gsd-check-update.js"
+        foreign_file.write_text("// GSD hook\n")
+        foreign_symlink = target / "foreign-link.sh"
+        foreign_symlink.symlink_to(foreign_file)
+
+        script = f"""
+set -e
+source "{dotconfigs_root}/lib/symlinks.sh"
+source "{dotconfigs_root}/lib/validation.sh"
+source "{dotconfigs_root}/lib/deploy.sh"
+created=0; updated=0; unchanged=0; skipped=0
+deploy_directory_files "{source}" "{target}" "block-destructive.sh" "{root}" "false" "force"
+"""
+        result = run_bash(script)
+        assert result.returncode == 0
+        # Dotconfigs file deployed
+        assert (target / "block-destructive.sh").is_symlink()
+        # Foreign files untouched
+        assert foreign_file.exists(), "Foreign file was deleted by deploy"
+        assert foreign_file.read_text() == "// GSD hook\n"
+        assert foreign_symlink.is_symlink(), "Foreign symlink was deleted by deploy"
+
+    def test_target_dir_symlink_preserved(
+        self, dotconfigs_root: Path, fake_source_tree, tmp_path: Path
+    ):
+        """A target path that is a symlink to a valid directory must not be replaced."""
+        root = fake_source_tree()
+        source = root / "plugins" / "claude" / "hooks"
+
+        # Create a real directory and symlink to it (simulates dotclaude setup)
+        real_dir = tmp_path / "real_hooks"
+        real_dir.mkdir()
+        (real_dir / "existing.sh").write_text("# existing\n")
+        target = tmp_path / "hooks_link"
+        target.symlink_to(real_dir)
+
+        script = f"""
+set -e
+source "{dotconfigs_root}/lib/symlinks.sh"
+source "{dotconfigs_root}/lib/validation.sh"
+source "{dotconfigs_root}/lib/deploy.sh"
+created=0; updated=0; unchanged=0; skipped=0
+deploy_directory_files "{source}" "{target}" "block-destructive.sh" "{root}" "false" "force"
+"""
+        result = run_bash(script)
+        assert result.returncode == 0
+        # Symlink to directory preserved (not replaced with real dir)
+        assert target.is_symlink(), "Directory symlink was replaced"
+        assert target.resolve() == real_dir.resolve()
+        # Dotconfigs file deployed inside
+        assert (target / "block-destructive.sh").is_symlink()
+        # Pre-existing file untouched
+        assert (real_dir / "existing.sh").exists()

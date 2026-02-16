@@ -75,7 +75,8 @@ deploy_directory_files() {
     # Create target directory unless dry-run
     if [[ "$dry_run" != "true" ]]; then
         # If target path exists but isn't a directory (e.g. dangling symlink, file), remove it
-        if [[ -L "$target_dir" || ( -e "$target_dir" && ! -d "$target_dir" ) ]]; then
+        # Note: -d follows symlinks, so symlinks to valid directories are preserved
+        if [[ ! -d "$target_dir" && ( -L "$target_dir" || -e "$target_dir" ) ]]; then
             rm -f "$target_dir"
         fi
         mkdir -p "$target_dir"
