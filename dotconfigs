@@ -36,6 +36,7 @@ Usage:
   dotconfigs project-init [path]                Scaffold per-project config
   dotconfigs project [path] [options]           Deploy per-project configuration
   dotconfigs global-configs <plugin>            Configure plugin via wizard (.env)
+  dotconfigs cleanup [options]                   Remove stale/broken symlinks
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
   dotconfigs help [command]                     Show help for command
@@ -52,6 +53,9 @@ Commands:
   project         Deploy per-project config from .dotconfigs/project.json
                   Options: --force, --dry-run
                   Aliases: project-deploy
+  cleanup          Remove stale dotconfigs symlinks and broken symlinks
+                  Default: dry-run. Use --apply to actually remove.
+                  Options: --apply, --dry-run, --project <path>
   global-configs  Interactive wizard to configure plugin defaults (.env)
   status          Check deployment status (requires .env)
   list            List all available plugins
@@ -187,6 +191,36 @@ Examples:
   dotconfigs project .                   Deploy current project
   dotconfigs project ~/myrepo --force    Deploy, skip conflict prompts
   dotconfigs project . --dry-run         Preview deployment
+EOF
+            ;;
+        cleanup)
+            cat <<EOF
+dotconfigs cleanup — Remove stale and broken symlinks
+
+Usage:
+  dotconfigs cleanup [--apply] [--dry-run] [--project <path>]
+
+Description:
+  Scans deployed target directories and removes:
+  - Dotconfigs-owned symlinks not in the current deploy set (stale)
+  - Broken/dangling symlinks (regardless of ownership)
+
+  Preserves:
+  - Foreign regular files (e.g. user-created hooks)
+  - Foreign valid symlinks (e.g. hooks from other tools)
+
+  Default mode is dry-run. Use --apply to actually remove files.
+
+Options:
+  --apply          Actually remove stale symlinks (default: dry-run)
+  --dry-run        Preview what would be removed (default)
+  --project <path> Clean project targets instead of global
+
+Examples:
+  dotconfigs cleanup                     Preview stale symlinks
+  dotconfigs cleanup --apply             Remove stale symlinks
+  dotconfigs cleanup --project .         Preview project cleanup
+  dotconfigs cleanup --project . --apply Remove stale project symlinks
 EOF
             ;;
         deploy)
@@ -420,6 +454,136 @@ _create_path_symlink() {
             echo "Warning: Failed to create $name symlink at $sym" >&2
         fi
     done
+}
+
+cmd_cleanup() {
+    local dry_run="true"
+    local config_file="$GLOBAL_CONFIG"
+    local project_path=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --apply)
+                dry_run="false"
+                shift
+                ;;
+            --dry-run)
+                dry_run="true"
+                shift
+                ;;
+            --project)
+                shift
+                project_path="${1:-.}"
+                shift
+                ;;
+            -*)
+                echo "Error: Unknown option '$1'" >&2
+                echo "Usage: dotconfigs cleanup [--apply] [--dry-run] [--project <path>]" >&2
+                exit 1
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    # Resolve project config if --project given
+    if [[ -n "$project_path" ]]; then
+        project_path=$(expand_path "$project_path")
+        config_file="$project_path/.dotconfigs/project.json"
+    fi
+
+    # Check jq + config exist
+    if ! check_jq; then
+        return 1
+    fi
+    if [[ ! -f "$config_file" ]]; then
+        echo "Error: config file not found: $config_file" >&2
+        exit 1
+    fi
+
+    init_colours
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Cleanup dry-run (use --apply to remove):"
+    else
+        echo "Cleaning up stale symlinks:"
+    fi
+    echo ""
+
+    removed=0
+
+    # Parse all modules and run cleanup on each target directory
+    local modules_data
+    modules_data=$(parse_modules "$config_file")
+
+    if [[ -z "$modules_data" ]]; then
+        echo "No modules found."
+        return 0
+    fi
+
+    while IFS=$'\t' read -r source target method include_csv; do
+        local abs_target
+        abs_target=$(expand_tilde "$target")
+
+        # If project, resolve relative targets
+        if [[ -n "$project_path" && "$abs_target" != /* ]]; then
+            abs_target="$project_path/$abs_target"
+        fi
+
+        local abs_source
+        if [[ "$source" != /* ]]; then
+            abs_source="$SCRIPT_DIR/$source"
+        else
+            abs_source="$source"
+        fi
+
+        case "$method" in
+            symlink)
+                if [[ -d "$abs_source" ]]; then
+                    # Directory module: build expected CSV from include list or source dir
+                    local deployed_csv=""
+                    if [[ "$include_csv" == "__NONE__" ]]; then
+                        deployed_csv=""
+                    elif [[ -n "$include_csv" ]]; then
+                        deployed_csv="$include_csv"
+                    else
+                        # No include list — all source files are expected
+                        for file in "$abs_source"/*; do
+                            [[ ! -e "$file" ]] && continue
+                            [[ -d "$file" ]] && continue
+                            if [[ -n "$deployed_csv" ]]; then
+                                deployed_csv="$deployed_csv,$(basename "$file")"
+                            else
+                                deployed_csv="$(basename "$file")"
+                            fi
+                        done
+                    fi
+                    cleanup_stale_in_directory "$abs_target" "$deployed_csv" "$SCRIPT_DIR" "$dry_run"
+                else
+                    # Single-file symlink: check if target is broken
+                    if [[ -L "$abs_target" && ! -e "$abs_target" ]]; then
+                        if [[ "$dry_run" == "true" ]]; then
+                            echo "  Would remove broken symlink: $abs_target"
+                        else
+                            rm -f "$abs_target"
+                            echo "  ✓ Removed broken symlink: $abs_target"
+                        fi
+                        removed=$(( removed + 1 ))
+                    fi
+                fi
+                ;;
+        esac
+    done <<< "$modules_data"
+
+    echo ""
+    echo "Cleanup summary:"
+    echo "  Removed: $removed"
+    if [[ "$dry_run" == "true" && "$removed" -gt 0 ]]; then
+        echo ""
+        echo "Run 'dotconfigs cleanup --apply' to remove."
+    fi
 }
 
 cmd_deploy() {
@@ -727,6 +891,9 @@ main() {
             else
                 cmd_project "${@:2}"
             fi
+            ;;
+        cleanup)
+            cmd_cleanup "${@:2}"
             ;;
         deploy|global-deploy)
             cmd_deploy "${@:2}"

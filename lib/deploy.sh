@@ -52,6 +52,77 @@ parse_modules_in_group() {
     jq -r --arg group "$group_key" '.[$group] | .. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (if has("include") then ((.include // []) - (.exclude // []) | if length == 0 then "__NONE__" else join(",") end) else "" end)] | @tsv' "$config_file" 2>/dev/null || true
 }
 
+# Remove stale symlinks from a target directory after deploy
+# Removes: dotconfigs-owned symlinks not in deployed set, broken/dangling symlinks
+# Preserves: foreign regular files, foreign valid symlinks
+# Args: target_dir, deployed_csv (comma-separated expected filenames), dotconfigs_root, dry_run
+# Uses global `removed` counter
+cleanup_stale_in_directory() {
+    local target_dir="$1"
+    local deployed_csv="$2"
+    local dotconfigs_root="$3"
+    local dry_run="$4"
+    local item
+    local item_name
+    local is_expected
+
+    # Target dir doesn't exist — nothing to clean
+    if [[ ! -d "$target_dir" ]]; then
+        return
+    fi
+
+    # Parse deployed_csv into array (bash 3.2 compatible)
+    local expected_files=()
+    if [[ -n "$deployed_csv" ]]; then
+        local IFS=','
+        for item_name in $deployed_csv; do
+            expected_files+=("$item_name")
+        done
+        unset IFS
+    fi
+
+    # Iterate items in target dir (use both -e and -L to catch broken symlinks)
+    for item in "$target_dir"/*; do
+        # Handle empty directory (glob returns literal pattern)
+        [[ ! -e "$item" && ! -L "$item" ]] && continue
+
+        item_name=$(basename "$item")
+
+        # Check if this item is in the expected set
+        is_expected=false
+        for expected in "${expected_files[@]}"; do
+            if [[ "$expected" == "$item_name" ]]; then
+                is_expected=true
+                break
+            fi
+        done
+
+        [[ "$is_expected" == "true" ]] && continue
+
+        # Item is not in the expected deploy set — check if we should remove it
+        if [[ -L "$item" && ! -e "$item" ]]; then
+            # Broken/dangling symlink — always remove
+            if [[ "$dry_run" == "true" ]]; then
+                echo "  Would remove broken symlink: $item_name"
+            else
+                rm -f "$item"
+                echo "  ✓ Removed broken symlink: $item_name"
+            fi
+            eval "removed=\$(( \$removed + 1 ))"
+        elif is_dotconfigs_owned "$item" "$dotconfigs_root" 2>/dev/null; then
+            # Stale dotconfigs-owned symlink — remove
+            if [[ "$dry_run" == "true" ]]; then
+                echo "  Would remove stale: $item_name"
+            else
+                rm -f "$item"
+                echo "  ✓ Removed stale: $item_name"
+            fi
+            eval "removed=\$(( \$removed + 1 ))"
+        fi
+        # Otherwise: foreign file or foreign valid symlink — leave it alone
+    done
+}
+
 # Deploy files from a directory source
 # Args: source_dir, target_dir, include_csv, dotconfigs_root, dry_run, interactive_mode
 # Returns: Status counts via global counters
@@ -67,8 +138,9 @@ deploy_directory_files() {
     local target_file
     local status
 
-    # All items excluded — deploy nothing
+    # All items excluded — deploy nothing, but still clean up stale entries
     if [[ "$include_csv" == "__NONE__" ]]; then
+        cleanup_stale_in_directory "$target_dir" "" "$dotconfigs_root" "$dry_run"
         return
     fi
 
@@ -122,6 +194,9 @@ deploy_directory_files() {
                 fi
             fi
         done
+
+        # Clean up stale entries (include-list branch)
+        cleanup_stale_in_directory "$target_dir" "$include_csv" "$dotconfigs_root" "$dry_run"
     else
         # Deploy all files in directory
         for file in "$source_dir"/*; do
@@ -150,6 +225,19 @@ deploy_directory_files() {
                 fi
             fi
         done
+
+        # Build deployed CSV from all source files, then clean up stale entries
+        local all_csv=""
+        for file in "$source_dir"/*; do
+            [[ ! -e "$file" ]] && continue
+            [[ -d "$file" ]] && continue
+            if [[ -n "$all_csv" ]]; then
+                all_csv="$all_csv,$(basename "$file")"
+            else
+                all_csv="$(basename "$file")"
+            fi
+        done
+        cleanup_stale_in_directory "$target_dir" "$all_csv" "$dotconfigs_root" "$dry_run"
     fi
 }
 
@@ -307,6 +395,7 @@ deploy_from_json() {
     updated=0
     unchanged=0
     skipped=0
+    removed=0
 
     # Parse modules
     modules_data=$(parse_modules_in_group "$config_file" "$group_key")
@@ -348,5 +437,6 @@ deploy_from_json() {
     echo "  Created:   $created"
     echo "  Updated:   $updated"
     echo "  Unchanged: $unchanged"
+    echo "  Removed:   $removed"
     echo "  Skipped:   $skipped"
 }
