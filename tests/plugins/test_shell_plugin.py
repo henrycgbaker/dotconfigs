@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import requires_cmd
+
 
 def get_shell_modules(dotconfigs_root: Path) -> dict[str, Path]:
     """Get dict of shell modules from manifest."""
@@ -43,6 +45,7 @@ class TestShellFiles:
 
     def test_files_source_without_error(self, shell_modules):
         """Shell files source without syntax errors."""
+        requires_cmd("zsh")
         if not shell_modules:
             pytest.skip("No shell modules in manifest")
 
@@ -55,9 +58,9 @@ class TestShellFiles:
             )
 
             # Syntax check should pass
-            assert result.returncode == 0, (
-                f"Syntax error in {mod_name}: {result.stderr}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Syntax error in {mod_name}: {result.stderr}"
 
     def test_files_exist(self, shell_modules):
         """All shell files in manifest exist."""

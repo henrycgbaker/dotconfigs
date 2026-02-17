@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+
+
+def requires_cmd(name: str) -> None:
+    """Skip test if a command-line binary is not available."""
+    if not shutil.which(name):
+        pytest.skip(f"{name} not available")
 
 
 @dataclass

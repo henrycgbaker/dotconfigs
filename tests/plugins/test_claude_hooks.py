@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import requires_cmd
+
 
 def get_available_claude_hooks(dotconfigs_root: Path) -> set[str]:
     """Get set of hooks available in claude plugin manifest."""
@@ -50,6 +52,7 @@ def hook_script(dotconfigs_root: Path, available_claude_hooks):
 
 def run_hook(hook_script: Path, tool_name: str, tool_input: dict) -> tuple[int, str]:
     """Run the Claude hook with given tool call data."""
+    requires_cmd("bash")
     stdin_data = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
 
     result = subprocess.run(
@@ -103,9 +106,9 @@ class TestClaudeHooks:
             hook_file = hooks_dir / hook_name
             if hook_file.exists():
                 content = hook_file.read_text()
-                assert content.startswith("#!"), (
-                    f"Hook {hook_name} should start with shebang"
-                )
+                assert content.startswith(
+                    "#!"
+                ), f"Hook {hook_name} should start with shebang"
 
     def test_hook_accepts_safe_commands(self, hook_script):
         """Hook allows safe commands."""
@@ -114,7 +117,9 @@ class TestClaudeHooks:
         data = parse_hook_output(output)
         # Should allow (no output or no deny decision)
         if data:
-            assert data.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+            assert (
+                data.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+            )
 
     def test_hook_accepts_safe_writes(self, hook_script):
         """Hook allows writes to normal files."""
@@ -126,4 +131,6 @@ class TestClaudeHooks:
         assert returncode == 0
         data = parse_hook_output(output)
         if data:
-            assert data.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+            assert (
+                data.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+            )
