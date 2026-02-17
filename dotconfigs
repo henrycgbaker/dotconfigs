@@ -32,11 +32,11 @@ dotconfigs — Unified configuration management
 Usage:
   dotconfigs setup                              One-time init (PATH symlinks)
   dotconfigs global-init                        Scaffold global.json from manifests
-  dotconfigs deploy [group] [options]           Deploy global config to filesystem
+  dotconfigs global-deploy [group] [options]    Deploy global config to filesystem
   dotconfigs project-init [path]                Scaffold per-project config
-  dotconfigs project [path] [options]           Deploy per-project configuration
+  dotconfigs project-deploy [path] [options]    Deploy per-project configuration
   dotconfigs global-configs <plugin>            Configure plugin via wizard (.env)
-  dotconfigs cleanup [options]                   Remove stale/broken symlinks
+  dotconfigs cleanup [options]                  Remove stale/broken symlinks
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
   dotconfigs help [command]                     Show help for command
@@ -44,16 +44,15 @@ Usage:
 Commands:
   setup           One-time init: add dotconfigs to PATH, then run global-init
   global-init     Scaffold global.json from plugin manifests
-  deploy          Deploy configuration from global.json (symlinks)
+  global-deploy   Deploy configuration from global.json (symlinks)
                   Options: --force, --dry-run
                   Without group: deploys all groups
-                  Aliases: global-deploy
+                  Aliases: deploy
   project-init    Scaffold .dotconfigs/project.json from plugin manifests
-                  Aliases: project-configs, project init
-  project         Deploy per-project config from .dotconfigs/project.json
+  project-deploy  Deploy per-project config from .dotconfigs/project.json
                   Options: --force, --dry-run
-                  Aliases: project-deploy
-  cleanup          Remove stale dotconfigs symlinks and broken symlinks
+                  Aliases: project
+  cleanup         Remove stale dotconfigs symlinks and broken symlinks
                   Default: dry-run. Use --apply to actually remove.
                   Options: --apply, --dry-run, --project <path>
   global-configs  Interactive wizard to configure plugin defaults (.env)
@@ -64,12 +63,12 @@ Commands:
 Examples:
   dotconfigs setup                      One-time init (PATH only)
   dotconfigs global-init                Scaffold global.json
-  dotconfigs deploy                     Deploy all global config
-  dotconfigs deploy claude              Deploy claude group only
-  dotconfigs deploy --dry-run           Preview all deployments
+  dotconfigs global-deploy              Deploy all global config
+  dotconfigs global-deploy claude       Deploy claude group only
+  dotconfigs global-deploy --dry-run    Preview all deployments
   dotconfigs project-init .             Scaffold project config
-  dotconfigs project .                  Deploy project configuration
-  dotconfigs project . --force          Deploy, skip conflict prompts
+  dotconfigs project-deploy .           Deploy project configuration
+  dotconfigs project-deploy . --force   Deploy, skip conflict prompts
   dotconfigs global-configs claude      Configure Claude via wizard
 
 Available plugins:
@@ -140,16 +139,12 @@ Examples:
   dotconfigs global-configs git       Configure git hooks and identity
 EOF
             ;;
-        project-configs|project-init)
+        project-init)
             cat <<EOF
 dotconfigs project-init — Scaffold per-project configuration
 
 Usage:
   dotconfigs project-init [path]
-
-Aliases:
-  dotconfigs project-configs [path]
-  dotconfigs project init [path]
 
 Description:
   Assembles .dotconfigs/project.json from plugin manifests (.project sections).
@@ -158,23 +153,22 @@ Description:
   Defaults to current directory if no path given.
   Requires a git repository.
 
-  After creating the config, edit exclude lists, then run: dotconfigs project <path>
+  After creating the config, edit exclude lists, then run: dotconfigs project-deploy <path>
 
 Examples:
   dotconfigs project-init .              Current directory
   dotconfigs project-init ~/myrepo       Specific project
-  dotconfigs project init ~/myrepo       Space-separated alias
 EOF
             ;;
-        project)
+        project-deploy|project)
             cat <<EOF
-dotconfigs project — Deploy per-project configuration
+dotconfigs project-deploy — Deploy per-project configuration
 
 Usage:
-  dotconfigs project [path] [--dry-run] [--force]
+  dotconfigs project-deploy [path] [--dry-run] [--force]
 
 Aliases:
-  dotconfigs project-deploy [path] [options]
+  dotconfigs project [path] [options]
 
 Description:
   Reads .dotconfigs/project.json and deploys all configured modules
@@ -188,9 +182,9 @@ Options:
   --force         Overwrite all conflicts without prompting
 
 Examples:
-  dotconfigs project .                   Deploy current project
-  dotconfigs project ~/myrepo --force    Deploy, skip conflict prompts
-  dotconfigs project . --dry-run         Preview deployment
+  dotconfigs project-deploy .                Deploy current project
+  dotconfigs project-deploy ~/myrepo --force Deploy, skip conflict prompts
+  dotconfigs project-deploy . --dry-run      Preview deployment
 EOF
             ;;
         cleanup)
@@ -223,15 +217,15 @@ Examples:
   dotconfigs cleanup --project . --apply Remove stale project symlinks
 EOF
             ;;
-        deploy)
+        global-deploy|deploy)
             cat <<EOF
-dotconfigs deploy — Deploy global configuration
+dotconfigs global-deploy — Deploy global configuration
 
 Usage:
-  dotconfigs deploy [group] [options]
+  dotconfigs global-deploy [group] [options]
 
 Aliases:
-  dotconfigs global-deploy [group] [options]
+  dotconfigs deploy [group] [options]
 
 Description:
   Deploys configuration from global.json to the filesystem via symlinks.
@@ -881,21 +875,16 @@ main() {
         global-configs)
             cmd_global_configs "${@:2}"
             ;;
-        project-configs|project-init)
+        project-init)
             cmd_project_init "${@:2}"
             ;;
-        project|project-deploy)
-            # Support "project init" as alias for "project-init"
-            if [[ "${2:-}" == "init" ]]; then
-                cmd_project_init "${@:3}"
-            else
-                cmd_project "${@:2}"
-            fi
+        project-deploy|project)
+            cmd_project "${@:2}"
             ;;
         cleanup)
             cmd_cleanup "${@:2}"
             ;;
-        deploy|global-deploy)
+        global-deploy|deploy)
             cmd_deploy "${@:2}"
             ;;
         status)

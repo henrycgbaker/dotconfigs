@@ -25,3 +25,22 @@ CLAUDE.local.md
 
 # GSD planning artifacts
 .planning/
+
+# Claude Code sandbox artifacts (created on session init with $HOME=workspace)
+# Shell dotfiles
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.profile
+.ripgreprc
+.zprofile
+.zshrc
+# Git-internal placeholders
+HEAD
+config
+hooks
+objects
+refs
+# Other sandbox copies
+.mcp.json

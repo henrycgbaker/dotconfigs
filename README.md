@@ -36,7 +36,7 @@ Plugin manifests (`plugins/*/manifest.json`) are the SSOT for each plugin. They 
    │  global.json     │ │  project.json      │        │
    └──────┬───────────┘ └───────┬────────────┘        ▼
           │                     │              ┌────────────────┐
-  dotconfigs deploy    dotconfigs project      │ docs/ROSTER.md │
+  dotconfigs global-deploy  dotconfigs project-deploy  │ docs/ROSTER.md │
           │                     │              └────────────────┘
           ▼                     ▼
    ┌──────────────┐    ┌────────────────┐
@@ -86,7 +86,7 @@ Each manifest declares modules with `source`, `target`, `method`, and `include`/
   2. dotconfigs global-init
      └── scaffolds .dotconfigs/global.json from manifests (if not exists)
 
-  3. dotconfigs deploy
+  3. dotconfigs global-deploy
      ├── reads .dotconfigs/global.json
      ├── for each module: symlink source → target
      └── conflict resolution: overwrite / skip / backup / diff
@@ -102,7 +102,7 @@ Each manifest declares modules with `source`, `target`, `method`, and `include`/
   5. (optional) edit project.json exclude lists
      └── e.g. exclude: ["prepare-commit-msg"]
 
-  6. dotconfigs project <path>
+  6. dotconfigs project-deploy <path>
      ├── reads .dotconfigs/project.json
      ├── for each module: symlink source → target
      └── respects include/exclude lists
@@ -137,11 +137,11 @@ cd ~/Repositories/dotconfigs
 ## Quick Start
 
 ```bash
-dotconfigs setup                  # One-time: create PATH symlinks
-dotconfigs global-init            # Scaffold .dotconfigs/global.json from manifests
-dotconfigs deploy                 # Deploy all global config
-dotconfigs project-init ~/myrepo  # Scaffold project config
-dotconfigs project ~/myrepo       # Deploy project hooks + skills
+dotconfigs setup                         # One-time: create PATH symlinks
+dotconfigs global-init                   # Scaffold .dotconfigs/global.json from manifests
+dotconfigs global-deploy                 # Deploy all global config
+dotconfigs project-init ~/myrepo         # Scaffold project config
+dotconfigs project-deploy ~/myrepo       # Deploy project hooks + skills
 ```
 
 ## Commands
@@ -154,19 +154,19 @@ One-time initialisation. Creates PATH symlinks for `dotconfigs` and `dots`. Run 
 dotconfigs setup          # Run once after cloning
 ```
 
-### dotconfigs deploy [group] [--dry-run] [--force]
+### dotconfigs global-deploy [group] [--dry-run] [--force]
 
 Deploys configuration from `.dotconfigs/global.json` to the filesystem via symlinks. Also ensures `dotconfigs` and `dots` are on PATH.
 
 ```bash
-dotconfigs deploy               # Deploy all groups
-dotconfigs deploy claude        # Deploy claude group only
-dotconfigs deploy git           # Deploy git group only
-dotconfigs deploy --dry-run     # Preview without changes
-dotconfigs deploy --force       # Skip conflict prompts
+dotconfigs global-deploy               # Deploy all groups
+dotconfigs global-deploy claude        # Deploy claude group only
+dotconfigs global-deploy git           # Deploy git group only
+dotconfigs global-deploy --dry-run     # Preview without changes
+dotconfigs global-deploy --force       # Skip conflict prompts
 ```
 
-Aliases: `global-deploy`
+Aliases: `deploy`
 
 **Conflict resolution:** If a target file exists and isn't a dotconfigs symlink, you're prompted to overwrite, skip, backup, or diff. dotconfigs tracks ownership per-file, so it coexists safely with other tools sharing directories like `~/.claude/`.
 
@@ -177,24 +177,21 @@ Assembles `.dotconfigs/project.json` from plugin manifests (`.project` sections 
 ```bash
 dotconfigs project-init .              # Current directory
 dotconfigs project-init ~/myrepo       # Specific repo
-dotconfigs project init ~/myrepo       # Space-separated alias
 ```
 
-Aliases: `project-configs`, `project init`
+The generated `project.json` has pre-populated include lists and empty exclude lists. Edit the exclude lists to skip specific hooks or skills per-project, then deploy with `dotconfigs project-deploy`.
 
-The generated `project.json` has pre-populated include lists and empty exclude lists. Edit the exclude lists to skip specific hooks or skills per-project, then deploy with `dotconfigs project`.
-
-### dotconfigs project [path] [--dry-run] [--force]
+### dotconfigs project-deploy [path] [--dry-run] [--force]
 
 Deploys per-project configuration from `.dotconfigs/project.json`. Symlinks hooks, skills, and other modules into the project. Respects include/exclude lists. Defaults to current directory. Requires `.dotconfigs/project.json` (run `project-init` first).
 
 ```bash
-dotconfigs project .                   # Deploy current project
-dotconfigs project ~/myrepo --force    # Deploy, skip conflict prompts
-dotconfigs project . --dry-run         # Preview
+dotconfigs project-deploy .                    # Deploy current project
+dotconfigs project-deploy ~/myrepo --force     # Deploy, skip conflict prompts
+dotconfigs project-deploy . --dry-run          # Preview
 ```
 
-Aliases: `project-deploy`
+Aliases: `project`
 
 ### dotconfigs global-configs \<plugin\>
 

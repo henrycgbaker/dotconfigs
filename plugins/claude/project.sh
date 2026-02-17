@@ -476,7 +476,7 @@ EOF
                 ;;
         esac
     else
-        if wizard_yesno "  Create project CLAUDE.md from global sections?" "y"; then
+        if wizard_yesno "  Create project CLAUDE.md from global sections?" "n"; then
             # Source deploy.sh to get _claude_build_md if not already loaded
             if ! declare -f _claude_build_md > /dev/null 2>&1; then
                 source "$PLUGIN_DIR/deploy.sh"

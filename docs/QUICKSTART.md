@@ -19,9 +19,9 @@ cd ~/Repositories/dotconfigs
 
 ```bash
 dotconfigs global-init          # Scaffold .dotconfigs/global.json from manifests
-dotconfigs deploy               # Deploy all plugins
-dotconfigs deploy git           # Deploy one plugin
-dotconfigs deploy --dry-run     # Preview first
+dotconfigs global-deploy        # Deploy all plugins
+dotconfigs global-deploy git    # Deploy one plugin
+dotconfigs global-deploy --dry-run  # Preview first
 ```
 
 This symlinks plugin files (hooks, settings, skills, gitconfig, etc.) to their global targets (`~/.claude/`, `~/.gitconfig`, `~/Library/...`).
@@ -32,7 +32,7 @@ From inside a git repo:
 
 ```bash
 dotconfigs project-init .       # Scaffold .dotconfigs/project.json
-dotconfigs project .            # Deploy hooks + skills into this repo
+dotconfigs project-deploy .     # Deploy hooks + skills into this repo
 ```
 
 To skip specific hooks or skills per-project, edit `.dotconfigs/project.json` exclude lists before deploying.
@@ -52,8 +52,8 @@ dotconfigs global-init           # Re-assemble .dotconfigs/global.json from mani
 | Task | Command |
 |------|---------|
 | Re-scaffold global config | `dotconfigs global-init` |
-| Preview changes | `dotconfigs deploy --dry-run` |
-| Force overwrite conflicts | `dotconfigs deploy --force` |
+| Preview changes | `dotconfigs global-deploy --dry-run` |
+| Force overwrite conflicts | `dotconfigs global-deploy --force` |
 | Check deployment status | `dotconfigs status` |
 | List available plugins | `dotconfigs list` |
 | Detailed help | `dotconfigs help <command>` |

@@ -470,18 +470,18 @@ echo "REMOVED=$removed"
         assert not stale.exists(), "Stale dotconfigs symlink was not removed"
         assert "REMOVED=1" in result.stdout
 
-    def test_broken_symlink_removed(
+    def test_broken_dotconfigs_symlink_removed(
         self, dotconfigs_root: Path, fake_source_tree, tmp_path: Path
     ):
-        """Broken/dangling symlinks are removed after deploy."""
+        """Broken symlinks pointing into dotconfigs tree are removed."""
         root = fake_source_tree()
         source = root / "plugins" / "claude" / "hooks"
         target = tmp_path / "target_hooks"
 
-        # Pre-populate target with a broken symlink
+        # Pre-populate target with a broken symlink pointing INTO dotconfigs tree
         target.mkdir(parents=True)
         broken = target / "deleted-hook.py"
-        broken.symlink_to("/nonexistent/path/to/nowhere")
+        broken.symlink_to(root / "plugins" / "claude" / "hooks" / "nonexistent.py")
 
         script = f"""
 set -e
@@ -496,8 +496,37 @@ echo "REMOVED=$removed"
         assert result.returncode == 0
         assert (
             not broken.exists() and not broken.is_symlink()
-        ), "Broken symlink was not removed"
+        ), "Broken dotconfigs symlink was not removed"
         assert "REMOVED=1" in result.stdout
+
+    def test_foreign_broken_symlink_preserved(
+        self, dotconfigs_root: Path, fake_source_tree, tmp_path: Path
+    ):
+        """Broken symlinks pointing outside dotconfigs tree survive cleanup."""
+        root = fake_source_tree()
+        source = root / "plugins" / "claude" / "hooks"
+        target = tmp_path / "target_hooks"
+
+        # Pre-populate with a broken symlink pointing outside dotconfigs (e.g. GSD)
+        target.mkdir(parents=True)
+        foreign_broken = target / "gsd-statusline.js"
+        foreign_broken.symlink_to("/opt/gsd/hooks/gsd-statusline.js")
+
+        script = f"""
+set -e
+source "{dotconfigs_root}/lib/symlinks.sh"
+source "{dotconfigs_root}/lib/validation.sh"
+source "{dotconfigs_root}/lib/deploy.sh"
+created=0; updated=0; unchanged=0; skipped=0; removed=0
+deploy_directory_files "{source}" "{target}" "block-destructive.sh" "{root}" "false" "force"
+echo "REMOVED=$removed"
+"""
+        result = run_bash(script)
+        assert result.returncode == 0
+        assert (
+            foreign_broken.is_symlink()
+        ), "Foreign broken symlink was deleted by cleanup"
+        assert "REMOVED=0" in result.stdout
 
     def test_foreign_files_preserved_during_cleanup(
         self, dotconfigs_root: Path, fake_source_tree, tmp_path: Path
@@ -540,12 +569,12 @@ echo "REMOVED=$removed"
         source = root / "plugins" / "claude" / "hooks"
         target = tmp_path / "target_hooks"
 
-        # Pre-populate with stale dotconfigs symlink + broken symlink
+        # Pre-populate with stale dotconfigs symlink + broken dotconfigs symlink
         target.mkdir(parents=True)
         stale = target / "old-hook.sh"
         stale.symlink_to(source / "block-destructive.sh")
         broken = target / "deleted.py"
-        broken.symlink_to("/nonexistent/path")
+        broken.symlink_to(root / "plugins" / "claude" / "hooks" / "gone.py")
 
         script = f"""
 set -e

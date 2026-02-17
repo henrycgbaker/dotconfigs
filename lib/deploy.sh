@@ -101,14 +101,18 @@ cleanup_stale_in_directory() {
 
         # Item is not in the expected deploy set — check if we should remove it
         if [[ -L "$item" && ! -e "$item" ]]; then
-            # Broken/dangling symlink — always remove
-            if [[ "$dry_run" == "true" ]]; then
-                echo "  Would remove broken symlink: $item_name"
-            else
-                rm -f "$item"
-                echo "  ✓ Removed broken symlink: $item_name"
+            # Broken/dangling symlink — only remove if it pointed into dotconfigs
+            local raw_target
+            raw_target=$(readlink "$item" 2>/dev/null)
+            if [[ "$raw_target" == "$dotconfigs_root"* ]]; then
+                if [[ "$dry_run" == "true" ]]; then
+                    echo "  Would remove broken symlink: $item_name"
+                else
+                    rm -f "$item"
+                    echo "  ✓ Removed broken symlink: $item_name"
+                fi
+                eval "removed=\$(( \$removed + 1 ))"
             fi
-            eval "removed=\$(( \$removed + 1 ))"
         elif is_dotconfigs_owned "$item" "$dotconfigs_root" 2>/dev/null; then
             # Stale dotconfigs-owned symlink — remove
             if [[ "$dry_run" == "true" ]]; then

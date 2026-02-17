@@ -33,9 +33,10 @@ assemble_from_manifests() {
 write_with_overwrite_protection() {
     local output_file="$1"
     local json_content="$2"
+    local display_name="$(basename "$(dirname "$output_file")")/$(basename "$output_file")"
 
     if [[ -f "$output_file" ]]; then
-        echo "$(basename "$output_file") already exists."
+        echo "$display_name already exists."
         local overwrite_answer="n"
         if [[ -t 1 ]]; then
             read -r -p "Overwrite? [y/N] " overwrite_answer </dev/tty
@@ -45,17 +46,17 @@ write_with_overwrite_protection() {
                 local backup="$output_file.bak.$(date +%Y%m%d%H%M%S)"
                 cp "$output_file" "$backup"
                 echo "$json_content" > "$output_file"
-                echo "Backed up to $(basename "$backup"), overwrote $(basename "$output_file")"
+                echo "Backed up to $(basename "$backup"), overwrote $display_name"
                 ;;
             *)
-                echo "Skipped (kept existing $(basename "$output_file"))"
+                echo "Skipped (kept existing $display_name)"
                 return 1
                 ;;
         esac
     else
         mkdir -p "$(dirname "$output_file")"
         echo "$json_content" > "$output_file"
-        echo "Created $(basename "$output_file")"
+        echo "Created $display_name"
     fi
     return 0
 }

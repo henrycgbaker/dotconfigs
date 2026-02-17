@@ -667,5 +667,5 @@ git push
 cd ~/Repositories/dotconfigs
 git pull
 # Symlinks auto-update — run deploy to apply any new settings
-dotconfigs deploy
+dotconfigs global-deploy
 ```
