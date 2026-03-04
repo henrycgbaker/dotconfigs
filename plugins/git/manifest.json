@@ -6,10 +6,15 @@
       "method": "symlink",
       "include": ["commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "pre-rebase", "prepare-commit-msg"]
     },
-    "config": {
+    "config-base": {
       "source": "plugins/git/templates/gitconfig",
-      "target": "~/.gitconfig",
+      "target": "~/.dotconfigs/gitconfig-base",
       "method": "symlink"
+    },
+    "config-include": {
+      "source": "plugins/git/templates/gitconfig-include",
+      "target": "~/.gitconfig",
+      "method": "append"
     },
     "global-excludes": {
       "source": "plugins/git/templates/global-excludes",
