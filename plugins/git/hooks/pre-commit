@@ -3,7 +3,7 @@
 # NAME: pre-commit
 # TYPE: git-hook
 # PLUGIN: git
-# DESCRIPTION: Branch-aware pre-commit — identity check, secrets scan, main-branch warning, Ruff format on main
+# DESCRIPTION: Pre-commit — identity check, secrets scan, block main commits, Ruff format+lint on staged files
 # CONFIGURABLE: none
 # ================
 
@@ -24,9 +24,10 @@ if [ "$ACTUAL_NAME" != "$EXPECTED_NAME" ] || [ "$ACTUAL_EMAIL" != "$EXPECTED_EMA
     exit 1
 fi
 
-# ALWAYS: Warn on direct main commits
+# ALWAYS: Block direct main commits
 if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
-    echo "⚠️  WARNING: Committing directly to $BRANCH"
+    echo "❌ ERROR: Direct commits to $BRANCH are blocked. Use a feature branch."
+    exit 1
 fi
 
 # ALWAYS: Secrets scan (gitleaks if available, inline regex fallback)
@@ -53,18 +54,16 @@ else
     fi
 fi
 
-# MAIN ONLY: Ruff format + check
-if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
-    STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
-    if [ -n "$STAGED_PY" ] && command -v ruff &> /dev/null; then
-        for file in $STAGED_PY; do
-            if [ -f "$file" ]; then
-                ruff format "$file"
-                ruff check --fix "$file" || true
-                git add "$file"
-            fi
-        done
-    fi
+# ALL BRANCHES: Ruff format + lint on staged .py files (~1s)
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+if [ -n "$STAGED_PY" ] && command -v ruff &> /dev/null; then
+    for file in $STAGED_PY; do
+        if [ -f "$file" ]; then
+            ruff format "$file"
+            ruff check --fix "$file" || true
+            git add "$file"
+        fi
+    done
 fi
 
 # Project-specific hook

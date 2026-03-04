@@ -67,6 +67,7 @@ Decisions logged in PROJECT.md Key Decisions table.
 - [ ] **v4+**: Deployment scan/status report command (`dotconfigs scan`)
 - [ ] **v4+**: Add `deploy` toggle field to global.json/project.json schema (skip entries without deleting)
 - [ ] **v4+**: Build merge-based deploy method for shared config files (settings.json SSOT vs runtime writes)
+- [ ] **v4+**: Use hookify format rather than shell scripts for hooks
 
 ### Blockers/Concerns
 

@@ -1,12 +1,12 @@
 ---
-description: Squash merge current branch to main
+description: Squash merge current branch to main via GitHub PR
 allowed-tools: Bash, Read
 argument-hint: [optional commit message]
 ---
 
-# Squash Merge Helper
+# Squash Merge via PR
 
-Complete a feature branch by squash merging to main.
+Complete a feature branch by squash merging to main through a GitHub PR with CI gate.
 
 ## Process
 
@@ -20,85 +20,76 @@ git status
 
 # Show commits that will be squashed
 git log main..HEAD --oneline
-```
 
-If on main, abort - nothing to squash merge.
-
-### 2. Check Branch Up-to-Date with Main
-```bash
-# Fetch latest main
-git fetch origin main
-
-# Check if main has diverged
-git log HEAD..origin/main --oneline
-```
-
-If main has new commits, recommend rebasing first:
-```bash
-git rebase origin/main
-```
-
-### 3. Review Changes
-```bash
-# Summary of what will be merged
+# Show diff stat
 git diff main...HEAD --stat
 ```
 
-### 4. Switch to Main and Pull
+If on main, abort — nothing to squash merge.
+If there are uncommitted changes, commit or stash first.
+
+### 2. Ensure Remote is Up to Date
+```bash
+# Push current branch (set upstream if needed)
+git push -u origin <branch>
+
+# Fetch latest main
+git fetch origin main
+```
+
+If main has diverged, rebase first: `git rebase origin/main`
+
+### 3. Detect Workflow
+
+Check if this repo has a GitHub remote:
+```bash
+gh repo view --json url 2>/dev/null
+```
+
+- **If GitHub remote exists:** continue with PR workflow (step 4)
+- **If no GitHub remote:** fall back to local merge workflow (step 7)
+
+### 4. Create PR
+Craft a conventional commit title: `type(scope): description`
+- Types: feat, fix, docs, refactor, test
+- Subject under 72 chars, imperative mood
+- Never include phase numbers, milestone IDs, or GSD references
+- Generate summary body from commit log
+
+```bash
+gh pr create --base main --title "type(scope): description" --body "..."
+```
+
+### 5. Wait for CI
+```bash
+gh pr checks <pr-number> --watch
+```
+
+If CI fails, fix issues and push again. Re-run checks.
+
+### 6. Squash Merge via GitHub
+```bash
+gh pr merge <pr-number> --squash --subject "type(scope): description"
+```
+
+Skip to step 8 (cleanup).
+
+### 7. Local Merge Fallback (no GitHub remote)
 ```bash
 git checkout main
 git pull
-```
-
-### 5. Squash Merge
-```bash
 git merge --squash <branch-name>
-```
-
-### 6. Create Clean Commit
-Help craft a conventional commit message summarising all the squashed changes:
-
-```bash
-git commit -m "type: description"
-```
-
-**Commit message guidance:**
-- Use conventional commit format (feat/fix/docs/refactor/test)
-- Subject under 72 characters, imperative mood
-- Summarise the overall change, not individual commits
-
-### 7. Cleanup
-```bash
-# Delete the merged branch locally
-git branch -d <branch-name>
-
-# Delete remote tracking branch (if exists)
-git push origin --delete <branch-name>
-
-# Push squashed commit to remote
+git commit -m "type(scope): description"
 git push
 ```
 
-## Tradeoffs
+### 8. Cleanup
+```bash
+git checkout main && git pull
+git branch -d <branch>
+```
 
-Squash merge creates a clean linear history on main but comes with tradeoffs:
-
-**Benefits:**
-- Single atomic commit per feature on main
-- Clean `git log` output
-- Easy to revert entire features
-
-**Tradeoffs:**
-- Individual branch commits lost from main history
-- Detailed development history only visible in PR/branch (if using GitHub)
-- Branch refs are the ONLY way to find individual commits after squash
-
-**Why this matters for solo dev:**
-- Clean main history > preserving every WIP commit
-- Feature branches capture detailed development journey
-- `git reflog` can still recover branch commits for ~90 days after deletion
-
-**Critical:** Delete the branch after squashing. Without branch refs, individual commits become unreachable in `git log` (though still in reflog temporarily).
+Remote branch is auto-deleted by GitHub. If not: `git push origin --delete <branch>`
 
 ## Notes
 - If $ARGUMENTS provided, use as commit message hint
