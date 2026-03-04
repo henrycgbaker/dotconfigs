@@ -1,9 +1,2 @@
 {
-  "global": {
-    "settings": {
-      "source": "plugins/vscode/settings.json",
-      "target": "~/Library/Application Support/Code/User/settings.json",
-      "method": "symlink"
-    }
-  }
 }
