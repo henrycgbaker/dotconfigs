@@ -15,8 +15,8 @@ Git hooks run during git operations to enforce quality standards and protect wor
 | post-checkout | Post-checkout info — displays branch information on checkout | GIT_HOOK_BRANCH_INFO, GIT_HOOK_POST_CHECKOUT_ENABLED |
 | post-merge | Post-merge checks — dependency change detection and migration reminders | GIT_HOOK_DEPENDENCY_CHECK, GIT_HOOK_MIGRATION_REMINDER, GIT_HOOK_POST_MERGE_ENABLED |
 | post-rewrite | Post-rewrite checks — dependency detection for rebase workflows | GIT_HOOK_DEPENDENCY_CHECK, GIT_HOOK_MIGRATION_REMINDER, GIT_HOOK_POST_REWRITE_ENABLED |
-| pre-commit | Branch-aware pre-commit — identity check always, Ruff format on main only |  |
-| pre-push | Code quality validation (pytest + ruff + mypy) and force-push protection |  |
+| pre-commit | Pre-commit — identity check, secrets scan, block main commits, Ruff format+lint on staged files |  |
+| pre-push | Force-push protection and fast lint/format check (tests + types run in CI) |  |
 | pre-rebase | Blocks rebasing main/master and warns about pushed commits |  |
 | prepare-commit-msg | Prepares commit message — extracts conventional commit prefix from branch name | GIT_HOOK_BRANCH_PREFIX, GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED |
 
@@ -37,55 +37,18 @@ Custom Claude Code commands (skills) for common workflows.
 | /commit | Help create a well-formatted commit |
 | /pr-review | Review current branch changes for PR readiness |
 | /simplicity-check | Review code or architecture for unnecessary complexity |
-| /squash-merge | Squash merge current branch to main |
+| /squash-merge | Squash merge current branch to main via GitHub PR |
 
-## Configuration Reference
+## Customisation
 
-All hook configuration follows a three-tier hierarchy:
+Hooks are opinionated by default. To add per-project behaviour, use `.local` extension scripts:
 
-1. **Hardcoded defaults** — Built into hook code (documented below)
-2. **Environment variables** — Set in `.env` or shell environment
-3. **Project config files** — Per-repository overrides
+- `.git/hooks/pre-commit.local` — runs at end of pre-commit
+- `.git/hooks/pre-push.local` — runs at end of pre-push
+- `.git/hooks/commit-msg.local` — runs at end of commit-msg
 
-Higher tiers override lower tiers (config file > env var > default).
-
-### Git Hook Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GIT_HOOK_BRANCH_INFO` | `true` | Display branch info on checkout |
-| `GIT_HOOK_BRANCH_PREFIX` | `true` | Auto-prefix commit with branch name |
-| `GIT_HOOK_DEPENDENCY_CHECK` | `true` | Check for dependency changes |
-| `GIT_HOOK_MIGRATION_REMINDER` | `true` | Remind about pending migrations |
-| `GIT_HOOK_POST_CHECKOUT_ENABLED` | `true` | Enable post-checkout hook |
-| `GIT_HOOK_POST_MERGE_ENABLED` | `true` | Enable post-merge hook |
-| `GIT_HOOK_POST_REWRITE_ENABLED` | `true` | Enable post-rewrite hook |
-| `GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED` | `true` | Enable prepare-commit-msg hook |
-
-### Claude Hook Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CLAUDE_HOOK_DESTRUCTIVE_GUARD` | `true` | Guard against destructive commands |
-| `CLAUDE_HOOK_FILE_PROTECTION` | `true` | Protect critical files |
-
-### Configuration File Locations
-
-**Git hooks:** Per-project config files (first found wins):
-- `.githooks/config`
-- `.claude/git-hooks.conf`
-- `.git/hooks/hooks.conf`
-- `.claude/hooks.conf`
-
-**Claude hooks:** Per-project config files (first found wins):
-- `.claude/claude-hooks.conf` (project-specific)
-- `~/.claude/claude-hooks.conf` (global fallback)
-
-### Plugin Configuration Ownership
-
-- **Git plugin** owns `git-hooks.conf` — deployed by `dotconfigs project-deploy` when project.json includes the git plugin
-- **Claude plugin** owns `claude-hooks.conf` — deployed by `dotconfigs project-deploy` when project.json includes the claude plugin
+To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deploying.
 
 ---
 
-*Generated: 2026-02-14 19:42:33 UTC*
+*Generated: 2026-03-04 10:24:05 UTC*

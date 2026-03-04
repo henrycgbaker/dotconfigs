@@ -116,93 +116,19 @@ while IFS= read -r cmd_file_name; do
 done < <(jq -r '.global.skills.include[]' "$CLAUDE_MANIFEST" | sort)
 
 # ============================================================================
-# Configuration Reference — parsed from hook CONFIG lines (not lib/config.sh)
+# Customisation Section
 # ============================================================================
 
 echo "" >> "$OUTPUT_FILE"
-echo "## Configuration Reference" >> "$OUTPUT_FILE"
+echo "## Customisation" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
-echo "All hook configuration follows a three-tier hierarchy:" >> "$OUTPUT_FILE"
+echo "Hooks are opinionated by default. To add per-project behaviour, use \`.local\` extension scripts:" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
-echo "1. **Hardcoded defaults** — Built into hook code (documented below)" >> "$OUTPUT_FILE"
-echo "2. **Environment variables** — Set in \`.env\` or shell environment" >> "$OUTPUT_FILE"
-echo "3. **Project config files** — Per-repository overrides" >> "$OUTPUT_FILE"
+echo "- \`.git/hooks/pre-commit.local\` — runs at end of pre-commit" >> "$OUTPUT_FILE"
+echo "- \`.git/hooks/pre-push.local\` — runs at end of pre-push" >> "$OUTPUT_FILE"
+echo "- \`.git/hooks/commit-msg.local\` — runs at end of commit-msg" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
-echo "Higher tiers override lower tiers (config file > env var > default)." >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "### Git Hook Configuration" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "| Variable | Default | Description |" >> "$OUTPUT_FILE"
-echo "|----------|---------|-------------|" >> "$OUTPUT_FILE"
-
-# Collect CONFIG lines from all git hooks declared in manifest, deduplicate
-{
-    while IFS= read -r hook_name; do
-        hook_file="$REPO_ROOT/plugins/git/hooks/$hook_name"
-        if [[ -f "$hook_file" ]]; then
-            grep "^# CONFIG:" "$hook_file" 2>/dev/null || true
-        fi
-    done < <(jq -r '.global.hooks.include[]' "$GIT_MANIFEST")
-} | sort -u | while IFS= read -r line; do
-    if [[ -z "$line" ]]; then continue; fi
-    # Parse: # CONFIG: VAR_NAME=default  Description
-    config_def=$(echo "$line" | sed 's/^# CONFIG: //')
-    var_name=$(echo "$config_def" | cut -d= -f1)
-    rest=$(echo "$config_def" | cut -d= -f2-)
-    var_default=$(echo "$rest" | awk '{print $1}')
-    var_desc=$(echo "$rest" | sed "s/^[^ ]* *//" )
-    var_desc="${var_desc//|/\\|}"
-
-    echo "| \`$var_name\` | \`$var_default\` | $var_desc |" >> "$OUTPUT_FILE"
-done
-
-echo "" >> "$OUTPUT_FILE"
-echo "### Claude Hook Configuration" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "| Variable | Default | Description |" >> "$OUTPUT_FILE"
-echo "|----------|---------|-------------|" >> "$OUTPUT_FILE"
-
-# Collect CONFIG lines from all claude hooks declared in manifest
-{
-    while IFS= read -r hook_name; do
-        hook_file="$REPO_ROOT/plugins/claude/hooks/$hook_name"
-        if [[ -f "$hook_file" ]]; then
-            grep "^# CONFIG:" "$hook_file" 2>/dev/null || true
-        fi
-    done < <(jq -r '.global.hooks.include[]' "$CLAUDE_MANIFEST")
-} | sort -u | while IFS= read -r line; do
-    if [[ -z "$line" ]]; then continue; fi
-    config_def=$(echo "$line" | sed 's/^# CONFIG: //')
-    var_name=$(echo "$config_def" | cut -d= -f1)
-    rest=$(echo "$config_def" | cut -d= -f2-)
-    var_default=$(echo "$rest" | awk '{print $1}')
-    var_desc=$(echo "$rest" | sed "s/^[^ ]* *//" )
-    var_desc="${var_desc//|/\\|}"
-
-    echo "| \`$var_name\` | \`$var_default\` | $var_desc |" >> "$OUTPUT_FILE"
-done
-
-# ============================================================================
-# Config File Locations
-# ============================================================================
-
-echo "" >> "$OUTPUT_FILE"
-echo "### Configuration File Locations" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "**Git hooks:** Per-project config files (first found wins):" >> "$OUTPUT_FILE"
-echo "- \`.githooks/config\`" >> "$OUTPUT_FILE"
-echo "- \`.claude/git-hooks.conf\`" >> "$OUTPUT_FILE"
-echo "- \`.git/hooks/hooks.conf\`" >> "$OUTPUT_FILE"
-echo "- \`.claude/hooks.conf\`" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "**Claude hooks:** Per-project config files (first found wins):" >> "$OUTPUT_FILE"
-echo "- \`.claude/claude-hooks.conf\` (project-specific)" >> "$OUTPUT_FILE"
-echo "- \`~/.claude/claude-hooks.conf\` (global fallback)" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "### Plugin Configuration Ownership" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "- **Git plugin** owns \`git-hooks.conf\` — deployed by \`dotconfigs project git\`" >> "$OUTPUT_FILE"
-echo "- **Claude plugin** owns \`claude-hooks.conf\` — deployed by \`dotconfigs project claude\`" >> "$OUTPUT_FILE"
+echo "To skip a hook entirely, exclude it in \`.dotconfigs/project.json\` before deploying." >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 # Footer
