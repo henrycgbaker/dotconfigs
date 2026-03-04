@@ -23,13 +23,6 @@
       "Read(.env.*)"
     ]
   },
-  "sandbox": {
-    "enabled": true,
-    "excludedCommands": [
-      "git",
-      "docker"
-    ]
-  },
   "hooks": {
     "PreToolUse": [
       {
