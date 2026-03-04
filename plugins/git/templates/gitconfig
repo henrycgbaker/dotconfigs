@@ -1,6 +1,6 @@
 # Git configuration — managed by dotconfigs
-# Symlinked to ~/.gitconfig
-# Edit this file directly; changes are visible in git diff.
+# Symlinked to ~/.dotconfigs/gitconfig-base, included from ~/.gitconfig
+# Machine-local config (credentials, overrides) goes in ~/.gitconfig directly.
 
 [user]
 	name = henrycgbaker
