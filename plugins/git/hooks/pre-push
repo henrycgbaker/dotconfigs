@@ -3,7 +3,7 @@
 # NAME: pre-push
 # TYPE: git-hook
 # PLUGIN: git
-# DESCRIPTION: Code quality validation (pytest + ruff + mypy) and force-push protection
+# DESCRIPTION: Force-push protection and fast lint/format check (tests + types run in CI)
 # CONFIGURABLE: none
 # ================
 
@@ -21,22 +21,22 @@ while read local_ref local_oid remote_ref remote_oid; do
     fi
 done
 
-# Code quality validation
+# Fast lint + format check (~2s) — tests and types run in CI
 echo "🔒 Validating push..."
 
-if command -v pytest &> /dev/null; then
-    echo "  → Running tests..."
-    pytest -x || { echo "❌ Tests failed"; exit 1; }
-fi
-
 if command -v ruff &> /dev/null; then
-    echo "  → Checking lint..."
-    ruff check . || { echo "❌ Lint failed"; exit 1; }
-fi
+    # Auto-detect lint paths (prefer src/ layout, fall back to .)
+    if [ -d "src" ]; then
+        LINT_PATHS="src/"
+        [ -d "tests" ] && LINT_PATHS="$LINT_PATHS tests/"
+    else
+        LINT_PATHS="."
+    fi
 
-if command -v mypy &> /dev/null; then
-    echo "  → Type checking..."
-    mypy . || { echo "❌ Type check failed"; exit 1; }
+    echo "  → Checking lint..."
+    ruff check $LINT_PATHS || { echo "❌ Lint failed"; exit 1; }
+    echo "  → Checking format..."
+    ruff format --check $LINT_PATHS || { echo "❌ Format check failed"; exit 1; }
 fi
 
 echo "✅ All checks passed"

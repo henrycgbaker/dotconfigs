@@ -36,13 +36,15 @@
 
 Workflow: Feature branches (`feature/*`, `fix/*`, `refactor/*`, `docs/*`) + squash merge to main. Commit freely on branches (WIP, notes, experiments fine), squash merge with clean conventional commit, delete branch. Use `/commit` and `/squash-merge`.
 
-Commits (main/squash): `type(scope): description` -- types: feat, fix, docs, refactor, test. Subject <72 chars, imperative mood. No AI attribution.
+Merges to main: Always via squash-merge PR (`/squash-merge`). Branch protection enforces CI pass. No direct pushes to main.
+
+Commits (main/squash): `type(scope): description` -- types: feat, fix, docs, refactor, test. Subject <72 chars, imperative mood. No AI attribution. Never include phase numbers, milestone IDs, or GSD workflow references in commit messages.
 
 Hooks: Per-project via `.git/hooks/`. Install with `dotconfigs project .` or manually:
 `cp ~/.dotconfigs/git-hooks/{pre-commit,commit-msg,pre-push} .git/hooks/ && chmod +x .git/hooks/*`
-- Pre-commit: Identity check always, Ruff format on main only (branch-aware)
+- Pre-commit: Identity check, secrets scan, block main commits, Ruff format+lint on staged files
 - Commit-msg: Blocks AI attribution
-- Pre-push: Tests + lint + type check + force-push protection
+- Pre-push: Fast lint + format check, force-push protection (tests + types run in CI)
 
 Exclusions: Add CLAUDE.md and .claude/ to `.git/info/exclude` in projects (not .gitignore).
 
