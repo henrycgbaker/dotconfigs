@@ -28,6 +28,12 @@ _claude_assemble_settings() {
         sed -i 's|\$CLAUDE_PROJECT_DIR/plugins/claude/hooks/|~/.claude/hooks/|g' "$output_file"
     fi
 
+    # Add sandbox on macOS only — causes severe slowness on Linux servers
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        local tmp_file="${output_file}.tmp"
+        jq '. + {sandbox: {enabled: true, excludedCommands: ["git", "docker"]}}' "$output_file" > "$tmp_file" && mv "$tmp_file" "$output_file"
+    fi
+
     return 0
 }
 
