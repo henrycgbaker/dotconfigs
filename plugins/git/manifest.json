@@ -33,7 +33,7 @@
     "gitignore": {
       "source": "plugins/git/templates/gitignore-default",
       "target": ".gitignore",
-      "method": "copy"
+      "method": "append"
     }
   }
 }
