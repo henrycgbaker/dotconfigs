@@ -8,6 +8,11 @@
             "type": "command",
             "command": ".claude/hooks/block-destructive.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/block-ai-pr-attribution.sh",
+            "timeout": 10
           }
         ]
       },
