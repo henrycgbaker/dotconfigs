@@ -24,6 +24,20 @@ if [ "$ACTUAL_NAME" != "$EXPECTED_NAME" ] || [ "$ACTUAL_EMAIL" != "$EXPECTED_EMA
     exit 1
 fi
 
+# ALWAYS: Block .planning/ files from being committed
+# .planning/ lives on disk only, excluded via .git/info/exclude.
+# This guard catches accidental staging (e.g. git add -A).
+PLANNING_FILES=$(git diff --cached --name-only | grep '^\.planning/' || true)
+if [ -n "$PLANNING_FILES" ]; then
+    echo "ERROR: .planning/ files must not be committed."
+    echo "They are excluded from version control via .git/info/exclude."
+    echo "Remove them with: git reset HEAD .planning/"
+    echo ""
+    echo "Blocked files:"
+    echo "$PLANNING_FILES" | sed 's/^/  /'
+    exit 1
+fi
+
 # ALWAYS: Block direct main commits
 if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
     echo "❌ ERROR: Direct commits to $BRANCH are blocked. Use a feature branch."
@@ -64,6 +78,38 @@ if [ -n "$STAGED_PY" ] && command -v ruff &> /dev/null; then
             git add "$file"
         fi
     done
+fi
+
+# CONDITIONAL: Conflict-resurrection check (only during merge or rebase)
+# Long-running branch resolutions can silently resurrect deleted code or
+# undo a fix that landed on main. Compare the net effect against main and
+# warn (do not block - some resurrections are intentional).
+# Cannot fire on GH UI merges (those run server-side); see /preflight-merge.
+if [ -e .git/MERGE_HEAD ] || [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
+    if git rev-parse --verify origin/main >/dev/null 2>&1; then
+        MERGE_BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "")
+        if [ -n "$MERGE_BASE" ]; then
+            STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
+            for f in $STAGED; do
+                if git diff --quiet "$MERGE_BASE"..origin/main -- "$f" 2>/dev/null; then
+                    continue
+                fi
+                MAIN_DELTA=$(git diff --shortstat "$MERGE_BASE"..origin/main -- "$f" 2>/dev/null)
+                NET_DELTA=$(git diff --shortstat origin/main -- "$f" 2>/dev/null)
+                if [ -n "$MAIN_DELTA" ] && [ -n "$NET_DELTA" ]; then
+                    echo "⚠  resurrection-check: $f overlaps main changes since merge-base"
+                    echo "    main added/removed since merge-base: $MAIN_DELTA"
+                    echo "    your branch's net diff vs main:      $NET_DELTA"
+                    echo "    Inspect: git diff origin/main -- '$f'"
+                fi
+            done
+            if [ -n "$STAGED" ]; then
+                echo "⚠  resurrection-check complete. Warnings above are advisory."
+                echo "   Some resurrections are intentional (revert PRs); proceed if expected."
+                echo "   For full per-hunk inspection: /check-resolution"
+            fi
+        fi
+    fi
 fi
 
 # Project-specific hook

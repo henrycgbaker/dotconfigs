@@ -15,7 +15,7 @@
       "source": "plugins/claude/commands",
       "target": "~/.claude/commands",
       "method": "symlink",
-      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md"]
+      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md", "check-resolution.md", "preflight-merge.md"]
     },
     "claude-md": {
       "source": "plugins/claude/CLAUDE.md",
@@ -35,7 +35,7 @@
       "source": "plugins/claude/commands",
       "target": ".claude/commands",
       "method": "symlink",
-      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md"],
+      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md", "check-resolution.md", "preflight-merge.md"],
       "exclude": []
     }
   }
