@@ -41,6 +41,11 @@
             "type": "command",
             "command": "~/.claude/hooks/block-ai-pr-attribution.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/block-gh-pr-write.sh",
+            "timeout": 10
           }
         ]
       },
@@ -67,6 +72,6 @@
       "docker"
     ]
   },
-  "skipDangerousModePermissionPrompt": true,
-  "effortLevel": "high"
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true
 }
