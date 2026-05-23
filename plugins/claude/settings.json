@@ -59,6 +59,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/facade-check.sh",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
