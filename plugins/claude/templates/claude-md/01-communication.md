@@ -9,7 +9,8 @@
 ## Language
 
 - British English (e.g., "colour", "analyse") in prose only. American English in code, variables, functions, APIs.
+- Use `-` not `--` or `—` (em dash) in prose. Never use em dashes.
 
 ## Autonomy & Decision Making
 
-- Always ask when requirements are ambiguous — don't guess on important decisions. For low-stakes work, make reasonable assumptions and mention them.
+- Always ask when requirements are ambiguous - don't guess on important decisions. For low-stakes work, make reasonable assumptions and mention them.
