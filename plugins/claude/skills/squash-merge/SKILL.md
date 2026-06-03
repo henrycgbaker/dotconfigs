@@ -1,6 +1,6 @@
 ---
 name: squash-merge
-description: Squash merge current branch to main via GitHub PR
+description: Drive the current feature branch through a GitHub PR to a squash-merge on main, running the preflight gate, CI watch, and post-merge cleanup. Use when the branch is review-ready or the user says "merge", "ship it", or "squash to main".
 allowed-tools: Bash, Read
 argument-hint: [optional commit message]
 ---
