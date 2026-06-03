@@ -3,19 +3,6 @@
 - Always use extended thinking for complex architecting problems and decision-making. 
 - Don't use use extended thinking unless requsted when in conversation / writing docs / straightforward tasks
 
-## Communication Style
-
-- Concise during execution, detailed when asked. Ask questions freely if unclear or better alternatives exist.
-- Brief one-line updates; skip preamble, report results only.
-- Brief error updates, then try alternatives.
-- After completion, explain work and how it fits the wider architecture.
-- Include diagrams where relevant.
-
-## Language
-
-- British English (e.g., "colour", "analyse") in prose only. American English in code, variables, functions, APIs.
-- Use `-` not `--` or `—` (em dash) in prose. Never use em dashes.
-
 ## Autonomy & Decision Making
 
 - Always ask when requirements are ambiguous - don't guess on important decisions. For low-stakes work, make reasonable assumptions and mention them.
