@@ -107,6 +107,29 @@ def validate_module(
         elif method == "copy":
             if target.read_text() != source.read_text():
                 failures.append(f"Content mismatch: {target}")
+        elif method == "merge":
+            # Merge-deployed files are regular files (never symlinks) and a
+            # superset of source: every source permission rule must survive.
+            if target.is_symlink():
+                failures.append(
+                    f"Merge target is a symlink (must be a regular file): {target}"
+                )
+            else:
+                try:
+                    s_allow = set(
+                        json.loads(source.read_text())
+                        .get("permissions", {})
+                        .get("allow", [])
+                    )
+                    t_allow = set(
+                        json.loads(target.read_text())
+                        .get("permissions", {})
+                        .get("allow", [])
+                    )
+                    if not s_allow <= t_allow:
+                        failures.append(f"Merge dropped base permissions: {target}")
+                except json.JSONDecodeError:
+                    failures.append(f"Merge target not valid JSON: {target}")
 
     return failures
 

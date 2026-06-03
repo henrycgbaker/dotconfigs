@@ -9,7 +9,7 @@
     "settings": {
       "source": "plugins/claude/settings.json",
       "target": "~/.claude/settings.json",
-      "method": "copy"
+      "method": "merge"
     },
     "skills": {
       "source": "plugins/claude/skills",

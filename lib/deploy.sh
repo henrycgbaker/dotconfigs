@@ -245,6 +245,43 @@ deploy_directory_files() {
     fi
 }
 
+# Deep-merge a managed JSON base ($source) into a co-owned target file,
+# preserving local entries. Used for files an application writes into (e.g.
+# Claude Code appends permission grants to settings.json): a symlink would write
+# those grants through into the repo, and a plain copy would clobber them.
+#
+# Semantics: base wins on managed keys; permissions.{allow,deny,ask} arrays are
+# UNIONED so locally-approved grants survive every deploy. Result is a regular
+# file (never a symlink). Idempotent.
+# Args: source_base, target
+merge_json_settings() {
+    local source="$1"
+    local target="$2"
+
+    # First deploy, or a stale symlink target (nothing local to preserve):
+    # place the base as a fresh regular file.
+    if [[ ! -e "$target" || -L "$target" ]]; then
+        rm -f "$target"
+        mkdir -p "$(dirname "$target")"
+        cp "$source" "$target"
+        return 0
+    fi
+
+    local tmp="${target}.merge.$$"
+    if jq -s '
+        .[0] as $live | .[1] as $base
+        | ($live * $base)
+        | .permissions.allow = ((($live.permissions.allow // []) + ($base.permissions.allow // [])) | unique)
+        | .permissions.deny  = ((($live.permissions.deny  // []) + ($base.permissions.deny  // [])) | unique)
+        | .permissions.ask   = ((($live.permissions.ask   // []) + ($base.permissions.ask   // [])) | unique)
+    ' "$target" "$source" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$target"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
 # Deploy a single module (source -> target)
 # Args: source, target, method, include_csv, dotconfigs_root, dry_run, interactive_mode
 # Returns: status string via global counters
@@ -329,6 +366,25 @@ deploy_module() {
                     else
                         eval "created=\$(( \$created + 1 ))"
                     fi
+                fi
+            fi
+            ;;
+        merge)
+            # JSON deep-merge for co-owned files (preserves local entries; never
+            # symlinks, never clobbers). See merge_json_settings.
+            if [[ "$dry_run" == "true" ]]; then
+                if [[ -f "$abs_target" && ! -L "$abs_target" ]]; then
+                    echo "  Would merge $rel_src -> $abs_target (preserving local entries)"
+                else
+                    echo "  Would create $abs_target from $rel_src (merge)"
+                fi
+                eval "updated=\$(( \$updated + 1 ))"
+            else
+                if merge_json_settings "$abs_source" "$abs_target"; then
+                    echo "  ✓ Merged $rel_src -> $abs_target (local entries preserved)"
+                    eval "updated=\$(( \$updated + 1 ))"
+                else
+                    echo "  ! Merge failed for $abs_target (invalid JSON?); left unchanged" >&2
                 fi
             fi
             ;;

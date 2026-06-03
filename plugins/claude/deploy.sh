@@ -213,10 +213,9 @@ plugin_claude_status() {
     declare -a file_states=()
     declare -a file_names=()
 
-    # Add settings.json if enabled
-    if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
-        files_to_check+=("$CLAUDE_DEPLOY_TARGET/settings.json|$PLUGIN_DIR/settings.json|settings.json")
-    fi
+    # settings.json is merge-deployed (regular file, not a symlink), so it is not
+    # part of the symlink-state status check - merge keeps local grants, the
+    # deployed file is intentionally a superset of the source.
 
     # Add CLAUDE.md (symlinked from assembled copy in plugin dir)
     if [[ ${#CLAUDE_MD_SECTIONS_ARRAY[@]} -gt 0 ]]; then

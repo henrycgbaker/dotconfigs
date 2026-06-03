@@ -107,9 +107,16 @@ section "Layer 1: Filesystem (symlinks)"
 
 echo " Claude:"
 
-# settings.json
+# settings.json is MERGE-deployed (regular file, NOT a symlink) so Claude's
+# local permission grants survive every deploy.
 if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
-    check_symlink "settings.json" "$deploy_target/settings.json" "$REPO_ROOT/plugins/claude/settings.json"
+    if [[ -L "$deploy_target/settings.json" ]]; then
+        check_fail "settings.json is a symlink (must be a merged regular file - Claude writes grants into it)"
+    elif [[ -f "$deploy_target/settings.json" ]]; then
+        check_pass "settings.json is a merged regular file (not a symlink)"
+    else
+        check_fail "settings.json not found at $deploy_target/settings.json"
+    fi
 else
     check_skip "settings.json (CLAUDE_SETTINGS_ENABLED=false)"
 fi
@@ -372,17 +379,23 @@ fi
 echo " Claude Code (file Claude actually reads):"
 
 # The file at $deploy_target/settings.json IS what Claude Code loads.
-# Since it's a symlink, verify the content Claude sees matches our source.
+# It's a MERGE of the repo base + local grants, so it is a SUPERSET of source,
+# not byte-identical. Verify the managed base landed: hooks match source and
+# every source permission rule is present in the deployed file.
 if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
     source_file="$REPO_ROOT/plugins/claude/settings.json"
     target_file="$deploy_target/settings.json"
 
     if [[ -f "$source_file" && -f "$target_file" ]]; then
-        # Byte-for-byte comparison (symlink means same file, but verify)
-        if cmp -s "$source_file" "$target_file"; then
-            check_pass "settings.json: Claude reads identical content to source"
+        # Managed-base subset check: source hooks == target hooks, and
+        # source.permissions.allow is a subset of target.permissions.allow.
+        if jq -es '
+            (.[0].hooks == .[1].hooks)
+            and ((.[0].permissions.allow // []) - (.[1].permissions.allow // []) | length == 0)
+        ' "$source_file" "$target_file" >/dev/null 2>&1; then
+            check_pass "settings.json: deployed file contains the managed base (hooks + source permissions)"
         else
-            check_fail "settings.json: Claude reads different content than source"
+            check_fail "settings.json: managed base missing from deployed file (hooks differ or source permissions dropped)"
         fi
 
         # Extract what Claude will actually enforce
