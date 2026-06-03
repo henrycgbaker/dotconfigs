@@ -212,3 +212,87 @@ class TestBlockAiPrAttribution:
         data = parse_hook_output(output)
         assert data is not None
         assert data["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+# ---------------------------------------------------------------------------
+# GitHub PR/issue write-guard hook tests
+# ---------------------------------------------------------------------------
+
+
+class TestBlockGhPrWrite:
+    """Tests for the block-gh-pr-write hook."""
+
+    @pytest.fixture
+    def gh_hook(self, dotconfigs_root: Path, available_claude_hooks):
+        hook_name = "block-gh-pr-write.sh"
+        if hook_name not in available_claude_hooks:
+            pytest.skip("block-gh-pr-write.sh not in manifest")
+        return dotconfigs_root / "plugins" / "claude" / "hooks" / hook_name
+
+    @staticmethod
+    def _is_deny(output: str) -> bool:
+        data = parse_hook_output(output)
+        return bool(data) and (
+            data.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+        )
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git status",
+            "gh pr view 213 --json body",
+            "gh pr list --state open",
+            # Reads against comment endpoints (no body params) must pass.
+            "gh api repos/o/r/pulls/213/comments --jq '.[].id'",
+            "gh api --paginate repos/o/r/issues/5/comments",
+            # Explicit GET is a read even with body params (query filters).
+            "gh api repos/o/r/pulls/213/comments -X GET -f per_page=100",
+        ],
+    )
+    def test_allows_reads_and_unrelated(self, gh_hook, cmd):
+        returncode, output = run_hook(gh_hook, "Bash", {"command": cmd})
+        assert returncode == 0
+        assert not self._is_deny(output), f"should allow: {cmd}"
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            'gh pr comment 213 --body "hi"',
+            'gh issue comment 5 --body "hi"',
+            "gh pr review 213 --approve",
+            "gh api repos/o/r/pulls/213/comments/123/replies -X POST -f body=hi",
+            "gh api -X PATCH repos/o/r/issues/comments/123 -f body=edited",
+        ],
+    )
+    def test_blocks_explicit_writes(self, gh_hook, cmd):
+        returncode, output = run_hook(gh_hook, "Bash", {"command": cmd})
+        assert self._is_deny(output), f"should block: {cmd}"
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            # The exact form that slipped through: implicit POST, no -X.
+            "gh api repos/o/r/pulls/213/comments/123/replies -f body='done'",
+            "gh api repos/o/r/pulls/213/comments/123/replies -f body='x' --jq '.id'",
+            "gh api repos/o/r/issues/5/comments -F body=@note.md",
+            "gh api repos/o/r/pulls/213/reviews --input review.json",
+            "gh api --method POST repos/o/r/pulls/213/comments -f body=hi",
+        ],
+    )
+    def test_blocks_implicit_post(self, gh_hook, cmd):
+        """gh infers POST from body params, so these are writes with no -X."""
+        returncode, output = run_hook(gh_hook, "Bash", {"command": cmd})
+        assert self._is_deny(output), f"should block implicit POST: {cmd}"
+
+    def test_bypass_with_env_prefix(self, gh_hook):
+        """GH_PR_COMMENT_OK=1 prefix is the explicit-approval escape hatch."""
+        cmd = "GH_PR_COMMENT_OK=1 gh api repos/o/r/pulls/213/comments/123/replies -f body='ok'"
+        returncode, output = run_hook(gh_hook, "Bash", {"command": cmd})
+        assert not self._is_deny(output)
+
+    def test_ignores_non_bash(self, gh_hook):
+        returncode, output = run_hook(
+            gh_hook, "Write", {"file_path": "/tmp/x", "content": "gh pr comment 1 --body x"}
+        )
+        assert returncode == 0
+        assert parse_hook_output(output) is None
