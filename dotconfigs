@@ -13,7 +13,6 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
 PLUGINS_DIR="$SCRIPT_DIR/plugins"
-ENV_FILE="$SCRIPT_DIR/.env"
 GLOBAL_CONFIG="$SCRIPT_DIR/.dotconfigs/global.json"
 
 # Source shared libraries eagerly (small files)
@@ -35,7 +34,6 @@ Usage:
   dotconfigs global-deploy [group] [options]    Deploy global config to filesystem
   dotconfigs project-init [path]                Scaffold per-project config
   dotconfigs project-deploy [path] [options]    Deploy per-project configuration
-  dotconfigs global-configs <plugin>            Configure plugin via wizard (.env)
   dotconfigs cleanup [options]                  Remove stale/broken symlinks
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
@@ -55,7 +53,6 @@ Commands:
   cleanup         Remove stale dotconfigs symlinks and broken symlinks
                   Default: dry-run. Use --apply to actually remove.
                   Options: --apply, --dry-run, --project <path>
-  global-configs  Interactive wizard to configure plugin defaults (.env)
   status          Check deployment status
   list            List all available plugins
   help            Show detailed help for specific command
@@ -69,7 +66,6 @@ Examples:
   dotconfigs project-init .             Scaffold project config
   dotconfigs project-deploy .           Deploy project configuration
   dotconfigs project-deploy . --force   Deploy, skip conflict prompts
-  dotconfigs global-configs claude      Configure Claude via wizard
 
 Available plugins:
 EOF
@@ -113,30 +109,6 @@ Description:
 
 Example:
   dotconfigs global-init
-EOF
-            ;;
-        global-configs)
-            cat <<EOF
-dotconfigs global-configs — Configure plugin defaults
-
-Usage:
-  dotconfigs global-configs <plugin>
-
-Description:
-  Runs the interactive setup wizard for the specified plugin.
-  Creates or updates .env file with plugin configuration.
-  These are global defaults applied across all projects.
-
-Available plugins:
-EOF
-            while IFS= read -r plugin; do
-                echo "  - $plugin"
-            done < <(discover_plugins "$PLUGINS_DIR")
-            cat <<EOF
-
-Examples:
-  dotconfigs global-configs claude    Configure Claude Code settings
-  dotconfigs global-configs git       Configure git hooks and identity
 EOF
             ;;
         project-init)
@@ -286,7 +258,7 @@ EOF
         *)
             echo "Error: Unknown command '$command'" >&2
             echo "" >&2
-            echo "Available commands: setup, global-init, deploy, project-init, project, global-configs, status, list, help" >&2
+            echo "Available commands: setup, global-init, deploy, project-init, project, cleanup, status, list, help" >&2
             return 1
             ;;
     esac
@@ -300,12 +272,6 @@ cmd_help() {
     fi
 }
 
-cmd_setup_legacy() {
-    echo "Warning: 'dotconfigs setup <plugin>' is deprecated." >&2
-    echo "Use: 'dotconfigs global-configs $1' instead." >&2
-    return 1
-}
-
 cmd_setup() {
     init_colours
 
@@ -314,9 +280,6 @@ cmd_setup() {
     echo "  dotconfigs - First Time Setup"
     echo "========================================================="
     echo ""
-
-    # Save version marker
-    wizard_save_env "$ENV_FILE" "DOTCONFIGS_VERSION" "2.0"
 
     # Create PATH symlinks (dotconfigs + dots)
     echo "Setting up PATH availability..."
@@ -359,33 +322,6 @@ cmd_global_init() {
     echo "Next steps:"
     echo "  1. (optional) Edit .dotconfigs/global.json to customise"
     echo "  2. dotconfigs deploy              Deploy all global config"
-}
-
-cmd_global_configs() {
-    local plugin=$1
-
-    if [[ -z "$plugin" ]]; then
-        echo "Error: Plugin name required" >&2
-        echo "Usage: dotconfigs global-configs <plugin>" >&2
-        echo "" >&2
-        list_available_plugins
-        exit 1
-    fi
-
-    if ! plugin_exists "$plugin"; then
-        echo "Error: Plugin '$plugin' not found" >&2
-        list_available_plugins
-        exit 1
-    fi
-
-    if [[ ! -f "$PLUGINS_DIR/$plugin/setup.sh" ]]; then
-        echo "Plugin '$plugin' has no interactive setup wizard." >&2
-        echo "Its configuration is declared in plugins/$plugin/manifest.json." >&2
-        exit 0
-    fi
-
-    source "$PLUGINS_DIR/$plugin/setup.sh"
-    "plugin_${plugin}_setup" "$@"
 }
 
 _create_path_symlink() {
@@ -877,18 +813,10 @@ main() {
 
     case "$1" in
         setup)
-            # Check if plugin arg provided (legacy mode)
-            if [[ $# -gt 1 ]]; then
-                cmd_setup_legacy "${@:2}"
-            else
-                cmd_setup
-            fi
+            cmd_setup
             ;;
         global-init)
             cmd_global_init "${@:2}"
-            ;;
-        global-configs)
-            cmd_global_configs "${@:2}"
             ;;
         project-init)
             cmd_project_init "${@:2}"
