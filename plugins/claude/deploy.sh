@@ -228,9 +228,9 @@ plugin_claude_status() {
         files_to_check+=("$CLAUDE_DEPLOY_TARGET/hooks/$hook|$PLUGIN_DIR/hooks/$hook|hooks/$hook")
     done
 
-    # Add skills
+    # Add skills (each is a SKILL.md directory symlinked whole)
     for skill in "${CLAUDE_SKILLS_ENABLED_ARRAY[@]}"; do
-        files_to_check+=("$CLAUDE_DEPLOY_TARGET/commands/${skill}.md|$PLUGIN_DIR/commands/${skill}.md|commands/${skill}.md")
+        files_to_check+=("$CLAUDE_DEPLOY_TARGET/skills/${skill}|$PLUGIN_DIR/skills/${skill}|skills/${skill}")
     done
 
     # Check each file and count states
@@ -537,16 +537,16 @@ plugin_claude_deploy() {
         done
     fi
 
-    # 4. Symlink skills (commands)
+    # 4. Symlink skills (each skills/<name>/ directory linked whole)
     if [[ ${#CLAUDE_SKILLS_ENABLED_ARRAY[@]} -gt 0 ]]; then
         echo "Deploying skills..."
         if [[ "$dry_run" != "true" ]]; then
-            mkdir -p "$CLAUDE_DEPLOY_TARGET/commands"
+            mkdir -p "$CLAUDE_DEPLOY_TARGET/skills"
         fi
 
         for skill in "${CLAUDE_SKILLS_ENABLED_ARRAY[@]}"; do
-            local target="$CLAUDE_DEPLOY_TARGET/commands/${skill}.md"
-            local source="$PLUGIN_DIR/commands/${skill}.md"
+            local target="$CLAUDE_DEPLOY_TARGET/skills/${skill}"
+            local source="$PLUGIN_DIR/skills/${skill}"
             local rel_skill="${source#$DOTCONFIGS_ROOT/}"
             local state=$(check_file_state "$target" "$source" "$DOTCONFIGS_ROOT")
 
@@ -577,7 +577,7 @@ plugin_claude_deploy() {
                         files_unchanged=$((files_unchanged + 1))
                         ;;
                     *)
-                        if backup_and_link "$source" "$target" "commands/${skill}.md" "$interactive_mode"; then
+                        if backup_and_link "$source" "$target" "skills/${skill}" "$interactive_mode"; then
                             if [[ "$state" == "not-deployed" ]]; then
                                 files_created=$((files_created + 1))
                             else

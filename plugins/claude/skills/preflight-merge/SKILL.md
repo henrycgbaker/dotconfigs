@@ -1,3 +1,10 @@
+---
+name: preflight-merge
+description: Simulate a PR's merge into its base branch locally before the GitHub UI merge, surfacing silent auto-merge regressions the UI hides
+allowed-tools: Bash
+argument-hint: [PR number]
+---
+
 # Preflight Merge
 
 Simulate a PR's merge into its base branch BEFORE clicking the GitHub UI's
@@ -135,6 +142,8 @@ and force-push the clean branch, rather than trying to resolve in GH UI.
   locally (after `git add`, before `git rebase --continue` / `git commit`).
   Use that when YOU are resolving conflicts locally; use `/preflight-merge`
   when GH UI is about to do the merge.
+- `/rebase-stacked-prs` - the fix when this flags a silent regression on a
+  stacked PR: replay only the new commits onto main instead of merging.
 - Memory: `feedback_silent_merge_regression.md` records the principle and
   the GH UI trap.
 - Pre-commit hook gated on `.git/MERGE_HEAD` / `.git/rebase-merge/` runs an

@@ -1,4 +1,5 @@
 ---
+name: squash-merge
 description: Squash merge current branch to main via GitHub PR
 allowed-tools: Bash, Read
 argument-hint: [optional commit message]

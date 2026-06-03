@@ -12,10 +12,10 @@
       "method": "copy"
     },
     "skills": {
-      "source": "plugins/claude/commands",
-      "target": "~/.claude/commands",
+      "source": "plugins/claude/skills",
+      "target": "~/.claude/skills",
       "method": "symlink",
-      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md", "check-resolution.md", "preflight-merge.md"]
+      "include": ["commit", "squash-merge", "check-resolution", "preflight-merge", "rebase-stacked-prs"]
     },
     "claude-md": {
       "source": "plugins/claude/CLAUDE.md",
@@ -32,10 +32,10 @@
       "exclude": []
     },
     "skills": {
-      "source": "plugins/claude/commands",
-      "target": ".claude/commands",
+      "source": "plugins/claude/skills",
+      "target": ".claude/skills",
       "method": "symlink",
-      "include": ["commit.md", "squash-merge.md", "simplicity-check.md", "pr-review.md", "check-resolution.md", "preflight-merge.md"],
+      "include": ["commit", "squash-merge", "check-resolution", "preflight-merge", "rebase-stacked-prs"],
       "exclude": []
     }
   }

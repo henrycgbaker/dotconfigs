@@ -1,5 +1,6 @@
 ---
-description: Help create a well-formatted commit
+name: commit
+description: Help create a well-formatted conventional commit
 allowed-tools: Bash, Read
 argument-hint: [optional message]
 ---
