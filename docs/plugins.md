@@ -56,14 +56,6 @@ zsh initialisation. Global scope only - source these from your `.zshrc`.
 | init | `plugins/shell/init.zsh` | `~/.dotconfigs/shell/init.zsh` |
 | aliases | `plugins/shell/aliases.zsh` | `~/.dotconfigs/shell/aliases.zsh` |
 
-## vscode
-
-VS Code settings. Global scope only (macOS path).
-
-| Module | Source | Target |
-|--------|--------|--------|
-| settings | `plugins/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` |
-
 ## Related
 
 - [Manifest format](manifest.md) - how each module above is declared.

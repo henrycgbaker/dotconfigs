@@ -1,27 +1,20 @@
 # Plugin Architecture
 
-Plugins live in `plugins/<name>/`. The manifest is the only required file -- everything else depends on whether the plugin needs interactive config or just deploys static files.
+Plugins live in `plugins/<name>/`. A plugin is any directory containing a `manifest.json` -- everything else is optional.
 
 ## Required
 
-- **`manifest.json`** -- SSOT for all deployable modules. Declares `"global"` and/or `"project"` sections, each containing modules with `source`, `target`, `method` (`symlink`|`copy`), and optional `include`/`exclude` lists.
+- **`manifest.json`** -- SSOT for all deployable modules. Declares `"global"` and/or `"project"` sections, each containing modules with `source`, `target`, `method` (`symlink` | `copy` | `merge` | `append`), and optional `include`/`exclude` lists.
 
-## Full Plugins (interactive config + deployment logic)
+The CLI walks manifests directly: `global-init` assembles `.dotconfigs/global.json` from the `.global` sections, `deploy` walks that file, and `status` checks each module's on-disk state against its source.
 
-Plugins that need wizards, status checks, or custom deployment logic also provide:
+## Optional
 
-- **`setup.sh`** -- Interactive configuration wizard. Must export `plugin_<name>_setup()`. Called via `dotconfigs global-configs <name>`. Writes config to `.env`.
-- **`deploy.sh`** -- Deployment logic and status. Must export `plugin_<name>_status()`. Called via `dotconfigs status <name>`.
-- **`project.sh`** *(optional)* -- Project-level logic. Exports `plugin_<name>_project()`.
-- **`DESCRIPTION`** -- One-line summary shown in `dotconfigs list`.
+- **`setup.sh`** -- Interactive configuration wizard. Must export `plugin_<name>_setup()`. Called via `dotconfigs global-configs <name>`. Writes user choices to `.env` for the plugin's hooks/templates to read at runtime.
+- **`DESCRIPTION`** -- One-line summary.
 
-Current full plugins: `claude`, `git`.
-
-## Data-Only Plugins (manifest + files)
-
-Plugins that just symlink/copy files need only a manifest and the source files it references. No `.sh` files required.
-
-Current data-only plugins: `shell`, `vscode`.
+Current plugins with a wizard: `claude`, `git`.
+Current data-only plugins (manifest + files): `shell`.
 
 ## Conventions
 

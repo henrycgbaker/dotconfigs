@@ -1,8 +1,6 @@
-- [ ] Fix missing source: `plugins/git/project-exclude-patterns` referenced in `.dotconfigs/project.json` but file does not exist
 - [ ] further research to optimise claude / git
 - [ ] at some point work on rewiring agents workflow back in low priority)_
-- [ ] add more plugins 
-- [ ] vs code: how to manage git extensions (what did i mean by this?)
+- [ ] add more plugins
 - [ ]  when to wizards: give option to delete files (hooks / extensions etc at target dir) - build in prompts for cleanup etc
 - [ ] add explore (i think this is actually supoer painful, so maybe just skip)
 - [ ] make it not my configs but a generic config manager !!!
