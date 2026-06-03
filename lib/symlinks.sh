@@ -1,6 +1,19 @@
 # lib/symlinks.sh — Symlink management and ownership detection
 # Sourced by dotconfigs entry point.
 
+# Resolve a path to its absolute, symlink-resolved form, portably.
+# Args: path
+# Stdout: absolute path (empty on failure, never errors).
+_resolve_abs_path() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS: readlink doesn't have -f, use perl
+        perl -MCwd -le 'print Cwd::abs_path(shift)' "$1" 2>/dev/null
+    else
+        # Linux: use readlink -f
+        readlink -f "$1" 2>/dev/null
+    fi
+}
+
 # Check if a file is a symlink pointing to the dotconfigs repo
 # Args: target_path, dotconfigs_path
 # Returns: 0 if owned by dotconfigs, 1 otherwise
@@ -14,14 +27,8 @@ is_dotconfigs_owned() {
         return 1
     fi
 
-    # Get link target with platform-specific handling
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS: readlink doesn't have -f, use perl
-        link_target=$(perl -MCwd -le 'print Cwd::abs_path(shift)' "$target_path" 2>/dev/null)
-    else
-        # Linux: use readlink -f
-        link_target=$(readlink -f "$target_path" 2>/dev/null)
-    fi
+    # Get link target (portable)
+    link_target=$(_resolve_abs_path "$target_path")
 
     # Check if link target starts with dotconfigs path
     if [[ "$link_target" == "$dotconfigs_path"* ]]; then
@@ -54,14 +61,8 @@ check_file_state() {
 
     # Case 3: Target is a symlink and owned by dotconfigs
     if [[ -L "$target_path" ]] && is_dotconfigs_owned "$target_path" "$dotconfigs_root"; then
-        # Resolve absolute path with platform-specific handling
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS: readlink doesn't have -f, use perl
-            link_target=$(perl -MCwd -le 'print Cwd::abs_path(shift)' "$target_path" 2>/dev/null)
-        else
-            # Linux: use readlink -f
-            link_target=$(readlink -f "$target_path" 2>/dev/null)
-        fi
+        # Resolve absolute path (portable)
+        link_target=$(_resolve_abs_path "$target_path")
 
         # Compare resolved path to expected source
         if [[ "$link_target" == "$expected_source" ]]; then
@@ -118,13 +119,8 @@ backup_and_link() {
     # If dest exists and is owned by dotconfigs, check if already correct
     if is_dotconfigs_owned "$dest" "$dotconfigs_root"; then
         local resolved_dest resolved_src
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            resolved_dest=$(perl -MCwd -le 'print Cwd::abs_path(shift)' "$dest" 2>/dev/null)
-            resolved_src=$(perl -MCwd -le 'print Cwd::abs_path(shift)' "$src" 2>/dev/null)
-        else
-            resolved_dest=$(readlink -f "$dest" 2>/dev/null)
-            resolved_src=$(readlink -f "$src" 2>/dev/null)
-        fi
+        resolved_dest=$(_resolve_abs_path "$dest")
+        resolved_src=$(_resolve_abs_path "$src")
         if [[ "$resolved_dest" == "$resolved_src" ]]; then
             echo "  Unchanged: $rel_src -> $dest"
             return 2
