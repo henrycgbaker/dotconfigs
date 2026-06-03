@@ -286,6 +286,44 @@ _merge_to_tmp() {
     return 1
 }
 
+# Substitute well-known deploy-time placeholders in a JSON source.
+# Currently handles:
+#   {{AUTHOR_NAME}}  -> git config --global user.name (fallback: Henry Baker)
+#   {{AUTHOR_EMAIL}} -> git config --global user.email (fallback: henry.c.g.baker@gmail.com)
+#
+# If the source contains no placeholders, echoes the original path unchanged
+# and returns 0. Otherwise writes a temp file with substituted content and
+# echoes its path; caller must rm the temp file after use.
+#
+# Args: source
+_substitute_placeholders() {
+    local source="$1"
+    if ! grep -q -e '{{AUTHOR_NAME}}' -e '{{AUTHOR_EMAIL}}' "$source" 2>/dev/null; then
+        echo "$source"
+        return 0
+    fi
+    local name email
+    name=$(git config --global user.name 2>/dev/null)
+    email=$(git config --global user.email 2>/dev/null)
+    [[ -z "$name" ]] && name="Henry Baker"
+    [[ -z "$email" ]] && email="henry.c.g.baker@gmail.com"
+    local tmp
+    tmp=$(mktemp -t "dotconfigs.subst.XXXXXX")
+    if ! jq --arg name "$name" --arg email "$email" '
+        walk(if type == "string" then
+            gsub("\\{\\{AUTHOR_NAME\\}\\}"; $name) | gsub("\\{\\{AUTHOR_EMAIL\\}\\}"; $email)
+        else . end)
+    ' "$source" > "$tmp" 2>/dev/null; then
+        rm -f "$tmp"
+        # On substitution failure, fall back to the original source so deploy
+        # doesn't break — placeholders will land in the target verbatim and the
+        # user will see them next time they read the file.
+        echo "$source"
+        return 1
+    fi
+    echo "$tmp"
+}
+
 # Deep-merge a managed JSON base ($source) into a co-owned target file,
 # preserving local entries. Used for files an application writes into (e.g.
 # Claude Code appends permission grants to settings.json): a symlink would write
@@ -404,13 +442,20 @@ deploy_module() {
         merge)
             # JSON deep-merge for co-owned files (preserves local entries; never
             # symlinks, never clobbers). See merge_json_settings.
+            #
+            # Source is first run through _substitute_placeholders so deploy-time
+            # values ({{AUTHOR_NAME}}, {{AUTHOR_EMAIL}}) land in the merged
+            # target. If no placeholders are present, the original path is used
+            # unchanged (no temp file created).
+            local _merge_src
+            _merge_src=$(_substitute_placeholders "$abs_source")
             if [[ "$dry_run" == "true" ]]; then
                 if [[ ! -f "$abs_target" || -L "$abs_target" ]]; then
                     echo "  Would create $abs_target from $rel_src (merge)"
                     eval "created=\$(( \$created + 1 ))"
                 else
                     local _preview
-                    if _preview=$(_merge_to_tmp "$abs_source" "$abs_target") \
+                    if _preview=$(_merge_to_tmp "$_merge_src" "$abs_target") \
                        && cmp -s "$_preview" "$abs_target"; then
                         echo "  Unchanged: $rel_src -> $abs_target (merge no-op)"
                         eval "unchanged=\$(( \$unchanged + 1 ))"
@@ -424,7 +469,7 @@ deploy_module() {
                 # `|| _rc=$?` suppresses set -e so the non-zero "unchanged" (2)
                 # and "failed" (1) returns are dispatched here, not fatal.
                 local _rc=0
-                merge_json_settings "$abs_source" "$abs_target" || _rc=$?
+                merge_json_settings "$_merge_src" "$abs_target" || _rc=$?
                 case $_rc in
                     0)
                         echo "  ✓ Merged $rel_src -> $abs_target (local entries preserved)"
@@ -440,6 +485,7 @@ deploy_module() {
                         ;;
                 esac
             fi
+            [[ "$_merge_src" != "$abs_source" ]] && rm -f "$_merge_src"
             ;;
         append)
             if [[ "$dry_run" == "true" ]]; then

@@ -57,8 +57,8 @@
   "outputStyle": "concise-execution",
   "preferredNotifChannel": "terminal_bell",
   "attribution": {
-    "name": "Henry Baker",
-    "email": "henry.c.g.baker@gmail.com"
+    "name": "{{AUTHOR_NAME}}",
+    "email": "{{AUTHOR_EMAIL}}"
   },
   "hooks": {
     "PreToolUse": [
