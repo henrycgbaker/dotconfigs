@@ -647,6 +647,12 @@ cmd_status() {
     check_jq || return 1
     _require_global_config || return 1
 
+    if [[ -n "$plugin_filter" ]] && ! plugin_exists "$plugin_filter"; then
+        echo "Error: Plugin '$plugin_filter' not found" >&2
+        list_available_plugins
+        return 1
+    fi
+
     local plugin lines has_ok has_drift has_missing count_ok total
     while IFS= read -r plugin; do
         [[ -n "$plugin_filter" && "$plugin" != "$plugin_filter" ]] && continue

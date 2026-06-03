@@ -259,6 +259,26 @@ deploy_directory_files() {
     fi
 }
 
+# Perform the deep-merge into a tmp file alongside target; on success echo the
+# tmp path (caller must mv or rm); on failure clean up and return non-zero.
+# Args: source, target
+_merge_to_tmp() {
+    local source="$1" target="$2"
+    local tmp="${target}.merge.$$"
+    if jq -s '
+        .[0] as $live | .[1] as $base
+        | ($live * $base)
+        | .permissions.allow = ((($live.permissions.allow // []) + ($base.permissions.allow // [])) | unique)
+        | .permissions.deny  = ((($live.permissions.deny  // []) + ($base.permissions.deny  // [])) | unique)
+        | .permissions.ask   = ((($live.permissions.ask   // []) + ($base.permissions.ask   // [])) | unique)
+    ' "$target" "$source" > "$tmp" 2>/dev/null; then
+        echo "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
 # Deep-merge a managed JSON base ($source) into a co-owned target file,
 # preserving local entries. Used for files an application writes into (e.g.
 # Claude Code appends permission grants to settings.json): a symlink would write
@@ -268,6 +288,8 @@ deploy_directory_files() {
 # UNIONED so locally-approved grants survive every deploy. Result is a regular
 # file (never a symlink). Idempotent.
 # Args: source_base, target
+# Returns: 0 if target changed, 2 if merge result identical to existing target
+#          (idempotent re-run), 1 on jq failure.
 merge_json_settings() {
     local source="$1"
     local target="$2"
@@ -281,19 +303,15 @@ merge_json_settings() {
         return 0
     fi
 
-    local tmp="${target}.merge.$$"
-    if jq -s '
-        .[0] as $live | .[1] as $base
-        | ($live * $base)
-        | .permissions.allow = ((($live.permissions.allow // []) + ($base.permissions.allow // [])) | unique)
-        | .permissions.deny  = ((($live.permissions.deny  // []) + ($base.permissions.deny  // [])) | unique)
-        | .permissions.ask   = ((($live.permissions.ask   // []) + ($base.permissions.ask   // [])) | unique)
-    ' "$target" "$source" > "$tmp" 2>/dev/null; then
-        mv "$tmp" "$target"
-        return 0
+    local tmp
+    tmp=$(_merge_to_tmp "$source" "$target") || return 1
+
+    if cmp -s "$tmp" "$target"; then
+        rm -f "$tmp"
+        return 2
     fi
-    rm -f "$tmp"
-    return 1
+    mv "$tmp" "$target"
+    return 0
 }
 
 # Deploy a single module (source -> target)
@@ -380,19 +398,40 @@ deploy_module() {
             # JSON deep-merge for co-owned files (preserves local entries; never
             # symlinks, never clobbers). See merge_json_settings.
             if [[ "$dry_run" == "true" ]]; then
-                if [[ -f "$abs_target" && ! -L "$abs_target" ]]; then
-                    echo "  Would merge $rel_src -> $abs_target (preserving local entries)"
-                else
+                if [[ ! -f "$abs_target" || -L "$abs_target" ]]; then
                     echo "  Would create $abs_target from $rel_src (merge)"
-                fi
-                eval "updated=\$(( \$updated + 1 ))"
-            else
-                if merge_json_settings "$abs_source" "$abs_target"; then
-                    echo "  ✓ Merged $rel_src -> $abs_target (local entries preserved)"
-                    eval "updated=\$(( \$updated + 1 ))"
+                    eval "created=\$(( \$created + 1 ))"
                 else
-                    echo "  ! Merge failed for $abs_target (invalid JSON?); left unchanged" >&2
+                    local _preview
+                    if _preview=$(_merge_to_tmp "$abs_source" "$abs_target") \
+                       && cmp -s "$_preview" "$abs_target"; then
+                        echo "  Unchanged: $rel_src -> $abs_target (merge no-op)"
+                        eval "unchanged=\$(( \$unchanged + 1 ))"
+                    else
+                        echo "  Would merge $rel_src -> $abs_target (preserving local entries)"
+                        eval "updated=\$(( \$updated + 1 ))"
+                    fi
+                    [[ -n "$_preview" ]] && rm -f "$_preview"
                 fi
+            else
+                # `|| _rc=$?` suppresses set -e so the non-zero "unchanged" (2)
+                # and "failed" (1) returns are dispatched here, not fatal.
+                local _rc=0
+                merge_json_settings "$abs_source" "$abs_target" || _rc=$?
+                case $_rc in
+                    0)
+                        echo "  ✓ Merged $rel_src -> $abs_target (local entries preserved)"
+                        eval "updated=\$(( \$updated + 1 ))"
+                        ;;
+                    2)
+                        echo "  Unchanged: $rel_src -> $abs_target"
+                        eval "unchanged=\$(( \$unchanged + 1 ))"
+                        ;;
+                    *)
+                        echo "  ! Merge failed for $abs_target (invalid JSON?); left unchanged" >&2
+                        eval "skipped=\$(( \$skipped + 1 ))"
+                        ;;
+                esac
             fi
             ;;
         append)
