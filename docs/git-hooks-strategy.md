@@ -1,5 +1,9 @@
 # Optimal .claude & .git Configuration Strategy
 
+[← docs](../README.md#documentation) · Explanation
+
+> The design rationale behind the branch-aware git hooks (see [Plugins → git](plugins.md#git) for the hooks themselves and [ROSTER.md](ROSTER.md) for their config keys).
+
 **Goal**: Maximize efficiency & robustness while minimizing token/time overhead. Per-project configuration, not version controlled.
 
 ---

@@ -1,5 +1,9 @@
 # Claude Code Configuration Guide
 
+[← docs](../README.md#documentation) · Explanation (background)
+
+> Background on Claude Code itself - how agents, skills, commands, hooks, and settings work and what they cost in tokens. This is context for *why* the [claude plugin](plugins.md) is shaped the way it is, not dotconfigs usage.
+
 Comprehensive guide to configuring Claude Code with agents, rules, commands, skills, hooks, and settings.
 
 ## Table of Contents
