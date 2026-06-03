@@ -25,31 +25,21 @@ expand_tilde() {
     echo "${1/#\~/$HOME}"
 }
 
-# Parse all modules from JSON config recursively
-# Args: config_file
+# Parse modules from JSON config recursively
+# Args: config_file [, group_key]
+# If group_key is empty/unset, walks entire config; otherwise filters to .[$group] first.
 # Returns: tab-separated lines: source\ttarget\tmethod\tinclude_csv
 parse_modules() {
     local config_file="$1"
+    local group_key="${2:-}"
 
-    # Use jq recursive descent to find all objects with source+target
-    jq -r '.. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (if has("include") then ((.include // []) - (.exclude // []) | if length == 0 then "__NONE__" else join(",") end) else "" end)] | @tsv' "$config_file" 2>/dev/null || true
-}
-
-# Parse modules from a specific group in JSON config
-# Args: config_file, group_key
-# Returns: tab-separated lines: source\ttarget\tmethod\tinclude_csv
-parse_modules_in_group() {
-    local config_file="$1"
-    local group_key="$2"
-
-    # If no group key, parse all modules
     if [[ -z "$group_key" ]]; then
-        parse_modules "$config_file"
-        return
+        # Recursive descent over the whole config
+        jq -r '.. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (if has("include") then ((.include // []) - (.exclude // []) | if length == 0 then "__NONE__" else join(",") end) else "" end)] | @tsv' "$config_file" 2>/dev/null || true
+    else
+        # Filter to specific group first, then recursive descent
+        jq -r --arg group "$group_key" '.[$group] | .. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (if has("include") then ((.include // []) - (.exclude // []) | if length == 0 then "__NONE__" else join(",") end) else "" end)] | @tsv' "$config_file" 2>/dev/null || true
     fi
-
-    # Filter to specific group first, then recursive descent
-    jq -r --arg group "$group_key" '.[$group] | .. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (if has("include") then ((.include // []) - (.exclude // []) | if length == 0 then "__NONE__" else join(",") end) else "" end)] | @tsv' "$config_file" 2>/dev/null || true
 }
 
 # Remove stale symlinks from a target directory after deploy
@@ -578,7 +568,7 @@ _require_global_config() {
 # Args: plugin
 _collect_plugin_states() {
     local plugin="$1"
-    parse_modules_in_group "$GLOBAL_CONFIG" "$plugin" \
+    parse_modules "$GLOBAL_CONFIG" "$plugin" \
         | while IFS=$'\t' read -r source target method include_csv; do
             check_module_state "$source" "$target" "$method" "$include_csv" "$SCRIPT_DIR"
           done
@@ -650,7 +640,7 @@ deploy_from_json() {
     removed=0
 
     # Parse modules
-    modules_data=$(parse_modules_in_group "$config_file" "$group_key")
+    modules_data=$(parse_modules "$config_file" "$group_key")
 
     # Check if any modules found
     if [[ -z "$modules_data" ]]; then

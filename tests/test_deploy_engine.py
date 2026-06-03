@@ -78,12 +78,12 @@ def test_parse_modules_include_exclude(
 
 
 # ---------------------------------------------------------------------------
-# parse_modules_in_group — group filtering
+# parse_modules — group filtering (optional second arg)
 # ---------------------------------------------------------------------------
 
 
-class TestParseModulesInGroup:
-    """Tests for parse_modules_in_group group filtering."""
+class TestParseModulesGroupFilter:
+    """Tests for parse_modules group_key filtering."""
 
     @pytest.fixture()
     def multi_group_config(self, tmp_path: Path) -> Path:
@@ -113,7 +113,7 @@ class TestParseModulesInGroup:
         result = run_bash_function(
             dotconfigs_root,
             "lib/deploy.sh",
-            "parse_modules_in_group",
+            "parse_modules",
             [str(multi_group_config), "claude"],
         )
         assert result.returncode == 0
@@ -124,11 +124,11 @@ class TestParseModulesInGroup:
     def test_empty_group_returns_all(
         self, dotconfigs_root: Path, multi_group_config: Path
     ):
-        """Empty group key falls through to parse_modules (returns all)."""
+        """Empty group key walks the whole config (returns all)."""
         result = run_bash_function(
             dotconfigs_root,
             "lib/deploy.sh",
-            "parse_modules_in_group",
+            "parse_modules",
             [str(multi_group_config), ""],
         )
         assert result.returncode == 0
@@ -141,7 +141,7 @@ class TestParseModulesInGroup:
         result = run_bash_function(
             dotconfigs_root,
             "lib/deploy.sh",
-            "parse_modules_in_group",
+            "parse_modules",
             [str(multi_group_config), "nonexistent"],
         )
         assert result.returncode == 0
