@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Help create a well-formatted conventional commit
+description: Stage changes and create a conventional commit on the current branch. Use when wrapping up a logical unit of work or when the user says "commit".
 allowed-tools: Bash, Read
 argument-hint: [optional message]
 ---

@@ -4,23 +4,60 @@
       "source": "plugins/claude/hooks",
       "target": "~/.claude/hooks",
       "method": "symlink",
-      "include": ["block-destructive.sh", "block-ai-pr-attribution.sh", "block-gh-comment.sh", "facade-check.sh"]
+      "include": [
+        "_hook-common.sh",
+        "block-rm-rf-root.sh",
+        "block-force-push.sh",
+        "block-hard-reset.sh",
+        "block-git-clean.sh",
+        "block-drop-table.sh",
+        "block-chmod-777.sh",
+        "block-sensitive-write.sh",
+        "block-ai-pr-attribution.sh",
+        "block-gh-comment.sh",
+        "facade-check.sh",
+        "inject-context.sh",
+        "session-start-env.sh",
+        "session-end-log.sh",
+        "pre-compact-snapshot.sh",
+        "notify.sh"
+      ]
     },
     "settings": {
       "source": "plugins/claude/settings.json",
       "target": "~/.claude/settings.json",
       "method": "merge"
     },
+    "output-styles": {
+      "source": "plugins/claude/output-styles",
+      "target": "~/.claude/output-styles",
+      "method": "symlink",
+      "include": ["concise-execution.md"]
+    },
     "skills": {
       "source": "plugins/claude/skills",
       "target": "~/.claude/skills",
       "method": "symlink",
-      "include": ["commit", "squash-merge", "check-resolution", "preflight-merge", "rebase-stacked-prs"]
+      "include": [
+        "commit",
+        "squash-merge",
+        "check-resolution",
+        "preflight-merge",
+        "rebase-stacked-prs",
+        "branch-cleanup",
+        "pr-create",
+        "fix-pr-feedback"
+      ]
     },
     "claude-md": {
       "source": "plugins/claude/CLAUDE.md",
       "target": "~/.claude/CLAUDE.md",
       "method": "symlink"
+    },
+    "hooks-conf": {
+      "source": "plugins/claude/templates/claude-hooks.conf",
+      "target": "~/.claude/claude-hooks.conf",
+      "method": "copy"
     }
   },
   "project": {
@@ -28,14 +65,40 @@
       "source": "plugins/claude/hooks",
       "target": ".claude/hooks",
       "method": "symlink",
-      "include": ["block-destructive.sh", "block-ai-pr-attribution.sh", "block-gh-comment.sh", "facade-check.sh"],
+      "include": [
+        "_hook-common.sh",
+        "block-rm-rf-root.sh",
+        "block-force-push.sh",
+        "block-hard-reset.sh",
+        "block-git-clean.sh",
+        "block-drop-table.sh",
+        "block-chmod-777.sh",
+        "block-sensitive-write.sh",
+        "block-ai-pr-attribution.sh",
+        "block-gh-comment.sh",
+        "facade-check.sh",
+        "inject-context.sh",
+        "session-start-env.sh",
+        "session-end-log.sh",
+        "pre-compact-snapshot.sh",
+        "notify.sh"
+      ],
       "exclude": []
     },
     "skills": {
       "source": "plugins/claude/skills",
       "target": ".claude/skills",
       "method": "symlink",
-      "include": ["commit", "squash-merge", "check-resolution", "preflight-merge", "rebase-stacked-prs"],
+      "include": [
+        "commit",
+        "squash-merge",
+        "check-resolution",
+        "preflight-merge",
+        "rebase-stacked-prs",
+        "branch-cleanup",
+        "pr-create",
+        "fix-pr-feedback"
+      ],
       "exclude": []
     }
   }

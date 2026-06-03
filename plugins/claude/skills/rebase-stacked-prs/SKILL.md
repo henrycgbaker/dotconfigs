@@ -1,6 +1,6 @@
 ---
 name: rebase-stacked-prs
-description: Safely rebase a stacked PR onto main, dropping already-merged stacked-below work without reintroducing legacy code
+description: Rebase a stacked PR onto current main by cherry-picking only its genuinely-new commits and auditing the result, dropping already-merged stacked-below work without reintroducing legacy code. Use when a stacked PR's lower PRs have merged (often in modified form) and a naive `git rebase --onto` would replay superseded commits.
 allowed-tools: Bash, Read, Edit, Write
 argument-hint: [PR number]
 ---

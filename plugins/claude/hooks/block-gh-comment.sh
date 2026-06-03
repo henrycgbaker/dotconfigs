@@ -18,42 +18,26 @@
 #   - GitHub MCP:     returns "ask" so the user approves the exact tool + args interactively
 #                     (an env-var prefix can't ride along on an MCP tool call).
 
-CLAUDE_HOOK_GH_COMMENT_GUARD="${CLAUDE_HOOK_GH_COMMENT_GUARD:-true}"
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
+CLAUDE_HOOK_GH_COMMENT_GUARD="${CLAUDE_HOOK_GH_COMMENT_GUARD:-true}"
+hook_load_conf
 
 if [[ "$CLAUDE_HOOK_GH_COMMENT_GUARD" != "true" ]]; then
     exit 0
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-    exit 0
-fi
+hook_require_cmd jq
 
 stdin_data=$(cat)
-tool_name=$(echo "$stdin_data" | jq -r '.tool_name // empty')
+{
+    IFS= read -r hook_event
+    IFS= read -r tool_name
+    IFS= read -r command
+} < <(echo "$stdin_data" | jq -r '.hook_event_name // "", .tool_name // "", .tool_input.command // ""')
 
-deny() {
-    local reason="$1"
-    local escaped
-    escaped=$(printf '%s' "$reason" | jq -Rs '.')
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": $escaped}}"
-    exit 0
-}
-
-ask_user() {
-    local reason="$1"
-    local escaped
-    escaped=$(printf '%s' "$reason" | jq -Rs '.')
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"ask\", \"permissionDecisionReason\": $escaped}}"
-    exit 0
-}
+[[ "$hook_event" == "PreToolUse" ]] || exit 0
 
 # === GitHub MCP server: mcp__github__* ===
 # A comment/review post = a write verb (add/create/submit/reply/update) plus a
@@ -64,7 +48,7 @@ ask_user() {
 # user approves the exact tool + args interactively.
 if [[ "$tool_name" == mcp__github__* ]]; then
     if echo "$tool_name" | grep -qE '^mcp__github__(add|create|submit|reply|update)_.*(comment|review)'; then
-        ask_user "GitHub MCP comment/review post (${tool_name}): user-facing content that emails notifications and can't be retracted. Approve only if the user explicitly asked you to post; otherwise report in chat or hand them the gh command."
+        hook_ask "GitHub MCP comment/review post (${tool_name}): user-facing content that emails notifications and can't be retracted. Approve only if the user explicitly asked you to post; otherwise report in chat or hand them the gh command."
     fi
     exit 0
 fi
@@ -73,8 +57,6 @@ fi
 if [[ "$tool_name" != "Bash" ]]; then
     exit 0
 fi
-
-command=$(echo "$stdin_data" | jq -r '.tool_input.command // empty')
 
 if [[ -z "$command" ]]; then
     exit 0
@@ -89,12 +71,12 @@ BYPASS_HINT="To override after explicit user approval, prefix the command: GH_CO
 
 # gh pr comment / gh issue comment — direct write operations.
 if echo "$command" | grep -qE '(^|[^A-Za-z0-9_])gh\s+(pr|issue)\s+comment(\s|$)'; then
-    deny "Blocked GitHub write: gh pr/issue comment posts user-facing content. Ask the user explicitly before posting. ${BYPASS_HINT}"
+    hook_deny "Blocked GitHub write: gh pr/issue comment posts user-facing content. Ask the user explicitly before posting. ${BYPASS_HINT}"
 fi
 
 # gh pr review — without --web this submits a review (approve/request-changes/comment).
 if echo "$command" | grep -qE '(^|[^A-Za-z0-9_])gh\s+pr\s+review(\s|$)' && ! echo "$command" | grep -qE -- '--web(\s|$)'; then
-    deny "Blocked GitHub write: gh pr review submits a review. Ask the user explicitly before posting. ${BYPASS_HINT}"
+    hook_deny "Blocked GitHub write: gh pr review submits a review. Ask the user explicitly before posting. ${BYPASS_HINT}"
 fi
 
 # gh api writes against PR/issue comment, review, or reply endpoints (incl. a
@@ -110,7 +92,7 @@ if echo "$command" | grep -qE '(^|[^A-Za-z0-9_])gh\s+api\b' \
    && { echo "$command" | grep -qE -- '(-X|--method)\s*(POST|PATCH|PUT)\b' \
         || { echo "$command" | grep -qE -- '(^|\s)(-f|-F|--field|--raw-field|--input)(\s|=)' \
              && ! echo "$command" | grep -qE -- '(-X|--method)\s*GET\b'; }; }; then
-    deny "Blocked GitHub write: gh api write (explicit -X/--method POST|PATCH|PUT, or implicit POST via -f/-F/--field/--raw-field/--input) to PR/issue comments|reviews|replies. Ask the user explicitly before posting. ${BYPASS_HINT}"
+    hook_deny "Blocked GitHub write: gh api write (explicit -X/--method POST|PATCH|PUT, or implicit POST via -f/-F/--field/--raw-field/--input) to PR/issue comments|reviews|replies. Ask the user explicitly before posting. ${BYPASS_HINT}"
 fi
 
 exit 0

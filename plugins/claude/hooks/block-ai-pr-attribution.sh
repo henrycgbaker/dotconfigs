@@ -8,40 +8,29 @@
 # CONFIG: CLAUDE_HOOK_PR_ATTRIBUTION_GUARD=true  Guard against AI attribution in PRs
 # ================
 
-CLAUDE_HOOK_PR_ATTRIBUTION_GUARD="${CLAUDE_HOOK_PR_ATTRIBUTION_GUARD:-true}"
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-# Try config files in order (project overrides global)
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
+CLAUDE_HOOK_PR_ATTRIBUTION_GUARD="${CLAUDE_HOOK_PR_ATTRIBUTION_GUARD:-true}"
+hook_load_conf
 
 [[ "$CLAUDE_HOOK_PR_ATTRIBUTION_GUARD" != "true" ]] && exit 0
-
-if ! command -v jq >/dev/null 2>&1; then
-    exit 0
-fi
+hook_require_cmd jq
 
 stdin_data=$(cat)
+{
+    IFS= read -r hook_event
+    IFS= read -r tool_name
+    IFS= read -r command
+} < <(echo "$stdin_data" | jq -r '.hook_event_name // "", .tool_name // "", .tool_input.command // ""')
 
-tool_name=$(echo "$stdin_data" | jq -r '.tool_name // empty')
+[[ "$hook_event" == "PreToolUse" ]] || exit 0
 [[ "$tool_name" != "Bash" ]] && exit 0
-
-command=$(echo "$stdin_data" | jq -r '.tool_input.command // empty')
 
 # Only check gh pr create/edit commands
 if ! echo "$command" | grep -qE 'gh\s+pr\s+(create|edit)'; then
     exit 0
 fi
-
-deny() {
-    local reason="$1"
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"$reason\"}}"
-    exit 0
-}
 
 AI_PATTERNS=(
     "Co-Authored-By:.*Claude"
@@ -73,7 +62,7 @@ AI_PATTERNS=(
 
 for pattern in "${AI_PATTERNS[@]}"; do
     if echo "$command" | grep -qiE "$pattern"; then
-        deny "PR contains AI attribution (matched: $pattern). Remove AI attribution from PR title/description."
+        hook_deny "PR contains AI attribution (matched: $pattern). Remove AI attribution from PR title/description."
     fi
 done
 

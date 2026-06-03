@@ -1,6 +1,6 @@
 ---
 name: preflight-merge
-description: Pre-merge gate Claude runs before completing any squash merge to main - simulates the merge and flags silent auto-merge regressions that would reintroduce code the base already fixed
+description: Simulate the squash of a PR against its current base and flag silent auto-merge regressions that would reintroduce code the base has since fixed. Use as the mandatory gate inside `/squash-merge` before `gh pr merge`, or before completing any merge of a long-running or stacked PR.
 allowed-tools: Bash
 argument-hint: [PR number]
 ---

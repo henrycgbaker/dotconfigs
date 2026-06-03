@@ -50,10 +50,26 @@ def hook_script(dotconfigs_root: Path, available_claude_hooks):
     return dotconfigs_root / "plugins" / "claude" / "hooks" / hook_name
 
 
-def run_hook(hook_script: Path, tool_name: str, tool_input: dict) -> tuple[int, str]:
-    """Run the Claude hook with given tool call data."""
+def run_hook(
+    hook_script: Path,
+    tool_name: str,
+    tool_input: dict,
+    hook_event_name: str = "PreToolUse",
+) -> tuple[int, str]:
+    """Run the Claude hook with given tool call data.
+
+    `hook_event_name` is what real Claude Code provides on every stdin
+    payload; hooks assert it defensively, so tests must supply it. Defaults
+    to PreToolUse since that's what most hook tests exercise.
+    """
     requires_cmd("bash")
-    stdin_data = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
+    stdin_data = json.dumps(
+        {
+            "hook_event_name": hook_event_name,
+            "tool_name": tool_name,
+            "tool_input": tool_input,
+        }
+    )
 
     result = subprocess.run(
         ["bash", str(hook_script)],

@@ -1,6 +1,6 @@
 ---
 name: check-resolution
-description: After resolving merge/rebase conflicts locally, verify the resolution didn't silently resurrect old code the branch removed or undo a fix that landed on main
+description: Audit a just-resolved merge or rebase locally to confirm the resolution didn't silently resurrect code the branch removed or revert a fix that landed on main. Use after `git add` of resolved files and before `git rebase --continue` / `git commit`.
 allowed-tools: Bash
 ---
 
