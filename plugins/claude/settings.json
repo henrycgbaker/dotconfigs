@@ -47,6 +47,7 @@
       "Bash(pytest*)"
     ],
     "soft_deny": ["$defaults"],
+    "_hard_deny_note": "Intentionally mirrors patterns the destructive-block hooks (block-rm-rf-root.sh, block-hard-reset.sh, block-chmod-777.sh) catch. Belt-and-braces: if a hook is toggled off via claude-hooks.conf, autoMode still enforces these here. Keep the two lists in sync when adding new destructive guards.",
     "hard_deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf ~)",

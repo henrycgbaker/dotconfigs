@@ -36,7 +36,11 @@ jq -n -c \
     --arg dur "$duration" \
     --arg model "$model" \
     --arg pd "$project_dir" \
-    '{timestamp: $ts, session_id: $sid, duration_seconds: $dur, model: $model, project_dir: $pd}' \
+    '{timestamp: $ts,
+      session_id: $sid,
+      duration_seconds: ($dur | tonumber? // null),
+      model: $model,
+      project_dir: $pd}' \
     >> "$log_file"
 
 exit 0

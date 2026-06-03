@@ -12,6 +12,13 @@ small, separately-committed change, and push the result back to the branch.
 Addressing feedback in code (one commit per comment) is the default; posting
 a reply on GitHub is not - the diff IS the response.
 
+**On posting replies:** the gh-comment hook blocks every `gh pr comment`,
+`gh issue comment`, `gh pr review`, and `gh api` comment-write unless the
+command is prefixed with `GH_COMMENT_OK=1`. This skill never posts replies
+automatically. If the user explicitly asks to reply to a specific comment,
+prefix the single command, e.g.:
+`GH_COMMENT_OK=1 gh api repos/OWNER/REPO/pulls/NUMBER/comments/CID/replies -f body='done'`
+
 ## When to invoke
 
 - Reviewer has left comments or requested changes on an open PR.

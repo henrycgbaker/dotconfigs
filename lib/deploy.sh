@@ -302,11 +302,20 @@ _substitute_placeholders() {
         echo "$source"
         return 0
     fi
-    local name email
+    local name email used_fallback=false
     name=$(git config --global user.name 2>/dev/null)
     email=$(git config --global user.email 2>/dev/null)
-    [[ -z "$name" ]] && name="Henry Baker"
-    [[ -z "$email" ]] && email="henry.c.g.baker@gmail.com"
+    if [[ -z "$name" ]]; then
+        name="Henry Baker"
+        used_fallback=true
+    fi
+    if [[ -z "$email" ]]; then
+        email="henry.c.g.baker@gmail.com"
+        used_fallback=true
+    fi
+    if [[ "$used_fallback" == "true" ]]; then
+        echo "  ! attribution: git config --global user.{name,email} not set; using hardcoded fallback ($name <$email>). Set your git identity to override." >&2
+    fi
     local tmp
     tmp=$(mktemp -t "dotconfigs.subst.XXXXXX")
     if ! jq --arg name "$name" --arg email "$email" '
