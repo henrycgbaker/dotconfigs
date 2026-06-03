@@ -340,10 +340,18 @@ cmd_global_init() {
         exit 1
     fi
 
+    local force="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force) force="true"; shift ;;
+            *) echo "Error: Unknown option '$1'" >&2; exit 1 ;;
+        esac
+    done
+
     local json
     json=$(assemble_from_manifests "global")
 
-    if ! write_with_overwrite_protection "$GLOBAL_CONFIG" "$json"; then
+    if ! write_with_overwrite_protection "$GLOBAL_CONFIG" "$json" "$force"; then
         return 0
     fi
 
@@ -712,6 +720,17 @@ cmd_list() {
 }
 
 cmd_project() {
+    # Space-form subcommands: `project init [path]` aliases `project-init [path]`;
+    # `project deploy [path]` is just `project [path]` with a redundant verb.
+    if [[ "${1:-}" == "init" ]]; then
+        shift
+        cmd_project_init "$@"
+        return
+    fi
+    if [[ "${1:-}" == "deploy" ]]; then
+        shift
+    fi
+
     local project_path=""
     local dry_run="false"
     local force="false"
@@ -870,7 +889,7 @@ main() {
             fi
             ;;
         global-init)
-            cmd_global_init
+            cmd_global_init "${@:2}"
             ;;
         global-configs)
             cmd_global_configs "${@:2}"

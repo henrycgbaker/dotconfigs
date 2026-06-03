@@ -11,6 +11,7 @@ Git hooks run during git operations to enforce quality standards and protect wor
 
 | Hook | Description | Configuration Keys |
 |------|-------------|-------------------|
+| check-facade-consumers | Verify every facade __all__ entry has at least one external consumer |  |
 | commit-msg | Blocks AI attribution patterns in commit messages |  |
 | post-checkout | Post-checkout info — displays branch information on checkout | GIT_HOOK_BRANCH_INFO, GIT_HOOK_POST_CHECKOUT_ENABLED |
 | post-merge | Post-merge checks — dependency change detection and migration reminders | GIT_HOOK_DEPENDENCY_CHECK, GIT_HOOK_MIGRATION_REMINDER, GIT_HOOK_POST_MERGE_ENABLED |
@@ -54,4 +55,4 @@ To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deployi
 
 ---
 
-*Generated: 2026-06-03 10:31:26 UTC*
+*Generated: 2026-06-03 15:09:22 UTC*

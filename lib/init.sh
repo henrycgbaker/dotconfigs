@@ -33,9 +33,18 @@ assemble_from_manifests() {
 write_with_overwrite_protection() {
     local output_file="$1"
     local json_content="$2"
+    local force="${3:-false}"
     local display_name="$(basename "$(dirname "$output_file")")/$(basename "$output_file")"
 
     if [[ -f "$output_file" ]]; then
+        # --force: back up and overwrite without prompting.
+        if [[ "$force" == "true" ]]; then
+            local backup="$output_file.bak.$(date +%Y%m%d%H%M%S)"
+            cp "$output_file" "$backup"
+            echo "$json_content" > "$output_file"
+            echo "Backed up to $(basename "$backup"), overwrote $display_name (--force)"
+            return 0
+        fi
         echo "$display_name already exists."
         local overwrite_answer="n"
         if [[ -t 1 ]]; then
