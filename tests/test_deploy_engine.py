@@ -355,7 +355,9 @@ deploy_from_json "{config_file}" "{root}" "" "false" "true"
 """
         result = run_bash(script)
         assert result.returncode == 0
-        assert "Updated:   1" in result.stdout
+        # A freshly-linked file is a creation (the symlink didn't exist before);
+        # the nonexistent include is skipped.
+        assert "Created:   1" in result.stdout
         assert "Skipped:   1" in result.stdout
 
 
@@ -494,9 +496,9 @@ echo "REMOVED=$removed"
 """
         result = run_bash(script)
         assert result.returncode == 0
-        assert (
-            not broken.exists() and not broken.is_symlink()
-        ), "Broken dotconfigs symlink was not removed"
+        assert not broken.exists() and not broken.is_symlink(), (
+            "Broken dotconfigs symlink was not removed"
+        )
         assert "REMOVED=1" in result.stdout
 
     def test_foreign_broken_symlink_preserved(
@@ -523,9 +525,9 @@ echo "REMOVED=$removed"
 """
         result = run_bash(script)
         assert result.returncode == 0
-        assert (
-            foreign_broken.is_symlink()
-        ), "Foreign broken symlink was deleted by cleanup"
+        assert foreign_broken.is_symlink(), (
+            "Foreign broken symlink was deleted by cleanup"
+        )
         assert "REMOVED=0" in result.stdout
 
     def test_foreign_files_preserved_during_cleanup(
@@ -556,9 +558,9 @@ echo "REMOVED=$removed"
         assert result.returncode == 0
         # Foreign files preserved
         assert foreign_file.exists(), "Foreign file was removed during cleanup"
-        assert (
-            foreign_symlink.is_symlink()
-        ), "Foreign symlink was removed during cleanup"
+        assert foreign_symlink.is_symlink(), (
+            "Foreign symlink was removed during cleanup"
+        )
         assert "REMOVED=0" in result.stdout
 
     def test_cleanup_dry_run(
