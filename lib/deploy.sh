@@ -782,9 +782,13 @@ undeploy_from_json() {
 
     echo ""
     echo "Undeploy summary:"
-    echo "  Removed:   $removed"
-    echo "  Unchanged: $unchanged"
-    echo "  Skipped:   $skipped"
+    if [[ "$dry_run" == "true" ]]; then
+        echo "  Would remove: $removed"
+    else
+        echo "  Removed:      $removed"
+    fi
+    echo "  Unchanged:    $unchanged"
+    echo "  Skipped:      $skipped"
 }
 
 # Main deployment entry point

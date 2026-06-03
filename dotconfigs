@@ -501,8 +501,6 @@ cmd_undeploy() {
         exit 1
     fi
 
-    init_colours
-
     undeploy_from_json "$config_file" "$SCRIPT_DIR" "$group" "$dry_run" "$project_path"
 
     if [[ "$dry_run" == "true" && "${removed:-0}" -gt 0 ]]; then
