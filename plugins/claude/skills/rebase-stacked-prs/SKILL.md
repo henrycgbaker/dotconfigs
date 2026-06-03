@@ -173,6 +173,6 @@ git worktree remove ../<slug>-rebase   # add --force if it still has the branch 
 ## Related — the safe-merge suite
 - `/check-resolution` — the general per-file "did this resolution resurrect old code?"
   audit for any local merge/rebase. Step 6 here is its stacked-PR-specific specialisation.
-- `/preflight-merge` — before a GitHub-UI merge of the rebased PR, simulate the merge
-  to catch silent auto-merge regressions the UI hides.
+- `/preflight-merge` — Claude's pre-merge gate; before completing the squash merge of
+  the rebased PR, it simulates the merge to catch silent auto-merge regressions.
 - `/squash-merge` — the normal feature-branch → main path once the PR is clean.

@@ -38,7 +38,7 @@ Custom Claude Code skills (`/name`) for common workflows.
 |---------|-------------|
 | /check-resolution | After resolving merge/rebase conflicts locally, verify the resolution didn't silently resurrect old code the branch removed or undo a fix that landed on main |
 | /commit | Help create a well-formatted conventional commit |
-| /preflight-merge | Simulate a PR's merge into its base branch locally before the GitHub UI merge, surfacing silent auto-merge regressions the UI hides |
+| /preflight-merge | Pre-merge gate Claude runs before completing any squash merge to main - simulates the merge and flags silent auto-merge regressions that would reintroduce code the base already fixed |
 | /rebase-stacked-prs | Safely rebase a stacked PR onto main, dropping already-merged stacked-below work without reintroducing legacy code |
 | /squash-merge | Squash merge current branch to main via GitHub PR |
 
@@ -54,4 +54,4 @@ To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deployi
 
 ---
 
-*Generated: 2026-06-03 10:07:28 UTC*
+*Generated: 2026-06-03 10:31:26 UTC*

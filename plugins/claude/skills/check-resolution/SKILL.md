@@ -102,8 +102,8 @@ non-zero. The point is to make the choice visible, not to gate it.
   correct after conflicts are resolved.
 - `/rebase-stacked-prs` is the full workflow for rebasing a stacked PR onto
   main; its added-line audit is a specialised form of this skill's 3-way diff.
-- `/preflight-merge` is the same resurrection check, but for a GitHub-UI merge
-  rather than a local resolution.
+- `/preflight-merge` is the same resurrection check, but run as Claude's gate at
+  squash-merge time rather than during a local hand-resolution.
 - Memory: `feedback_conflict_resurrection.md` records the principle and
   the canonical command.
 - Hook: a pre-commit hook gated on `.git/MERGE_HEAD` / `.git/rebase-merge/`

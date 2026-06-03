@@ -156,28 +156,28 @@ Never patch with `${var//old/new}` substitution - that is what causes most
 mangling in practice (shell expansion + pattern overlap with replacement
 content).
 
-### 5.7 Preflight the merge (detect silent auto-merge regressions)
+### 5.7 Preflight the merge (mandatory gate — detect silent auto-merge regressions)
 
-Step 2.5 caught conflicts and reversals as the branch stood when the PR was
-opened. This step re-checks against the CURRENT base, right before merge,
-in the same way GitHub will do it server-side. Catches the case where main
-moved during the PR's review and an intermediate squash merge has
-invisibly changed the merge-base-vs-base delta.
+Always run this before completing the merge. Step 2.5 caught conflicts and
+reversals as the branch stood when the PR was opened; this step re-checks
+against the CURRENT base, right before merge, the same way the server-side
+squash will combine them. Catches the case where main moved during review and
+an intermediate squash merge invisibly changed the merge-base-vs-base delta.
 
 ```bash
 /preflight-merge <pr-number>
 ```
 
-The skill:
+The gate:
 - Fetches both sides into a throwaway clone.
 - Simulates `git merge` against the PR's base.
-- Lists files git auto-merged silently (invisible in GH UI) AND files with
-  textual conflicts.
+- Lists files git auto-merged silently (no conflict marker — the dangerous
+  set) AND files with textual conflicts.
 - For each auto-merged file, checks whether the merge result diverges from
   the current base - i.e., whether the branch's stale overlay won on lines
   the base has since fixed.
-- Verdict: `SAFE`, `CONFLICTS ONLY` (safe to resolve in UI), or
-  `DO NOT MERGE` (silent regressions detected).
+- Verdict: `SAFE`, `CONFLICTS ONLY` (resolve them, then re-run the gate), or
+  `DO NOT MERGE` (silent regressions detected — do not proceed to step 6).
 
 If `DO NOT MERGE`, the fix is upstream: usually a commit on the branch
 carries content the base now owns through a different commit ID (typical
