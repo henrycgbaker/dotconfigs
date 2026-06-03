@@ -172,11 +172,11 @@ class TestProjectDeployExclude:
     @pytest.mark.parametrize(
         "exclude,deployed,absent",
         [
-            ([], ["block-destructive.sh"], []),
+            ([], ["block-rm-rf-root.sh"], []),
             (
-                ["block-destructive.sh"],
+                ["block-rm-rf-root.sh"],
                 [],
-                ["block-destructive.sh"],
+                ["block-rm-rf-root.sh"],
             ),
         ],
         ids=["no-exclude", "exclude-all"],
