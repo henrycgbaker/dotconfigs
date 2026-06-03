@@ -80,7 +80,9 @@ class TestSettingsMerge:
     ) -> None:
         before = merged.read_text()
         result = _merge(dotconfigs_root, tmp_path / "source.json", merged)
-        assert result.returncode == 0, result.stderr
+        # Return code 2 = "merge result identical to existing target", so
+        # deploy can count it as Unchanged. Content must still match.
+        assert result.returncode == 2, result.stderr
         assert merged.read_text() == before
 
     def test_first_deploy_creates_from_base(

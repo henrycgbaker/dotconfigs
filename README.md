@@ -24,7 +24,7 @@ Per-project hooks/skills, from inside a repo: `dotconfigs project-init . && dotc
 
 **Reference**
 - [Commands](docs/commands.md) - every command, its flags, and examples.
-- [Plugins](docs/plugins.md) - what each plugin (claude, git, shell, vscode) deploys and where.
+- [Plugins](docs/plugins.md) - what each plugin (claude, git, shell) deploys and where.
 - [Manifest format](docs/manifest.md) - the manifest schema and the four deploy methods.
 - [ROSTER](docs/ROSTER.md) - generated index of all hooks, skills, and their config keys.
 
@@ -40,7 +40,6 @@ Per-project hooks/skills, from inside a repo: `dotconfigs project-init . && dotc
 | **claude** | Claude Code hooks, skills (`/commit`, `/squash-merge`, `/preflight-merge`, `/check-resolution`, `/rebase-stacked-prs`), `settings.json`, global `CLAUDE.md` |
 | **git** | `~/.gitconfig`, global excludes (`~/.config/git/ignore`), 8 branch-aware hooks (pre-commit, pre-push, commit-msg, …), and per-project `.git/info/exclude` + `.gitignore` |
 | **shell** | zsh `init.zsh` + `aliases.zsh` (source them from `.zshrc`) |
-| **vscode** | VS Code `settings.json` (macOS) |
 
 See [Plugins](docs/plugins.md) for the full module tables.
 

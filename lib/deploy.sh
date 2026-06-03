@@ -259,6 +259,26 @@ deploy_directory_files() {
     fi
 }
 
+# Perform the deep-merge into a tmp file alongside target; on success echo the
+# tmp path (caller must mv or rm); on failure clean up and return non-zero.
+# Args: source, target
+_merge_to_tmp() {
+    local source="$1" target="$2"
+    local tmp="${target}.merge.$$"
+    if jq -s '
+        .[0] as $live | .[1] as $base
+        | ($live * $base)
+        | .permissions.allow = ((($live.permissions.allow // []) + ($base.permissions.allow // [])) | unique)
+        | .permissions.deny  = ((($live.permissions.deny  // []) + ($base.permissions.deny  // [])) | unique)
+        | .permissions.ask   = ((($live.permissions.ask   // []) + ($base.permissions.ask   // [])) | unique)
+    ' "$target" "$source" > "$tmp" 2>/dev/null; then
+        echo "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
 # Deep-merge a managed JSON base ($source) into a co-owned target file,
 # preserving local entries. Used for files an application writes into (e.g.
 # Claude Code appends permission grants to settings.json): a symlink would write
@@ -268,6 +288,8 @@ deploy_directory_files() {
 # UNIONED so locally-approved grants survive every deploy. Result is a regular
 # file (never a symlink). Idempotent.
 # Args: source_base, target
+# Returns: 0 if target changed, 2 if merge result identical to existing target
+#          (idempotent re-run), 1 on jq failure.
 merge_json_settings() {
     local source="$1"
     local target="$2"
@@ -281,19 +303,15 @@ merge_json_settings() {
         return 0
     fi
 
-    local tmp="${target}.merge.$$"
-    if jq -s '
-        .[0] as $live | .[1] as $base
-        | ($live * $base)
-        | .permissions.allow = ((($live.permissions.allow // []) + ($base.permissions.allow // [])) | unique)
-        | .permissions.deny  = ((($live.permissions.deny  // []) + ($base.permissions.deny  // [])) | unique)
-        | .permissions.ask   = ((($live.permissions.ask   // []) + ($base.permissions.ask   // [])) | unique)
-    ' "$target" "$source" > "$tmp" 2>/dev/null; then
-        mv "$tmp" "$target"
-        return 0
+    local tmp
+    tmp=$(_merge_to_tmp "$source" "$target") || return 1
+
+    if cmp -s "$tmp" "$target"; then
+        rm -f "$tmp"
+        return 2
     fi
-    rm -f "$tmp"
-    return 1
+    mv "$tmp" "$target"
+    return 0
 }
 
 # Deploy a single module (source -> target)
@@ -380,24 +398,45 @@ deploy_module() {
             # JSON deep-merge for co-owned files (preserves local entries; never
             # symlinks, never clobbers). See merge_json_settings.
             if [[ "$dry_run" == "true" ]]; then
-                if [[ -f "$abs_target" && ! -L "$abs_target" ]]; then
-                    echo "  Would merge $rel_src -> $abs_target (preserving local entries)"
-                else
+                if [[ ! -f "$abs_target" || -L "$abs_target" ]]; then
                     echo "  Would create $abs_target from $rel_src (merge)"
-                fi
-                eval "updated=\$(( \$updated + 1 ))"
-            else
-                if merge_json_settings "$abs_source" "$abs_target"; then
-                    echo "  ✓ Merged $rel_src -> $abs_target (local entries preserved)"
-                    eval "updated=\$(( \$updated + 1 ))"
+                    eval "created=\$(( \$created + 1 ))"
                 else
-                    echo "  ! Merge failed for $abs_target (invalid JSON?); left unchanged" >&2
+                    local _preview
+                    if _preview=$(_merge_to_tmp "$abs_source" "$abs_target") \
+                       && cmp -s "$_preview" "$abs_target"; then
+                        echo "  Unchanged: $rel_src -> $abs_target (merge no-op)"
+                        eval "unchanged=\$(( \$unchanged + 1 ))"
+                    else
+                        echo "  Would merge $rel_src -> $abs_target (preserving local entries)"
+                        eval "updated=\$(( \$updated + 1 ))"
+                    fi
+                    [[ -n "$_preview" ]] && rm -f "$_preview"
                 fi
+            else
+                # `|| _rc=$?` suppresses set -e so the non-zero "unchanged" (2)
+                # and "failed" (1) returns are dispatched here, not fatal.
+                local _rc=0
+                merge_json_settings "$abs_source" "$abs_target" || _rc=$?
+                case $_rc in
+                    0)
+                        echo "  ✓ Merged $rel_src -> $abs_target (local entries preserved)"
+                        eval "updated=\$(( \$updated + 1 ))"
+                        ;;
+                    2)
+                        echo "  Unchanged: $rel_src -> $abs_target"
+                        eval "unchanged=\$(( \$unchanged + 1 ))"
+                        ;;
+                    *)
+                        echo "  ! Merge failed for $abs_target (invalid JSON?); left unchanged" >&2
+                        eval "skipped=\$(( \$skipped + 1 ))"
+                        ;;
+                esac
             fi
             ;;
         append)
             if [[ "$dry_run" == "true" ]]; then
-                if [[ -f "$abs_target" ]] && grep -qF "$(cat "$abs_source")" "$abs_target"; then
+                if [[ -s "$abs_source" && -f "$abs_target" ]] && grep -qFf "$abs_source" "$abs_target"; then
                     echo "  Unchanged: $rel_src -> $abs_target (already present)"
                     eval "unchanged=\$(( \$unchanged + 1 ))"
                 else
@@ -410,7 +449,7 @@ deploy_module() {
                 mkdir -p "$target_dir"
 
                 # Check if content already present (idempotent)
-                if [[ -f "$abs_target" ]] && grep -qF "$(cat "$abs_source")" "$abs_target"; then
+                if [[ -s "$abs_source" && -f "$abs_target" ]] && grep -qFf "$abs_source" "$abs_target"; then
                     echo "  Unchanged: $rel_src -> $abs_target (already present)"
                     eval "unchanged=\$(( \$unchanged + 1 ))"
                 else
@@ -425,6 +464,147 @@ deploy_module() {
             eval "skipped=\$(( \$skipped + 1 ))"
             ;;
     esac
+}
+
+# Check the deployment state of a single module, by method.
+# Echoes one tab-separated "<state>\t<display_name>" line per file (for a
+# symlink directory module, one line per included file; otherwise one line).
+# A missing source is appended to the display name so the user sees the cause.
+#
+# States: deployed, drifted-broken, drifted-foreign, drifted-wrong-target,
+#         not-deployed.
+#
+# Args: source, target, method, include_csv, dotconfigs_root
+check_module_state() {
+    local source="$1"
+    local target="$2"
+    local method="$3"
+    local include_csv="$4"
+    local dotconfigs_root="$5"
+    local abs_source abs_target rel_src
+
+    if [[ "$source" != /* ]]; then
+        abs_source="$dotconfigs_root/$source"
+    else
+        abs_source="$source"
+    fi
+    abs_target=$(expand_tilde "$target")
+    rel_src="${abs_source#"$dotconfigs_root/"}"
+
+    if [[ ! -e "$abs_source" ]]; then
+        printf "%s\t%s\n" "not-deployed" "$rel_src (source missing)"
+        return 0
+    fi
+
+    case "$method" in
+        symlink)
+            if [[ -d "$abs_source" ]]; then
+                [[ "$include_csv" == "__NONE__" ]] && return 0
+                local files=() target_base="${abs_target##*/}"
+                if [[ -n "$include_csv" ]]; then
+                    # IFS=',' for CSV split; set -f disables glob expansion so
+                    # an entry like "foo.*" is a literal filename.
+                    local IFS=','
+                    set -f
+                    for f in $include_csv; do files+=("$f"); done
+                    set +f
+                else
+                    local f
+                    for f in "$abs_source"/*; do
+                        [[ ! -e "$f" ]] && continue
+                        [[ -d "$f" ]] && continue
+                        files+=("${f##*/}")
+                    done
+                fi
+                local name state
+                for name in "${files[@]}"; do
+                    state=$(check_file_state "$abs_target/$name" "$abs_source/$name" "$dotconfigs_root")
+                    printf "%s\t%s/%s\n" "$state" "$target_base" "$name"
+                done
+            else
+                local state
+                state=$(check_file_state "$abs_target" "$abs_source" "$dotconfigs_root")
+                printf "%s\t%s\n" "$state" "$rel_src"
+            fi
+            ;;
+        merge)
+            # Target is intentionally a superset of source (Claude appends
+            # permission grants). We can confirm a regular file exists; a
+            # stale dotconfigs symlink doesn't count.
+            if [[ -f "$abs_target" && ! -L "$abs_target" ]]; then
+                printf "%s\t%s\n" "deployed" "$rel_src"
+            else
+                printf "%s\t%s\n" "not-deployed" "$rel_src"
+            fi
+            ;;
+        append)
+            # grep -qFf treats the source as a fixed-string PATTERN FILE.
+            # Each source line becomes one needle; "present" means every
+            # source line is somewhere in target. Empty source is treated as
+            # not-deployed rather than vacuously matching.
+            if [[ -s "$abs_source" && -f "$abs_target" ]] \
+               && grep -qFf "$abs_source" "$abs_target" 2>/dev/null; then
+                printf "%s\t%s\n" "deployed" "$rel_src"
+            else
+                printf "%s\t%s\n" "not-deployed" "$rel_src"
+            fi
+            ;;
+        copy)
+            if [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target" 2>/dev/null; then
+                printf "%s\t%s\n" "deployed" "$rel_src"
+            elif [[ -e "$abs_target" ]]; then
+                printf "%s\t%s\n" "drifted-foreign" "$rel_src"
+            else
+                printf "%s\t%s\n" "not-deployed" "$rel_src"
+            fi
+            ;;
+        *)
+            echo "Warning: unknown method '$method' for $rel_src" >&2
+            printf "%s\t%s\n" "not-deployed" "$rel_src (unknown method: $method)"
+            ;;
+    esac
+}
+
+# Print a global-config error and return 1 if .dotconfigs/global.json is missing.
+# Relies on the caller-scoped $GLOBAL_CONFIG (set in the entry point).
+_require_global_config() {
+    if [[ ! -f "$GLOBAL_CONFIG" ]]; then
+        echo "Error: $GLOBAL_CONFIG not found. Run 'dotconfigs global-init' first." >&2
+        return 1
+    fi
+}
+
+# Emit per-file "<state>\t<name>" lines for every module in a plugin's group.
+# Args: plugin
+_collect_plugin_states() {
+    local plugin="$1"
+    parse_modules_in_group "$GLOBAL_CONFIG" "$plugin" \
+        | while IFS=$'\t' read -r source target method include_csv; do
+            check_module_state "$source" "$target" "$method" "$include_csv" "$SCRIPT_DIR"
+          done
+}
+
+# Tally a "<state>\t<name>" blob into flag/count vars in the caller's scope.
+# Args: lines, has_ok_var, has_drift_var, has_missing_var, count_ok_var, total_var
+_tally_states() {
+    local lines="$1" has_ok_var="$2" has_drift_var="$3" has_missing_var="$4" count_ok_var="$5" total_var="$6"
+    local state name ok=false drift=false missing=false n_ok=0 n_total=0
+
+    while IFS=$'\t' read -r state name; do
+        [[ -z "$state" ]] && continue
+        n_total=$(( n_total + 1 ))
+        case "$state" in
+            deployed)     ok=true;      n_ok=$(( n_ok + 1 )) ;;
+            not-deployed) missing=true ;;
+            drifted-*)    drift=true ;;
+        esac
+    done <<< "$lines"
+
+    eval "$has_ok_var=\$ok"
+    eval "$has_drift_var=\$drift"
+    eval "$has_missing_var=\$missing"
+    eval "$count_ok_var=\$n_ok"
+    eval "$total_var=\$n_total"
 }
 
 # Main deployment entry point
