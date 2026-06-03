@@ -26,6 +26,7 @@ Claude hooks run during Claude Code operations for code quality and safety.
 
 | Hook | Description | Configuration Keys |
 |------|-------------|-------------------|
+| block-ai-pr-attribution | PreToolUse hook to block AI attribution in PR titles and descriptions | CLAUDE_HOOK_PR_ATTRIBUTION_GUARD |
 | block-destructive | PreToolUse hook to block destructive commands and protect sensitive files | CLAUDE_HOOK_DESTRUCTIVE_GUARD, CLAUDE_HOOK_FILE_PROTECTION |
 
 ## Commands
@@ -36,6 +37,7 @@ Custom Claude Code commands (skills) for common workflows.
 |---------|-------------|
 | /commit | Help create a well-formatted commit |
 | /pr-review | Review current branch changes for PR readiness |
+| /rebase-stacked-prs | Safely rebase a stacked PR onto main, dropping already-merged stacked-below work without reintroducing legacy code |
 | /simplicity-check | Review code or architecture for unnecessary complexity |
 | /squash-merge | Squash merge current branch to main via GitHub PR |
 
@@ -51,4 +53,4 @@ To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deployi
 
 ---
 
-*Generated: 2026-03-04 10:24:05 UTC*
+*Generated: 2026-06-03 09:20:28 UTC*

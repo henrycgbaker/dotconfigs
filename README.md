@@ -239,7 +239,7 @@ Manages Claude Code configuration via symlinks.
 | CLAUDE.md | `plugins/claude/CLAUDE.md` | `~/.claude/CLAUDE.md` |
 
 **Hooks:** `block-destructive.sh` (PreToolUse guard — blocks destructive commands and protects sensitive files)
-**Skills:** `/commit`, `/squash-merge`, `/pr-review`, `/simplicity-check`
+**Skills:** `/commit`, `/squash-merge`, `/pr-review`, `/simplicity-check`, `/rebase-stacked-prs`
 
 Project scope supports exclude lists to skip specific hooks or skills per-repo.
 
@@ -366,7 +366,7 @@ dotconfigs/
 │   ├── claude/
 │   │   ├── manifest.json         # SSOT: global + project module declarations
 │   │   ├── hooks/                # block-destructive.sh
-│   │   ├── commands/             # commit.md, squash-merge.md, pr-review.md, simplicity-check.md
+│   │   ├── commands/             # commit.md, squash-merge.md, pr-review.md, simplicity-check.md, rebase-stacked-prs.md
 │   │   ├── agents/               # Per-project agent personas (stub, not yet wired)
 │   │   ├── settings.json         # Claude Code settings
 │   │   ├── CLAUDE.md             # Global Claude instructions
