@@ -1,4 +1,8 @@
-# Quickstart
+# Getting started
+
+[← docs](../README.md#documentation) · Tutorial
+
+Install dotconfigs, deploy your global config, then wire up a project - end to end.
 
 ## Requirements
 
@@ -39,13 +43,7 @@ To skip specific hooks or skills per-project, edit `.dotconfigs/project.json` ex
 
 ## Deploy methods
 
-Each module in a manifest declares a `method` controlling how source files reach their target:
-
-| Method | Behaviour | Use when |
-|--------|-----------|----------|
-| `symlink` | Creates a symlink from target to source. Updates live when source changes. | Default for most files — hooks, skills, gitconfig |
-| `append` | Appends source content to target (idempotent — skips if already present). Preserves existing content. | Target may have user/project content — `.gitignore`, `.git/info/exclude` |
-| `copy` | Overwrites target with source. Target is independent of source after deploy. | Structured files that can't be appended (JSON) |
+Each module declares a `method` (`symlink` · `append` · `copy` · `merge`) controlling how its source reaches the target - the default is `symlink`. You rarely touch this, but it's worth knowing why `~/.claude/settings.json` is merged rather than symlinked: see [Deploy methods](deploy-methods.md).
 
 ## Customise
 
@@ -68,4 +66,9 @@ dotconfigs global-init           # Re-assemble .dotconfigs/global.json from mani
 | List available plugins | `dotconfigs list` |
 | Detailed help | `dotconfigs help <command>` |
 
-See [README.md](../README.md) for full architecture and plugin reference.
+## Next
+
+- [Commands](commands.md) - every command and flag.
+- [Plugins](plugins.md) - what each plugin deploys.
+- [Architecture](architecture.md) - how the manifest → deploy flow works.
+- [Deploy methods](deploy-methods.md) - symlink vs copy vs append vs merge, and why.
