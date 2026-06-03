@@ -4,6 +4,7 @@
     "PYTHONUNBUFFERED": "1"
   },
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Bash(ruff:*)",
       "Bash(pytest:*)",
@@ -27,6 +28,38 @@
       "Read(.env.*)"
     ]
   },
+  "autoMode": {
+    "environment": [],
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git rev-parse*)",
+      "Bash(ls*)",
+      "Bash(cat*)",
+      "Bash(grep*)",
+      "Bash(find*)",
+      "Bash(rg*)",
+      "Bash(ruff check*)",
+      "Bash(ruff format*)",
+      "Bash(pytest*)"
+    ],
+    "soft_deny": ["$defaults"],
+    "hard_deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(git reset --hard*)",
+      "Bash(chmod -R 777*)"
+    ]
+  },
+  "outputStyle": "concise-execution",
+  "preferredNotifChannel": "terminal_bell",
+  "attribution": {
+    "name": "Henry Baker",
+    "email": "henry.c.g.baker@gmail.com"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -34,17 +67,57 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/block-destructive.sh",
+            "if": "Bash(rm *)",
+            "command": "~/.claude/hooks/block-rm-rf-root.sh",
+            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
+            "if": "Bash(git push*)",
+            "command": "~/.claude/hooks/block-force-push.sh",
+            "args": [],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git reset*)",
+            "command": "~/.claude/hooks/block-hard-reset.sh",
+            "args": [],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git clean*)",
+            "command": "~/.claude/hooks/block-git-clean.sh",
+            "args": [],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/block-drop-table.sh",
+            "args": [],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(chmod *)",
+            "command": "~/.claude/hooks/block-chmod-777.sh",
+            "args": [],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr*)",
             "command": "~/.claude/hooks/block-ai-pr-attribution.sh",
+            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
+            "if": "Bash(gh *)",
             "command": "~/.claude/hooks/block-gh-comment.sh",
+            "args": [],
             "timeout": 10
           }
         ]
@@ -54,7 +127,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/block-destructive.sh",
+            "command": "~/.claude/hooks/block-sensitive-write.sh",
+            "args": [],
             "timeout": 10
           }
         ]
@@ -65,7 +139,81 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/block-gh-comment.sh",
+            "args": [],
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/facade-check.sh",
+            "args": [],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/inject-context.sh",
+            "args": [],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/session-start-env.sh",
+            "args": [],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/session-end-log.sh",
+            "args": [],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/pre-compact-snapshot.sh",
+            "args": [],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/notify.sh",
+            "args": [],
+            "timeout": 15
           }
         ]
       }

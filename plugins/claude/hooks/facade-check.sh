@@ -19,6 +19,8 @@
 
 set -e
 payload=$(cat)
+[[ "$(printf '%s' "$payload" | jq -r '.hook_event_name // empty')" == "PostToolUse" ]] || exit 0
+
 file_path=$(printf '%s' "$payload" | jq -r '.tool_input.file_path // empty')
 
 case "$file_path" in

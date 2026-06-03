@@ -37,6 +37,8 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 stdin_data=$(cat)
+[[ "$(echo "$stdin_data" | jq -r '.hook_event_name // empty')" == "PreToolUse" ]] || exit 0
+
 tool_name=$(echo "$stdin_data" | jq -r '.tool_name // empty')
 
 deny() {
