@@ -6,37 +6,6 @@ PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTCONFIGS_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
 ENV_FILE="$DOTCONFIGS_ROOT/.env"
 
-# Internal: Assemble settings.json from template
-# Args: plugin_dir, output_file
-_claude_assemble_settings() {
-    local plugin_dir="$1"
-    local output_file="$2"
-    local template="$plugin_dir/templates/settings/settings-template.json"
-
-    if [[ ! -f "$template" ]]; then
-        echo "Error: settings-template.json not found" >&2
-        return 1
-    fi
-
-    cp "$template" "$output_file"
-
-    # Safety: resolve any $CLAUDE_PROJECT_DIR references to ~/.claude/
-    # (template should already use ~/.claude/ paths, but this catches drift)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' 's|\$CLAUDE_PROJECT_DIR/plugins/claude/hooks/|~/.claude/hooks/|g' "$output_file"
-    else
-        sed -i 's|\$CLAUDE_PROJECT_DIR/plugins/claude/hooks/|~/.claude/hooks/|g' "$output_file"
-    fi
-
-    # Add sandbox on macOS only — causes severe slowness on Linux servers
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        local tmp_file="${output_file}.tmp"
-        jq '. + {sandbox: {enabled: true, excludedCommands: ["git", "docker"]}}' "$output_file" > "$tmp_file" && mv "$tmp_file" "$output_file"
-    fi
-
-    return 0
-}
-
 # Internal: Apply CLAUDE.md exclusion
 # Args: repo_path
 # Respects CLAUDE_MD_EXCLUDE_DEST: "exclude" (.git/info/exclude) or "gitignore" (.gitignore)
@@ -336,32 +305,11 @@ plugin_claude_deploy() {
         fi
     fi
 
-    # 1. Build and symlink settings.json
+    # 1. Deploy settings.json. The tracked plugins/claude/settings.json is the
+    # single source of truth; deploy merges it into ~/.claude/settings.json.
     if [[ "${CLAUDE_SETTINGS_ENABLED:-false}" == "true" ]]; then
         local settings_source="$PLUGIN_DIR/settings.json"
         local rel_settings="${settings_source#$DOTCONFIGS_ROOT/}"
-
-        if [[ "$regenerate" == "true" && -f "$settings_source" ]]; then
-            # Regenerate: warn and offer backup
-            echo "Regenerating settings.json from template..."
-            if [[ "$dry_run" != "true" ]]; then
-                local backup="${settings_source}.bak.$(date +%Y%m%d-%H%M%S)"
-                cp "$settings_source" "$backup"
-                _claude_assemble_settings "$PLUGIN_DIR" "$settings_source"
-                echo "  ✓ Regenerated from template (backup: $backup)"
-            else
-                echo "  Would regenerate from template (with backup)"
-            fi
-        elif [[ ! -f "$settings_source" ]]; then
-            # First run: create from template
-            echo "Creating settings.json from template..."
-            if [[ "$dry_run" != "true" ]]; then
-                _claude_assemble_settings "$PLUGIN_DIR" "$settings_source"
-                echo "  ✓ Created from settings-template.json"
-            else
-                echo "  Would create from: settings-template.json"
-            fi
-        fi
 
         echo "Deploying settings.json..."
         local state=$(check_file_state "$CLAUDE_DEPLOY_TARGET/settings.json" "$settings_source" "$DOTCONFIGS_ROOT")
