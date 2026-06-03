@@ -51,6 +51,8 @@ Hooks: Per-project via `.git/hooks/`. Install with `dotconfigs project .` or man
 
 Exclusions: Add CLAUDE.md and .claude/ to `.git/info/exclude` in projects (not .gitignore).
 
+Do NOT comment directly on GitHub, unless requested to explicitly.
+
 Rebasing a stale PR: if a PR branch has diverged from main by more than a handful of merges, check `git log origin/main..HEAD` and `git log HEAD..origin/main` before `git rebase origin/main`. Commits on the branch that duplicate work already merged on main (similar titles, overlapping file changes) need to be explicitly dropped via `git rebase -i origin/main` with `drop` directives - don't rely on conflict resolution to sort it out. When conflicts arise from review-polish commits that only exist on main, take main's version rather than trying to merge the two forms.
 
 Missing-work diagnosis: When a user says "I thought we did X" or "this seems to have got lost", the FIRST step is `git fetch origin` - do not reason about main from stale local refs. Then check `git log origin/main` and `gh pr list --state merged --search "<keyword>"`. In a squash-merge workflow, merged PRs create new commits on main with different SHAs; the original source-branch commits persist in the loose object store as "dangling" and this is the normal post-merge state, NOT evidence of loss. Before ever concluding work is lost from `git fsck --lost-found --unreachable` output, diff the dangling commits' content against `origin/main` to check for overlap - in a squash-merge repo they are almost always already integrated.
