@@ -219,14 +219,14 @@ class TestBlockAiPrAttribution:
 # ---------------------------------------------------------------------------
 
 
-class TestBlockGhPrWrite:
-    """Tests for the block-gh-pr-write hook."""
+class TestBlockGhComment:
+    """Tests for the block-gh-comment hook."""
 
     @pytest.fixture
     def gh_hook(self, dotconfigs_root: Path, available_claude_hooks):
-        hook_name = "block-gh-pr-write.sh"
+        hook_name = "block-gh-comment.sh"
         if hook_name not in available_claude_hooks:
-            pytest.skip("block-gh-pr-write.sh not in manifest")
+            pytest.skip("block-gh-comment.sh not in manifest")
         return dotconfigs_root / "plugins" / "claude" / "hooks" / hook_name
 
     @staticmethod
@@ -234,6 +234,13 @@ class TestBlockGhPrWrite:
         data = parse_hook_output(output)
         return bool(data) and (
             data.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+        )
+
+    @staticmethod
+    def _is_ask(output: str) -> bool:
+        data = parse_hook_output(output)
+        return bool(data) and (
+            data.get("hookSpecificOutput", {}).get("permissionDecision") == "ask"
         )
 
     @pytest.mark.parametrize(
@@ -285,14 +292,50 @@ class TestBlockGhPrWrite:
         assert self._is_deny(output), f"should block implicit POST: {cmd}"
 
     def test_bypass_with_env_prefix(self, gh_hook):
-        """GH_PR_COMMENT_OK=1 prefix is the explicit-approval escape hatch."""
-        cmd = "GH_PR_COMMENT_OK=1 gh api repos/o/r/pulls/213/comments/123/replies -f body='ok'"
+        """GH_COMMENT_OK=1 prefix is the explicit-approval escape hatch."""
+        cmd = "GH_COMMENT_OK=1 gh api repos/o/r/pulls/213/comments/123/replies -f body='ok'"
         returncode, output = run_hook(gh_hook, "Bash", {"command": cmd})
         assert not self._is_deny(output)
 
-    def test_ignores_non_bash(self, gh_hook):
+    def test_ignores_unrelated_non_bash(self, gh_hook):
         returncode, output = run_hook(
             gh_hook, "Write", {"file_path": "/tmp/x", "content": "gh pr comment 1 --body x"}
         )
         assert returncode == 0
         assert parse_hook_output(output) is None
+
+    # --- GitHub MCP server entrypoint (mcp__github__*) ---
+
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            "mcp__github__add_issue_comment",
+            "mcp__github__create_pending_pull_request_review",
+            "mcp__github__add_comment_to_pending_review",
+            "mcp__github__submit_pending_pull_request_review",
+            "mcp__github__create_and_submit_pull_request_review",
+        ],
+    )
+    def test_mcp_comment_review_writes_ask(self, gh_hook, tool_name):
+        """MCP comment/review posts return 'ask' (no env-prefix bypass possible)."""
+        returncode, output = run_hook(gh_hook, tool_name, {"body": "hi"})
+        assert returncode == 0
+        assert self._is_ask(output), f"should ask: {tool_name}"
+
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            # Reads — contain 'comment'/'review' but no write verb.
+            "mcp__github__get_issue_comments",
+            "mcp__github__get_pull_request_reviews",
+            "mcp__github__list_issues",
+            # Non-comment writes — out of scope.
+            "mcp__github__create_pull_request",
+            "mcp__github__update_issue",
+            "mcp__github__merge_pull_request",
+        ],
+    )
+    def test_mcp_reads_and_noncomment_writes_pass(self, gh_hook, tool_name):
+        returncode, output = run_hook(gh_hook, tool_name, {})
+        assert returncode == 0
+        assert parse_hook_output(output) is None, f"should pass: {tool_name}"

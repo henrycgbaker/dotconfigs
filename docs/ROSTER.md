@@ -29,7 +29,7 @@ Claude hooks run during Claude Code operations for code quality and safety.
 |------|-------------|-------------------|
 | block-ai-pr-attribution | PreToolUse hook to block AI attribution in PR titles and descriptions | CLAUDE_HOOK_PR_ATTRIBUTION_GUARD |
 | block-destructive | PreToolUse hook to block destructive commands and protect sensitive files | CLAUDE_HOOK_DESTRUCTIVE_GUARD, CLAUDE_HOOK_FILE_PROTECTION |
-| block-gh-pr-write | PreToolUse hook to block GitHub PR/issue write operations (comments, reviews, replies) unless explicitly authorised via GH_PR_COMMENT_OK=1 | CLAUDE_HOOK_GH_PR_WRITE_GUARD |
+| block-gh-comment | PreToolUse hook blocking unsolicited GitHub comment/review posts across two entrypoints - the gh CLI (Bash) and the GitHub MCP server (mcp__github__*). gh writes are denied unless prefixed GH_COMMENT_OK=1; MCP comment/review writes return "ask" for interactive approval. | CLAUDE_HOOK_GH_COMMENT_GUARD |
 
 ## Skills
 
@@ -55,4 +55,4 @@ To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deployi
 
 ---
 
-*Generated: 2026-06-03 15:09:22 UTC*
+*Generated: 2026-06-03 15:57:25 UTC*

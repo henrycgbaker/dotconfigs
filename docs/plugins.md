@@ -15,7 +15,7 @@ Manages Claude Code configuration.
 | settings | `plugins/claude/settings.json` | `~/.claude/settings.json` | [merge](deploy-methods.md#the-settingsjson-case-why-merge-exists) |
 | CLAUDE.md | `plugins/claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | symlink |
 
-- **Hooks:** `block-destructive.sh`, `block-ai-pr-attribution.sh`, `block-gh-pr-write.sh`, `facade-check.sh` (PreToolUse guards).
+- **Hooks:** `block-destructive.sh`, `block-ai-pr-attribution.sh`, `block-gh-comment.sh`, `facade-check.sh` (PreToolUse guards).
 - **Skills:** `/commit`, `/squash-merge`, `/check-resolution`, `/preflight-merge`, `/rebase-stacked-prs` (each a `skills/<name>/SKILL.md`).
 
 `settings.json` uses `merge` (not symlink/copy) because Claude Code writes permission grants into it - see [Deploy methods](deploy-methods.md). Project scope supports exclude lists to skip specific hooks/skills per repo.
