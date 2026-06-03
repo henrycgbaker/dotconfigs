@@ -45,7 +45,7 @@ Manages git config, global excludes, and hooks.
 | `post-checkout` | Branch info on switch |
 | `post-rewrite` | Dependency detection for rebase |
 
-`prepare-commit-msg`, `post-merge`, `post-checkout`, `post-rewrite` are configurable (see [Hook configuration](manifest.md#hook-configuration)). The design rationale is in [Git hooks strategy](git-hooks-strategy.md).
+`prepare-commit-msg`, `post-merge`, `post-checkout`, `post-rewrite` are configurable (see [Hook configuration](manifest.md#hook-configuration)).
 
 ## shell
 

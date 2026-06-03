@@ -36,7 +36,7 @@ Claude Code's `~/.claude/settings.json` is **co-owned**: the user/app appends pe
 
 It's idempotent: re-deploying merges the same base again with no change. First deploy (or a stale symlink left by an older version) just drops the base in as a fresh regular file.
 
-This mirrors how Claude Code itself layers settings - user-global is the lowest-priority layer and permission arrays merge across layers, with new grants now written to project-local `.claude/settings.local.json`. So the version-controlled base and machine-local grants never need to fight over one file. Background: [Claude Code concepts](claude-code-concepts.md).
+This mirrors how Claude Code itself layers settings - user-global is the lowest-priority layer and permission arrays merge across layers, with new grants now written to project-local `.claude/settings.local.json`. So the version-controlled base and machine-local grants never need to fight over one file.
 
 ## Picking a method for a new module
 
