@@ -91,6 +91,7 @@
           },
           {
             "type": "command",
+            "if": "Bash(*DROP*)",
             "command": "~/.claude/hooks/block-drop-table.sh",
             "timeout": 10
           },

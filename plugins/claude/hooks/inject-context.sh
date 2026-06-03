@@ -33,10 +33,15 @@ if ! git -C "$project_dir" rev-parse --git-dir >/dev/null 2>&1; then
     exit 0
 fi
 
+# Batched git calls: one `git log` returns sha + subject in one process.
+# Total: 3 git invocations instead of 4 (~25% fewer subprocess spawns on
+# every prompt).
 branch=$(git -C "$project_dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
+{
+    IFS= read -r sha
+    IFS= read -r subject
+} < <(git -C "$project_dir" log -1 --format='%h%n%s' 2>/dev/null)
 dirty=$(git -C "$project_dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-sha=$(git -C "$project_dir" rev-parse --short HEAD 2>/dev/null)
-subject=$(git -C "$project_dir" log -1 --pretty=%s 2>/dev/null)
 
 context="[context: branch=${branch} | dirty=${dirty} modified | head=${sha} ${subject}]"
 

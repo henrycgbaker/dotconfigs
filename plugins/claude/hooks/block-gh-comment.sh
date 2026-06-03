@@ -37,9 +37,13 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 stdin_data=$(cat)
-[[ "$(echo "$stdin_data" | jq -r '.hook_event_name // empty')" == "PreToolUse" ]] || exit 0
+{
+    IFS= read -r hook_event
+    IFS= read -r tool_name
+    IFS= read -r command
+} < <(echo "$stdin_data" | jq -r '.hook_event_name // "", .tool_name // "", .tool_input.command // ""')
 
-tool_name=$(echo "$stdin_data" | jq -r '.tool_name // empty')
+[[ "$hook_event" == "PreToolUse" ]] || exit 0
 
 deny() {
     local reason="$1"
@@ -75,8 +79,6 @@ fi
 if [[ "$tool_name" != "Bash" ]]; then
     exit 0
 fi
-
-command=$(echo "$stdin_data" | jq -r '.tool_input.command // empty')
 
 if [[ -z "$command" ]]; then
     exit 0
