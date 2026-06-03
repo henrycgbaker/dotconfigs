@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# === METADATA ===
+# NAME: check-facade-consumers
+# TYPE: git-hook
+# PLUGIN: git
+# DESCRIPTION: Verify every facade __all__ entry has at least one external consumer
+# CONFIGURABLE: none
+# ================
 """Verify every facade __all__ entry has at least one external consumer.
 
 A "facade" is any ``__init__.py`` under ``src/`` whose body declares
