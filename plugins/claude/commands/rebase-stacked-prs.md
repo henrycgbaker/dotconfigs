@@ -23,8 +23,9 @@ PR number: `$ARGUMENTS` (ask if not supplied).
 
 > Build a new branch from `origin/main`, cherry-pick only the new commits, and audit
 > that `git diff origin/main..new-branch` carries **exactly the new feature's added
-> lines** - nothing more. When a conflict touches code that diverged on main, **always
-> keep main's version**; the PR's copy is the legacy version that review superseded.
+> lines** - nothing more. In a conflict, preserve what the new commit *actually changes*
+> (its delta, reapplied onto main) and discard only the divergence that comes from
+> superseded stacked-below work - never reflexively keep one side.
 
 ## Process
 
@@ -68,14 +69,28 @@ git cherry-pick NEW_FIRST [.. NEW_LAST]      # one or a short list
 ```
 Expect conflicts only where main diverged from the PR's stale base.
 
-### 5. Resolve conflicts by keeping main on diverged code
-For each conflict:
-- If the hunk is the **new feature content** -> take the PR side.
-- If the hunk is **surrounding code that main changed** (an import that gained/lost a
-  symbol, a refactored helper, a reworded test) -> **take main's side (HEAD)**. The PR
-  side is the legacy version.
-- Only keep a symbol/import the new code **actually uses**. Drop incidental additions
-  that rode in from stacked-below commits (e.g. an unused import).
+### 5. Resolve conflicts: preserve the commit's intent, drop only stacked-below noise
+A conflict means the commit's change landed on lines main also changed. Don't reflexively
+pick a side - classify each conflicting hunk against the commit's **own** patch first:
+```bash
+git show <newcommit> -- <path>   # exactly what THIS commit changes, vs its parent
+```
+- **Incidental divergence** - the conflicting lines are *not* in the commit's patch; they
+  differ only because stacked-below work (now on main in a different form) touched them.
+  -> **take main (HEAD)**; the PR side is superseded legacy. This is the common case in a
+  stale stack, but never assume it.
+- **Feature intent** - the conflicting lines *are* in the commit's patch; changing them is
+  the point of the commit. -> **apply the commit's change, expressed against main's current
+  version** (keep main's untouched neighbours, layer the commit's delta on top). Keeping
+  main here would silently drop the feature.
+- **True clash** - both the commit *and* main genuinely changed the same logic for
+  different reasons. -> real merge judgement; reconcile the two intents, and if the right
+  answer isn't clear, **stop and ask**.
+
+A single hunk can mix cases (e.g. an import line where main dropped a stacked-below symbol
+*and* the commit adds a new one), so resolve line by line, not side by side. Only keep a
+symbol/import the new code **actually uses**. Step 6's added-line audit is the backstop: a
+feature line you wrongly resolved to main shows up as "missing on the left".
 
 Resolve with Edit, then:
 ```bash
