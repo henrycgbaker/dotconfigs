@@ -60,8 +60,8 @@
   "outputStyle": "concise-execution",
   "preferredNotifChannel": "terminal_bell",
   "attribution": {
-    "name": "{{AUTHOR_NAME}}",
-    "email": "{{AUTHOR_EMAIL}}"
+    "name": "Henry Baker",
+    "email": "henry.c.g.baker@gmail.com"
   },
   "sandbox": {
     "enabled": true,

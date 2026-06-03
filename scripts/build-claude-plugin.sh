@@ -93,8 +93,16 @@ jq '
 
 # ---------------------------------------------------------------------------
 # settings.json — everything EXCEPT the hooks block (those move to hooks.json).
+# Also bake in author attribution: the dotconfigs deploy path substitutes the
+# {{AUTHOR_*}} placeholders at deploy time, but a marketplace install never runs
+# that step, so substitute them here (mirror lib/deploy.sh _substitute_placeholders).
 # ---------------------------------------------------------------------------
-jq 'del(.hooks)' "$SETTINGS_SRC" > "$OUT/settings.json"
+jq --arg name "$author_name" --arg email "$author_email" '
+    del(.hooks)
+    | walk(if type == "string" then
+        gsub("\\{\\{AUTHOR_NAME\\}\\}"; $name) | gsub("\\{\\{AUTHOR_EMAIL\\}\\}"; $email)
+      else . end)
+' "$SETTINGS_SRC" > "$OUT/settings.json"
 
 # ---------------------------------------------------------------------------
 # Symlink hook scripts back to source so edits propagate without a rebuild.
