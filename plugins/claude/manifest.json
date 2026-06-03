@@ -5,6 +5,7 @@
       "target": "~/.claude/hooks",
       "method": "symlink",
       "include": [
+        "_hook-common.sh",
         "block-rm-rf-root.sh",
         "block-force-push.sh",
         "block-hard-reset.sh",
@@ -65,6 +66,7 @@
       "target": ".claude/hooks",
       "method": "symlink",
       "include": [
+        "_hook-common.sh",
         "block-rm-rf-root.sh",
         "block-force-push.sh",
         "block-hard-reset.sh",

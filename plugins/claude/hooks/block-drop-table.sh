@@ -8,18 +8,14 @@
 # CONFIG: CLAUDE_HOOK_DESTRUCTIVE_GUARD=true  Guard against destructive commands
 # ================
 
-CLAUDE_HOOK_DESTRUCTIVE_GUARD="${CLAUDE_HOOK_DESTRUCTIVE_GUARD:-true}"
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
+CLAUDE_HOOK_DESTRUCTIVE_GUARD="${CLAUDE_HOOK_DESTRUCTIVE_GUARD:-true}"
+hook_load_conf
 
 [[ "$CLAUDE_HOOK_DESTRUCTIVE_GUARD" == "true" ]] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
+hook_require_cmd jq
 
 stdin_data=$(cat)
 {
@@ -31,16 +27,8 @@ stdin_data=$(cat)
 [[ "$hook_event" == "PreToolUse" ]] || exit 0
 [[ "$tool_name" == "Bash" ]] || exit 0
 
-deny() {
-    local reason="$1"
-    local escaped
-    escaped=$(printf '%s' "$reason" | jq -Rs '.')
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": $escaped}}"
-    exit 0
-}
-
 if echo "$command" | grep -qiE 'DROP\s+(TABLE|DATABASE)'; then
-    deny "Destructive command blocked: DROP TABLE/DATABASE (deletes database objects)"
+    hook_deny "Destructive command blocked: DROP TABLE/DATABASE (deletes database objects)"
 fi
 
 exit 0

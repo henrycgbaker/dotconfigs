@@ -8,18 +8,14 @@
 # CONFIG: CLAUDE_HOOK_PRECOMPACT_SNAPSHOT=true  Snapshot transcript before compaction
 # ================
 
-CLAUDE_HOOK_PRECOMPACT_SNAPSHOT="${CLAUDE_HOOK_PRECOMPACT_SNAPSHOT:-true}"
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
+CLAUDE_HOOK_PRECOMPACT_SNAPSHOT="${CLAUDE_HOOK_PRECOMPACT_SNAPSHOT:-true}"
+hook_load_conf
 
 [[ "$CLAUDE_HOOK_PRECOMPACT_SNAPSHOT" == "true" ]] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
+hook_require_cmd jq
 
 stdin_data=$(cat)
 [[ "$(echo "$stdin_data" | jq -r '.hook_event_name // empty')" == "PreCompact" ]] || exit 0

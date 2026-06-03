@@ -9,18 +9,14 @@
 # CONFIG: CLAUDE_HOOK_NOTIFY_DESKTOP=true  Push notifications to desktop notify-send
 # ================
 
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
+
 CLAUDE_HOOK_NOTIFY_NTFY="${CLAUDE_HOOK_NOTIFY_NTFY:-true}"
 CLAUDE_HOOK_NOTIFY_DESKTOP="${CLAUDE_HOOK_NOTIFY_DESKTOP:-true}"
+hook_load_conf
 
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
-
-command -v jq >/dev/null 2>&1 || exit 0
+hook_require_cmd jq
 
 stdin_data=$(cat)
 [[ "$(echo "$stdin_data" | jq -r '.hook_event_name // empty')" == "Notification" ]] || exit 0

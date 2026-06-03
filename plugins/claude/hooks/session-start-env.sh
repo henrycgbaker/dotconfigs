@@ -8,18 +8,14 @@
 # CONFIG: CLAUDE_HOOK_VENV_AUTO=true  Auto-activate Python .venv on session start
 # ================
 
-CLAUDE_HOOK_VENV_AUTO="${CLAUDE_HOOK_VENV_AUTO:-true}"
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
+CLAUDE_HOOK_VENV_AUTO="${CLAUDE_HOOK_VENV_AUTO:-true}"
+hook_load_conf
 
 [[ "$CLAUDE_HOOK_VENV_AUTO" == "true" ]] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
+hook_require_cmd jq
 
 stdin_data=$(cat)
 [[ "$(echo "$stdin_data" | jq -r '.hook_event_name // empty')" == "SessionStart" ]] || exit 0

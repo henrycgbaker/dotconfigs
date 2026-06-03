@@ -8,18 +8,14 @@
 # CONFIG: CLAUDE_HOOK_FILE_PROTECTION=true  Protect critical files
 # ================
 
-CLAUDE_HOOK_FILE_PROTECTION="${CLAUDE_HOOK_FILE_PROTECTION:-true}"
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
+CLAUDE_HOOK_FILE_PROTECTION="${CLAUDE_HOOK_FILE_PROTECTION:-true}"
+hook_load_conf
 
 [[ "$CLAUDE_HOOK_FILE_PROTECTION" == "true" ]] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
+hook_require_cmd jq
 
 stdin_data=$(cat)
 {
@@ -31,28 +27,20 @@ stdin_data=$(cat)
 [[ "$hook_event" == "PreToolUse" ]] || exit 0
 [[ "$tool_name" == "Write" || "$tool_name" == "Edit" ]] || exit 0
 
-deny() {
-    local reason="$1"
-    local escaped
-    escaped=$(printf '%s' "$reason" | jq -Rs '.')
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": $escaped}}"
-    exit 0
-}
-
 if [[ "$file_path" =~ \.pem$ ]]; then
-    deny "File protection: Cannot write to .pem files (private keys)"
+    hook_deny "File protection: Cannot write to .pem files (private keys)"
 fi
 
 if [[ "$file_path" =~ credentials ]]; then
-    deny "File protection: Cannot write to files containing credentials"
+    hook_deny "File protection: Cannot write to files containing credentials"
 fi
 
 if [[ "$file_path" == *".env.production"* ]]; then
-    deny "File protection: Cannot write to .env.production (production secrets)"
+    hook_deny "File protection: Cannot write to .env.production (production secrets)"
 fi
 
 if [[ "$file_path" =~ id_rsa$ || "$file_path" =~ id_ed25519$ ]]; then
-    deny "File protection: Cannot write to SSH private keys"
+    hook_deny "File protection: Cannot write to SSH private keys"
 fi
 
 exit 0

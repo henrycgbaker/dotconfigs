@@ -8,19 +8,15 @@
 # CONFIG: CLAUDE_HOOK_PROMPT_CONTEXT=true  Prepend git context to user prompts
 # ================
 
-CLAUDE_HOOK_PROMPT_CONTEXT="${CLAUDE_HOOK_PROMPT_CONTEXT:-true}"
+# shellcheck source=_hook-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-    # shellcheck source=/dev/null
-    source "$HOME/.claude/claude-hooks.conf"
-fi
+CLAUDE_HOOK_PROMPT_CONTEXT="${CLAUDE_HOOK_PROMPT_CONTEXT:-true}"
+hook_load_conf
 
 [[ "$CLAUDE_HOOK_PROMPT_CONTEXT" == "true" ]] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
-command -v git >/dev/null 2>&1 || exit 0
+hook_require_cmd jq
+hook_require_cmd git
 
 stdin_data=$(cat)
 [[ "$(echo "$stdin_data" | jq -r '.hook_event_name // empty')" == "UserPromptSubmit" ]] || exit 0
