@@ -130,6 +130,24 @@ def validate_module(
                         failures.append(f"Merge dropped base permissions: {target}")
                 except json.JSONDecodeError:
                     failures.append(f"Merge target not valid JSON: {target}")
+        elif method == "append":
+            # Append-deployed files are regular files containing every non-empty
+            # line of the source (same contract as `grep -qFf` in lib/deploy.sh).
+            if target.is_symlink():
+                failures.append(
+                    f"Append target is a symlink (must be a regular file): {target}"
+                )
+            else:
+                source_lines = [
+                    ln for ln in source.read_text().splitlines() if ln.strip()
+                ]
+                target_text = target.read_text()
+                missing = [ln for ln in source_lines if ln not in target_text]
+                if missing:
+                    failures.append(
+                        f"Append target missing source lines: {target} "
+                        f"({len(missing)} missing, first: {missing[0]!r})"
+                    )
 
     return failures
 
