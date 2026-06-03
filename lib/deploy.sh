@@ -397,7 +397,7 @@ deploy_module() {
             ;;
         append)
             if [[ "$dry_run" == "true" ]]; then
-                if [[ -f "$abs_target" ]] && grep -qF "$(cat "$abs_source")" "$abs_target"; then
+                if [[ -s "$abs_source" && -f "$abs_target" ]] && grep -qFf "$abs_source" "$abs_target"; then
                     echo "  Unchanged: $rel_src -> $abs_target (already present)"
                     eval "unchanged=\$(( \$unchanged + 1 ))"
                 else
@@ -410,7 +410,7 @@ deploy_module() {
                 mkdir -p "$target_dir"
 
                 # Check if content already present (idempotent)
-                if [[ -f "$abs_target" ]] && grep -qF "$(cat "$abs_source")" "$abs_target"; then
+                if [[ -s "$abs_source" && -f "$abs_target" ]] && grep -qFf "$abs_source" "$abs_target"; then
                     echo "  Unchanged: $rel_src -> $abs_target (already present)"
                     eval "unchanged=\$(( \$unchanged + 1 ))"
                 else
@@ -428,62 +428,59 @@ deploy_module() {
 }
 
 # Check the deployment state of a single module, by method.
-# Echoes one state token per source-file (for directory symlinks, one per
-# included file). Each line: "<state>\t<display_name>".
+# Echoes one tab-separated "<state>\t<display_name>" line per file (for a
+# symlink directory module, one line per included file; otherwise one line).
+# A missing source is appended to the display name so the user sees the cause.
 #
 # States: deployed, drifted-broken, drifted-foreign, drifted-wrong-target,
-#         not-deployed, present (for merge/append/copy where we can't compare
-#         against a symlink target).
+#         not-deployed.
 #
-# Args: source, target, method, include_csv, dotconfigs_root, [project_root]
+# Args: source, target, method, include_csv, dotconfigs_root
 check_module_state() {
     local source="$1"
     local target="$2"
     local method="$3"
     local include_csv="$4"
     local dotconfigs_root="$5"
-    local project_root="${6:-}"
-    local abs_source abs_target
+    local abs_source abs_target rel_src
 
-    # Resolve absolute source
     if [[ "$source" != /* ]]; then
         abs_source="$dotconfigs_root/$source"
     else
         abs_source="$source"
     fi
-
-    # Resolve absolute target (tilde + project_root)
     abs_target=$(expand_tilde "$target")
-    if [[ -n "$project_root" && "$abs_target" != /* ]]; then
-        abs_target="$project_root/$abs_target"
-    fi
+    rel_src="${abs_source#"$dotconfigs_root/"}"
 
-    local rel_src="${abs_source#$dotconfigs_root/}"
+    if [[ ! -e "$abs_source" ]]; then
+        printf "%s\t%s\n" "not-deployed" "$rel_src (source missing)"
+        return 0
+    fi
 
     case "$method" in
         symlink)
             if [[ -d "$abs_source" ]]; then
-                # Directory module: enumerate expected files
-                local files=()
-                if [[ "$include_csv" == "__NONE__" ]]; then
-                    return 0
-                elif [[ -n "$include_csv" ]]; then
+                [[ "$include_csv" == "__NONE__" ]] && return 0
+                local files=() target_base="${abs_target##*/}"
+                if [[ -n "$include_csv" ]]; then
+                    # IFS=',' for CSV split; set -f disables glob expansion so
+                    # an entry like "foo.*" is a literal filename.
                     local IFS=','
+                    set -f
                     for f in $include_csv; do files+=("$f"); done
-                    unset IFS
+                    set +f
                 else
                     local f
                     for f in "$abs_source"/*; do
                         [[ ! -e "$f" ]] && continue
                         [[ -d "$f" ]] && continue
-                        files+=("$(basename "$f")")
+                        files+=("${f##*/}")
                     done
                 fi
-                local name expected state
+                local name state
                 for name in "${files[@]}"; do
-                    expected="$abs_source/$name"
-                    state=$(check_file_state "$abs_target/$name" "$expected" "$dotconfigs_root")
-                    printf "%s\t%s/%s\n" "$state" "$(basename "$abs_target")" "$name"
+                    state=$(check_file_state "$abs_target/$name" "$abs_source/$name" "$dotconfigs_root")
+                    printf "%s\t%s/%s\n" "$state" "$target_base" "$name"
                 done
             else
                 local state
@@ -492,17 +489,23 @@ check_module_state() {
             fi
             ;;
         merge)
-            # Merge files are intentionally regular files (a superset of source);
-            # we can only confirm the target exists.
-            if [[ -f "$abs_target" ]]; then
-                printf "%s\t%s\n" "present" "$rel_src"
+            # Target is intentionally a superset of source (Claude appends
+            # permission grants). We can confirm a regular file exists; a
+            # stale dotconfigs symlink doesn't count.
+            if [[ -f "$abs_target" && ! -L "$abs_target" ]]; then
+                printf "%s\t%s\n" "deployed" "$rel_src"
             else
                 printf "%s\t%s\n" "not-deployed" "$rel_src"
             fi
             ;;
         append)
-            if [[ -f "$abs_target" ]] && grep -qF "$(cat "$abs_source")" "$abs_target" 2>/dev/null; then
-                printf "%s\t%s\n" "present" "$rel_src"
+            # grep -qFf treats the source as a fixed-string PATTERN FILE.
+            # Each source line becomes one needle; "present" means every
+            # source line is somewhere in target. Empty source is treated as
+            # not-deployed rather than vacuously matching.
+            if [[ -s "$abs_source" && -f "$abs_target" ]] \
+               && grep -qFf "$abs_source" "$abs_target" 2>/dev/null; then
+                printf "%s\t%s\n" "deployed" "$rel_src"
             else
                 printf "%s\t%s\n" "not-deployed" "$rel_src"
             fi
@@ -516,7 +519,53 @@ check_module_state() {
                 printf "%s\t%s\n" "not-deployed" "$rel_src"
             fi
             ;;
+        *)
+            echo "Warning: unknown method '$method' for $rel_src" >&2
+            printf "%s\t%s\n" "not-deployed" "$rel_src (unknown method: $method)"
+            ;;
     esac
+}
+
+# Print a global-config error and return 1 if .dotconfigs/global.json is missing.
+# Relies on the caller-scoped $GLOBAL_CONFIG (set in the entry point).
+_require_global_config() {
+    if [[ ! -f "$GLOBAL_CONFIG" ]]; then
+        echo "Error: $GLOBAL_CONFIG not found. Run 'dotconfigs global-init' first." >&2
+        return 1
+    fi
+}
+
+# Emit per-file "<state>\t<name>" lines for every module in a plugin's group.
+# Args: plugin
+_collect_plugin_states() {
+    local plugin="$1"
+    parse_modules_in_group "$GLOBAL_CONFIG" "$plugin" \
+        | while IFS=$'\t' read -r source target method include_csv; do
+            check_module_state "$source" "$target" "$method" "$include_csv" "$SCRIPT_DIR"
+          done
+}
+
+# Tally a "<state>\t<name>" blob into flag/count vars in the caller's scope.
+# Args: lines, has_ok_var, has_drift_var, has_missing_var, count_ok_var, total_var
+_tally_states() {
+    local lines="$1" has_ok_var="$2" has_drift_var="$3" has_missing_var="$4" count_ok_var="$5" total_var="$6"
+    local state name ok=false drift=false missing=false n_ok=0 n_total=0
+
+    while IFS=$'\t' read -r state name; do
+        [[ -z "$state" ]] && continue
+        n_total=$(( n_total + 1 ))
+        case "$state" in
+            deployed)     ok=true;      n_ok=$(( n_ok + 1 )) ;;
+            not-deployed) missing=true ;;
+            drifted-*)    drift=true ;;
+        esac
+    done <<< "$lines"
+
+    eval "$has_ok_var=\$ok"
+    eval "$has_drift_var=\$drift"
+    eval "$has_missing_var=\$missing"
+    eval "$count_ok_var=\$n_ok"
+    eval "$total_var=\$n_total"
 }
 
 # Main deployment entry point

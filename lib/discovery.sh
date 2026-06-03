@@ -11,22 +11,21 @@ discover_plugins() {
         return 0
     fi
 
+    local manifest_path dir
     find "$plugins_dir" -mindepth 2 -maxdepth 2 -name manifest.json -type f | while read -r manifest_path; do
-        basename "$(dirname "$manifest_path")"
+        dir="${manifest_path%/*}"
+        echo "${dir##*/}"
     done | sort
 }
 
-# Check if a plugin exists and is valid.
-# A plugin is any plugins/<name>/ directory with a manifest.json.
-# Optional files: setup.sh (interactive wizard for global-configs).
+# Check if a plugin exists. Single source of truth for "what is a plugin":
+# delegates to discover_plugins so the contract is defined in exactly one place.
 # Args: plugin, plugins_dir (defaults to $PLUGINS_DIR)
-# Returns: 0 if valid plugin, 1 otherwise
+# Returns: 0 if a discovered plugin, 1 otherwise
 plugin_exists() {
     local plugin="$1"
     local plugins_dir="${2:-$PLUGINS_DIR}"
-    local plugin_dir="$plugins_dir/$plugin"
-
-    [[ -d "$plugin_dir" ]] && [[ -f "$plugin_dir/manifest.json" ]]
+    discover_plugins "$plugins_dir" | grep -qx "$plugin"
 }
 
 # List all available plugins to stderr
