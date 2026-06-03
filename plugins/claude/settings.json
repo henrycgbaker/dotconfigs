@@ -69,55 +69,47 @@
             "type": "command",
             "if": "Bash(rm *)",
             "command": "~/.claude/hooks/block-rm-rf-root.sh",
-            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
             "if": "Bash(git push*)",
             "command": "~/.claude/hooks/block-force-push.sh",
-            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
             "if": "Bash(git reset*)",
             "command": "~/.claude/hooks/block-hard-reset.sh",
-            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
             "if": "Bash(git clean*)",
             "command": "~/.claude/hooks/block-git-clean.sh",
-            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
             "command": "~/.claude/hooks/block-drop-table.sh",
-            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
             "if": "Bash(chmod *)",
             "command": "~/.claude/hooks/block-chmod-777.sh",
-            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
             "if": "Bash(gh pr*)",
             "command": "~/.claude/hooks/block-ai-pr-attribution.sh",
-            "args": [],
             "timeout": 10
           },
           {
             "type": "command",
             "if": "Bash(gh *)",
             "command": "~/.claude/hooks/block-gh-comment.sh",
-            "args": [],
             "timeout": 10
           }
         ]
@@ -128,7 +120,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/block-sensitive-write.sh",
-            "args": [],
             "timeout": 10
           }
         ]
@@ -139,7 +130,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/block-gh-comment.sh",
-            "args": [],
             "timeout": 10
           }
         ]
@@ -152,7 +142,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/facade-check.sh",
-            "args": [],
             "timeout": 10
           }
         ]
@@ -164,7 +153,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/inject-context.sh",
-            "args": [],
             "timeout": 5
           }
         ]
@@ -176,7 +164,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/session-start-env.sh",
-            "args": [],
             "timeout": 5
           }
         ]
@@ -188,7 +175,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/session-end-log.sh",
-            "args": [],
             "timeout": 5
           }
         ]
@@ -200,7 +186,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/pre-compact-snapshot.sh",
-            "args": [],
             "timeout": 10
           }
         ]
@@ -212,7 +197,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/notify.sh",
-            "args": [],
             "timeout": 15
           }
         ]
