@@ -1,0 +1,146 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(rm *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-rm-rf-root.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-force-push.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git reset*)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-hard-reset.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git clean*)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-git-clean.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(*DROP*)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-drop-table.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(chmod *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-chmod-777.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr*)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-ai-pr-attribution.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-gh-comment.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-sensitive-write.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-gh-comment.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/facade-check.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/inject-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/session-start-env.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/session-end-log.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/pre-compact-snapshot.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/notify.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

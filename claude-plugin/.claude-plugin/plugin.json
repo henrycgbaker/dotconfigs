@@ -1,0 +1,9 @@
+{
+  "name": "dots",
+  "version": "0.1.0",
+  "description": "Henry Baker's Claude Code config: safety hooks, git workflow skills, and a concise-execution output style.",
+  "author": {
+    "name": "Henry Baker",
+    "email": "henry.c.g.baker@gmail.com"
+  }
+}

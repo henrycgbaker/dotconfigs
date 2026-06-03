@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/_hook-common.sh

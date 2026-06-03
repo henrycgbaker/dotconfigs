@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/block-gh-comment.sh

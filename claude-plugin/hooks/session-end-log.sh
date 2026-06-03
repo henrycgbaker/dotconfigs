@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/session-end-log.sh

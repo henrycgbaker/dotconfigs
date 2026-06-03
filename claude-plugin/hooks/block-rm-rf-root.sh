@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/block-rm-rf-root.sh
