@@ -31,62 +31,44 @@ This document lists all available hooks, skills, and configuration options in do
 HEADER
 
 # ============================================================================
-# Git Hooks Section — discovered via plugins/git/manifest.json
+# Hook Sections — discovered via each plugin's manifest.json
 # ============================================================================
 
-echo "" >> "$OUTPUT_FILE"
-echo "## Git Hooks" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "Git hooks run during git operations to enforce quality standards and protect workflows." >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "| Hook | Description | Configuration Keys |" >> "$OUTPUT_FILE"
-echo "|------|-------------|-------------------|" >> "$OUTPUT_FILE"
+# Append a "## <heading>" table of a plugin's hooks. NAME/DESCRIPTION/CONFIG
+# are read from each hook file's METADATA block (missing fields tolerated).
+# Args: plugin, heading, intro
+emit_hook_table() {
+    local plugin="$1" heading="$2" intro="$3"
+    local manifest="$REPO_ROOT/plugins/$plugin/manifest.json"
+    local hook_name hook_file name desc config
 
-GIT_MANIFEST="$REPO_ROOT/plugins/git/manifest.json"
+    {
+        echo ""
+        echo "## $heading"
+        echo ""
+        echo "$intro"
+        echo ""
+        echo "| Hook | Description | Configuration Keys |"
+        echo "|------|-------------|-------------------|"
+    } >> "$OUTPUT_FILE"
 
-while IFS= read -r hook_name; do
-    hook_file="$REPO_ROOT/plugins/git/hooks/$hook_name"
-    if [[ -f "$hook_file" ]]; then
+    while IFS= read -r hook_name; do
+        hook_file="$REPO_ROOT/plugins/$plugin/hooks/$hook_name"
+        [[ -f "$hook_file" ]] || continue
         name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //' || true)
         desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //' || true)
-
-        # Extract config key names from CONFIG lines
         config=$(grep "^# CONFIG:" "$hook_file" 2>/dev/null | sed 's/^# CONFIG: //' | cut -d= -f1 | paste -sd',' - | sed 's/,/, /g' || true)
-
         if [[ -n "$name" ]]; then
             echo "| $name | $desc | $config |" >> "$OUTPUT_FILE"
         fi
-    fi
-done < <(jq -r '.global.hooks.include[]' "$GIT_MANIFEST" | sort)
+    done < <(jq -r '.global.hooks.include[]' "$manifest" | sort)
+}
 
-# ============================================================================
-# Claude Hooks Section — discovered via plugins/claude/manifest.json
-# ============================================================================
+emit_hook_table git "Git Hooks" "Git hooks run during git operations to enforce quality standards and protect workflows."
+emit_hook_table claude "Claude Hooks" "Claude hooks run during Claude Code operations for code quality and safety."
 
-echo "" >> "$OUTPUT_FILE"
-echo "## Claude Hooks" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "Claude hooks run during Claude Code operations for code quality and safety." >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "| Hook | Description | Configuration Keys |" >> "$OUTPUT_FILE"
-echo "|------|-------------|-------------------|" >> "$OUTPUT_FILE"
-
+# Reused by the Skills section below.
 CLAUDE_MANIFEST="$REPO_ROOT/plugins/claude/manifest.json"
-
-while IFS= read -r hook_name; do
-    hook_file="$REPO_ROOT/plugins/claude/hooks/$hook_name"
-    if [[ -f "$hook_file" ]]; then
-        name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //' || true)
-        desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //' || true)
-
-        # Extract config key names from CONFIG lines
-        config=$(grep "^# CONFIG:" "$hook_file" 2>/dev/null | sed 's/^# CONFIG: //' | cut -d= -f1 | paste -sd',' - | sed 's/,/, /g' || true)
-
-        if [[ -n "$name" ]]; then
-            echo "| $name | $desc | $config |" >> "$OUTPUT_FILE"
-        fi
-    fi
-done < <(jq -r '.global.hooks.include[]' "$CLAUDE_MANIFEST" | sort)
 
 # ============================================================================
 # Commands Section — discovered via plugins/claude/manifest.json

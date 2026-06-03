@@ -127,6 +127,63 @@ cleanup_stale_in_directory() {
     done
 }
 
+# Symlink-deploy a single file or directory, state-aware.
+# Reports Unchanged / Would link / Would update / conflict and tallies the
+# correct counter (created/updated/unchanged/skipped) via eval into the caller.
+# Used for every symlink target so dry-run reflects real on-disk state.
+# Args: source, target, name, dotconfigs_root, dry_run, interactive_mode
+link_one() {
+    local src="$1" tgt="$2" name="$3" root="$4" dry="$5" mode="$6"
+    local rel="${src#$root/}"
+    local state
+    state=$(check_file_state "$tgt" "$src" "$root")
+
+    if [[ "$state" == "deployed" ]]; then
+        echo "  Unchanged: $rel -> $tgt"
+        eval "unchanged=\$(( \$unchanged + 1 ))"
+        return
+    fi
+
+    if [[ "$dry" == "true" ]]; then
+        case "$state" in
+            not-deployed)
+                echo "  Would link: $rel -> $tgt"
+                eval "created=\$(( \$created + 1 ))"
+                ;;
+            drifted-foreign)
+                if [[ "$mode" == "force" ]]; then
+                    echo "  Would overwrite: $rel -> $tgt (--force)"
+                    eval "updated=\$(( \$updated + 1 ))"
+                else
+                    echo "  Would prompt: conflict at $tgt (source: $rel)"
+                    eval "skipped=\$(( \$skipped + 1 ))"
+                fi
+                ;;
+            *)
+                # drifted-broken / drifted-wrong-target: ours, will be re-pointed
+                echo "  Would update: $rel -> $tgt"
+                eval "updated=\$(( \$updated + 1 ))"
+                ;;
+        esac
+        return
+    fi
+
+    # Real run: act, then count by the prior state.
+    backup_and_link "$src" "$tgt" "$name" "$mode"
+    local rc=$?
+    if [[ $rc -eq 0 ]]; then
+        if [[ "$state" == "not-deployed" ]]; then
+            eval "created=\$(( \$created + 1 ))"
+        else
+            eval "updated=\$(( \$updated + 1 ))"
+        fi
+    elif [[ $rc -eq 2 ]]; then
+        eval "unchanged=\$(( \$unchanged + 1 ))"
+    else
+        eval "skipped=\$(( \$skipped + 1 ))"
+    fi
+}
+
 # Deploy files from a directory source
 # Args: source_dir, target_dir, include_csv, dotconfigs_root, dry_run, interactive_mode
 # Returns: Status counts via global counters
@@ -179,30 +236,14 @@ deploy_directory_files() {
                 continue
             fi
 
-            if [[ "$dry_run" == "true" ]]; then
-                local rel_src="${file#$dotconfigs_root/}"
-                echo "  Would link $rel_src -> $target_file"
-                eval "created=\$(( \$created + 1 ))"
-            else
-                # Call backup_and_link and capture status
-                if backup_and_link "$file" "$target_file" "$file_name" "$interactive_mode"; then
-                    # Successfully linked (output already printed by backup_and_link)
-                    if is_dotconfigs_owned "$target_file" "$dotconfigs_root"; then
-                        eval "updated=\$(( \$updated + 1 ))"
-                    else
-                        eval "created=\$(( \$created + 1 ))"
-                    fi
-                else
-                    # Skipped (output already printed by backup_and_link)
-                    eval "skipped=\$(( \$skipped + 1 ))"
-                fi
-            fi
+            link_one "$file" "$target_file" "$file_name" "$dotconfigs_root" "$dry_run" "$interactive_mode"
         done
 
         # Clean up stale entries (include-list branch)
         cleanup_stale_in_directory "$target_dir" "$include_csv" "$dotconfigs_root" "$dry_run"
     else
-        # Deploy all files in directory
+        # Deploy all files in directory, building the deployed CSV as we go.
+        local all_csv=""
         for file in "$source_dir"/*; do
             [[ ! -e "$file" ]] && continue
             [[ -d "$file" ]] && continue  # Skip subdirectories
@@ -210,37 +251,10 @@ deploy_directory_files() {
             file_name=$(basename "$file")
             target_file="$target_dir/$file_name"
 
-            if [[ "$dry_run" == "true" ]]; then
-                local rel_src="${file#$dotconfigs_root/}"
-                echo "  Would link $rel_src -> $target_file"
-                eval "created=\$(( \$created + 1 ))"
-            else
-                # Call backup_and_link and capture status
-                if backup_and_link "$file" "$target_file" "$file_name" "$interactive_mode"; then
-                    # Successfully linked (output already printed by backup_and_link)
-                    if is_dotconfigs_owned "$target_file" "$dotconfigs_root" 2>/dev/null; then
-                        eval "updated=\$(( \$updated + 1 ))"
-                    else
-                        eval "created=\$(( \$created + 1 ))"
-                    fi
-                else
-                    # Skipped (output already printed by backup_and_link)
-                    eval "skipped=\$(( \$skipped + 1 ))"
-                fi
-            fi
+            link_one "$file" "$target_file" "$file_name" "$dotconfigs_root" "$dry_run" "$interactive_mode"
+            all_csv="${all_csv:+$all_csv,}$file_name"
         done
 
-        # Build deployed CSV from all source files, then clean up stale entries
-        local all_csv=""
-        for file in "$source_dir"/*; do
-            [[ ! -e "$file" ]] && continue
-            [[ -d "$file" ]] && continue
-            if [[ -n "$all_csv" ]]; then
-                all_csv="$all_csv,$(basename "$file")"
-            else
-                all_csv="$(basename "$file")"
-            fi
-        done
         cleanup_stale_in_directory "$target_dir" "$all_csv" "$dotconfigs_root" "$dry_run"
     fi
 }
@@ -325,30 +339,21 @@ deploy_module() {
                 deploy_directory_files "$abs_source" "$abs_target" "$include_csv" "$dotconfigs_root" "$dry_run" "$interactive_mode"
             else
                 # File source: single symlink
-                if [[ "$dry_run" == "true" ]]; then
-                    echo "  Would link $rel_src -> $abs_target"
-                    eval "created=\$(( \$created + 1 ))"
-                else
-                    local file_name
-                    file_name=$(basename "$abs_target")
-                    if backup_and_link "$abs_source" "$abs_target" "$file_name" "$interactive_mode"; then
-                        # Successfully linked (output already printed)
-                        if is_dotconfigs_owned "$abs_target" "$dotconfigs_root" 2>/dev/null; then
-                            eval "updated=\$(( \$updated + 1 ))"
-                        else
-                            eval "created=\$(( \$created + 1 ))"
-                        fi
-                    else
-                        # Skipped
-                        eval "skipped=\$(( \$skipped + 1 ))"
-                    fi
-                fi
+                link_one "$abs_source" "$abs_target" "$(basename "$abs_target")" "$dotconfigs_root" "$dry_run" "$interactive_mode"
             fi
             ;;
         copy)
             if [[ "$dry_run" == "true" ]]; then
-                echo "  Would copy $rel_src -> $abs_target"
-                eval "created=\$(( \$created + 1 ))"
+                if [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target"; then
+                    echo "  Unchanged: $rel_src -> $abs_target"
+                    eval "unchanged=\$(( \$unchanged + 1 ))"
+                elif [[ -e "$abs_target" ]]; then
+                    echo "  Would copy (overwrite): $rel_src -> $abs_target"
+                    eval "updated=\$(( \$updated + 1 ))"
+                else
+                    echo "  Would copy: $rel_src -> $abs_target"
+                    eval "created=\$(( \$created + 1 ))"
+                fi
             else
                 local target_dir
                 target_dir=$(dirname "$abs_target")
@@ -359,9 +364,11 @@ deploy_module() {
                     echo "  Unchanged: $rel_src -> $abs_target"
                     eval "unchanged=\$(( \$unchanged + 1 ))"
                 else
+                    local existed="false"
+                    [[ -e "$abs_target" ]] && existed="true"
                     cp -p "$abs_source" "$abs_target"
                     echo "  ✓ Copied $rel_src -> $abs_target"
-                    if [[ -f "$abs_target" ]]; then
+                    if [[ "$existed" == "true" ]]; then
                         eval "updated=\$(( \$updated + 1 ))"
                     else
                         eval "created=\$(( \$created + 1 ))"
@@ -390,8 +397,13 @@ deploy_module() {
             ;;
         append)
             if [[ "$dry_run" == "true" ]]; then
-                echo "  Would append $rel_src -> $abs_target"
-                eval "created=\$(( \$created + 1 ))"
+                if [[ -f "$abs_target" ]] && grep -qF "$(cat "$abs_source")" "$abs_target"; then
+                    echo "  Unchanged: $rel_src -> $abs_target (already present)"
+                    eval "unchanged=\$(( \$unchanged + 1 ))"
+                else
+                    echo "  Would append: $rel_src -> $abs_target"
+                    eval "updated=\$(( \$updated + 1 ))"
+                fi
             else
                 local target_dir
                 target_dir=$(dirname "$abs_target")

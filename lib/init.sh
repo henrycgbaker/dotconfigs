@@ -37,31 +37,31 @@ write_with_overwrite_protection() {
     local display_name="$(basename "$(dirname "$output_file")")/$(basename "$output_file")"
 
     if [[ -f "$output_file" ]]; then
-        # --force: back up and overwrite without prompting.
+        # Decide whether to overwrite: --force skips the prompt; otherwise ask
+        # (default no, and no on a non-TTY).
+        local proceed="false" suffix=""
         if [[ "$force" == "true" ]]; then
-            local backup="$output_file.bak.$(date +%Y%m%d%H%M%S)"
-            cp "$output_file" "$backup"
-            echo "$json_content" > "$output_file"
-            echo "Backed up to $(basename "$backup"), overwrote $display_name (--force)"
-            return 0
+            proceed="true"
+            suffix=" (--force)"
+        else
+            echo "$display_name already exists."
+            local overwrite_answer="n"
+            if [[ -t 1 ]]; then
+                read -r -p "Overwrite? [y/N] " overwrite_answer </dev/tty
+            fi
+            if [[ "$overwrite_answer" == [yY] ]]; then
+                proceed="true"
+            fi
         fi
-        echo "$display_name already exists."
-        local overwrite_answer="n"
-        if [[ -t 1 ]]; then
-            read -r -p "Overwrite? [y/N] " overwrite_answer </dev/tty
+
+        if [[ "$proceed" != "true" ]]; then
+            echo "Skipped (kept existing $display_name)"
+            return 1
         fi
-        case "$overwrite_answer" in
-            [yY])
-                local backup="$output_file.bak.$(date +%Y%m%d%H%M%S)"
-                cp "$output_file" "$backup"
-                echo "$json_content" > "$output_file"
-                echo "Backed up to $(basename "$backup"), overwrote $display_name"
-                ;;
-            *)
-                echo "Skipped (kept existing $display_name)"
-                return 1
-                ;;
-        esac
+        local backup="$output_file.bak.$(date +%Y%m%d%H%M%S)"
+        cp "$output_file" "$backup"
+        echo "$json_content" > "$output_file"
+        echo "Backed up to $(basename "$backup"), overwrote $display_name$suffix"
     else
         mkdir -p "$(dirname "$output_file")"
         echo "$json_content" > "$output_file"
