@@ -69,18 +69,20 @@ if echo "$command" | grep -qE '(^|[^A-Za-z0-9_])gh\s+pr\s+review(\s|$)' && ! ech
     deny "Blocked GitHub write: gh pr review submits a review. Ask the user explicitly before posting. ${BYPASS_HINT}"
 fi
 
-# gh api writes against PR/issue comment, review, or reply endpoints.
+# gh api writes against PR/issue comment, review, or reply endpoints (incl. a
+# standalone comment by id, e.g. /repos/.../issues/comments/<id>).
+#
+# A write is either an explicit write method (-X / --method POST|PATCH|PUT) OR
+# gh's *implicit* POST: gh api defaults to GET but switches to POST as soon as
+# any body param is supplied (-f/-F/--field/--raw-field/--input), so a reply can
+# be posted with no -X at all. An explicit -X/--method GET is always a read,
+# even when body params are present, so it is not blocked.
 if echo "$command" | grep -qE '(^|[^A-Za-z0-9_])gh\s+api\b' \
-   && echo "$command" | grep -qE -- '-X\s*(POST|PATCH|PUT)\b' \
-   && echo "$command" | grep -qE '/(pulls|issues)/(comments/[0-9]+(/replies)?|[0-9]+/(comments|reviews|replies))'; then
-    deny "Blocked GitHub write: gh api POST/PATCH/PUT to PR/issue comments|reviews|replies. Ask the user explicitly before posting. ${BYPASS_HINT}"
-fi
-
-# gh api PATCH/PUT to a standalone comment by id (e.g. /repos/.../issues/comments/<id>).
-if echo "$command" | grep -qE '(^|[^A-Za-z0-9_])gh\s+api\b' \
-   && echo "$command" | grep -qE -- '-X\s*(PATCH|PUT)\b' \
-   && echo "$command" | grep -qE '/(issues|pulls)/comments/[0-9]+(\s|"|$)'; then
-    deny "Blocked GitHub write: gh api PATCH/PUT to an existing comment. Ask the user explicitly before posting. ${BYPASS_HINT}"
+   && echo "$command" | grep -qE '/(pulls|issues)/(comments/[0-9]+(/replies)?|[0-9]+/(comments|reviews|replies))' \
+   && { echo "$command" | grep -qE -- '(-X|--method)\s*(POST|PATCH|PUT)\b' \
+        || { echo "$command" | grep -qE -- '(^|\s)(-f|-F|--field|--raw-field|--input)(\s|=)' \
+             && ! echo "$command" | grep -qE -- '(-X|--method)\s*GET\b'; }; }; then
+    deny "Blocked GitHub write: gh api write (explicit -X/--method POST|PATCH|PUT, or implicit POST via -f/-F/--field/--raw-field/--input) to PR/issue comments|reviews|replies. Ask the user explicitly before posting. ${BYPASS_HINT}"
 fi
 
 exit 0
