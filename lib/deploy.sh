@@ -25,6 +25,23 @@ expand_tilde() {
     echo "${1/#\~/$HOME}"
 }
 
+# Idempotency check for the append method: every non-blank line in source must
+# already appear (exact match) somewhere in target. `grep -qFf` is the obvious
+# tool here but it has "any match" semantics and treats blank lines as wildcards,
+# so a single common line in target falsely reports the whole source as present.
+# Args: source, target
+# Returns: 0 if every non-blank source line is present in target, 1 otherwise.
+_source_already_appended() {
+    local src="$1" tgt="$2"
+    [[ -s "$src" && -f "$tgt" ]] || return 1
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "${line//[[:space:]]/}" ]] && continue
+        grep -qFx -- "$line" "$tgt" || return 1
+    done < "$src"
+    return 0
+}
+
 # Parse modules from JSON config recursively
 # Args: config_file [, group_key]
 # If group_key is empty/unset, walks entire config; otherwise filters to .[$group] first.
@@ -426,7 +443,7 @@ deploy_module() {
             ;;
         append)
             if [[ "$dry_run" == "true" ]]; then
-                if [[ -s "$abs_source" && -f "$abs_target" ]] && grep -qFf "$abs_source" "$abs_target"; then
+                if _source_already_appended "$abs_source" "$abs_target"; then
                     echo "  Unchanged: $rel_src -> $abs_target (already present)"
                     eval "unchanged=\$(( \$unchanged + 1 ))"
                 else
@@ -439,7 +456,7 @@ deploy_module() {
                 mkdir -p "$target_dir"
 
                 # Check if content already present (idempotent)
-                if [[ -s "$abs_source" && -f "$abs_target" ]] && grep -qFf "$abs_source" "$abs_target"; then
+                if _source_already_appended "$abs_source" "$abs_target"; then
                     echo "  Unchanged: $rel_src -> $abs_target (already present)"
                     eval "unchanged=\$(( \$unchanged + 1 ))"
                 else
@@ -528,12 +545,9 @@ check_module_state() {
             fi
             ;;
         append)
-            # grep -qFf treats the source as a fixed-string PATTERN FILE.
-            # Each source line becomes one needle; "present" means every
-            # source line is somewhere in target. Empty source is treated as
-            # not-deployed rather than vacuously matching.
-            if [[ -s "$abs_source" && -f "$abs_target" ]] \
-               && grep -qFf "$abs_source" "$abs_target" 2>/dev/null; then
+            # Same idempotency contract as deploy_module: every non-blank
+            # line of source must already appear in target.
+            if _source_already_appended "$abs_source" "$abs_target"; then
                 printf "%s\t%s\n" "deployed" "$rel_src"
             else
                 printf "%s\t%s\n" "not-deployed" "$rel_src"
