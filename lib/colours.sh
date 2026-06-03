@@ -77,7 +77,7 @@ _print_file_status() {
     local state="$2"
 
     case "$state" in
-        deployed)
+        deployed|present)
             printf "  %b %s\n" "$(colour_green "$SYMBOL_OK")" "$display_name"
             ;;
         drifted-broken)

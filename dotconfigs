@@ -56,7 +56,7 @@ Commands:
                   Default: dry-run. Use --apply to actually remove.
                   Options: --apply, --dry-run, --project <path>
   global-configs  Interactive wizard to configure plugin defaults (.env)
-  status          Check deployment status (requires .env)
+  status          Check deployment status
   list            List all available plugins
   help            Show detailed help for specific command
 
@@ -378,7 +378,12 @@ cmd_global_configs() {
         exit 1
     fi
 
-    # Load and run plugin wizard
+    if [[ ! -f "$PLUGINS_DIR/$plugin/setup.sh" ]]; then
+        echo "Plugin '$plugin' has no interactive setup wizard." >&2
+        echo "Its configuration is declared in plugins/$plugin/manifest.json." >&2
+        exit 0
+    fi
+
     source "$PLUGINS_DIR/$plugin/setup.sh"
     "plugin_${plugin}_setup" "$@"
 }
@@ -638,83 +643,113 @@ cmd_deploy() {
 cmd_status() {
     local plugin_filter="${1:-}"
 
-    # Initialize colour codes
     init_colours
 
-    # Check if .env exists
-    if [[ ! -f "$ENV_FILE" ]]; then
-        echo "Error: No configuration found. Run 'dotconfigs setup' then 'dotconfigs global-configs <plugin>' first." >&2
+    if ! check_jq; then
+        return 1
+    fi
+
+    if [[ ! -f "$GLOBAL_CONFIG" ]]; then
+        echo "Error: $GLOBAL_CONFIG not found. Run 'dotconfigs global-init' first." >&2
         exit 1
     fi
 
-    # Iterate over all plugins
+    local plugin lines line state name
+    local count_ok count_drift count_missing
     while IFS= read -r plugin; do
-        # Skip if filter provided and doesn't match
         if [[ -n "$plugin_filter" && "$plugin" != "$plugin_filter" ]]; then
             continue
         fi
 
-        # Source the plugin's deploy.sh if not already sourced
-        if [[ -f "$PLUGINS_DIR/$plugin/deploy.sh" ]]; then
-            source "$PLUGINS_DIR/$plugin/deploy.sh"
+        # Walk modules in this plugin's group; collect "<state>\t<name>" lines
+        lines=$(parse_modules_in_group "$GLOBAL_CONFIG" "$plugin" \
+            | while IFS=$'\t' read -r source target method include_csv; do
+                check_module_state "$source" "$target" "$method" "$include_csv" "$SCRIPT_DIR"
+              done)
+
+        if [[ -z "$lines" ]]; then
+            printf "%b %s\n\n" "$(colour_yellow "$plugin")" "no modules in $GLOBAL_CONFIG"
+            continue
         fi
 
-        # Check if plugin_<name>_status function exists
-        if declare -f "plugin_${plugin}_status" > /dev/null 2>&1; then
-            "plugin_${plugin}_status"
+        count_ok=0; count_drift=0; count_missing=0
+        while IFS=$'\t' read -r state name; do
+            [[ -z "$state" ]] && continue
+            case "$state" in
+                deployed|present) count_ok=$(( count_ok + 1 )) ;;
+                not-deployed)     count_missing=$(( count_missing + 1 )) ;;
+                drifted-*)        count_drift=$(( count_drift + 1 )) ;;
+            esac
+        done <<< "$lines"
+
+        if [[ $count_drift -gt 0 ]]; then
+            printf "%b %b %s\n" "$(colour_yellow "$plugin")" "$(colour_yellow "$SYMBOL_DRIFT")" "deployed (drift detected)"
+        elif [[ $count_missing -gt 0 && $count_ok -eq 0 ]]; then
+            printf "%b %b %s\n" "$(colour_red "$plugin")" "$(colour_red "$SYMBOL_MISSING")" "not deployed"
+        elif [[ $count_missing -gt 0 ]]; then
+            printf "%b %b %s\n" "$(colour_yellow "$plugin")" "$(colour_yellow "$SYMBOL_DRIFT")" "partially deployed"
         else
-            printf "%b %s\n" "$(colour_red "$plugin")" "not configured"
+            printf "%b %b %s\n" "$(colour_green "$plugin")" "$(colour_green "$SYMBOL_OK")" "deployed"
         fi
+
+        while IFS=$'\t' read -r state name; do
+            [[ -z "$state" ]] && continue
+            _print_file_status "$name" "$state"
+        done <<< "$lines"
 
         echo ""
     done < <(discover_plugins "$PLUGINS_DIR")
 }
 
 cmd_list() {
-    # Initialize colour codes
     init_colours
-
-    # Source .env if it exists
-    if [[ -f "$ENV_FILE" ]]; then
-        source "$ENV_FILE"
-    fi
 
     echo "Available plugins:"
     echo ""
 
+    # No global.json yet — just list discovered plugins with no state.
+    if [[ ! -f "$GLOBAL_CONFIG" ]]; then
+        while IFS= read -r plugin; do
+            printf "  - %s\n" "$plugin"
+        done < <(discover_plugins "$PLUGINS_DIR")
+        echo ""
+        echo "Run 'dotconfigs global-init' to scaffold .dotconfigs/global.json."
+        return 0
+    fi
+
+    if ! check_jq; then
+        return 1
+    fi
+
+    local plugin lines state name
+    local count_ok count_drift count_missing total
     while IFS= read -r plugin; do
-        local is_installed=false
+        lines=$(parse_modules_in_group "$GLOBAL_CONFIG" "$plugin" \
+            | while IFS=$'\t' read -r source target method include_csv; do
+                check_module_state "$source" "$target" "$method" "$include_csv" "$SCRIPT_DIR"
+              done)
 
-        # Check if plugin is installed by looking for key env vars
-        case "$plugin" in
-            claude)
-                if [[ -n "${CLAUDE_DEPLOY_TARGET:-}" ]]; then
-                    is_installed=true
-                fi
-                ;;
-            git)
-                if [[ -n "${GIT_USER_NAME:-}" ]] || [[ -n "${GIT_USER_EMAIL:-}" ]]; then
-                    is_installed=true
-                fi
-                ;;
-            *)
-                # Generic check: try to load plugin config
-                if [[ -f "$PLUGINS_DIR/$plugin/deploy.sh" ]]; then
-                    source "$PLUGINS_DIR/$plugin/deploy.sh"
-                    if declare -f "_${plugin}_load_config" > /dev/null 2>&1; then
-                        if "_${plugin}_load_config" > /dev/null 2>&1; then
-                            is_installed=true
-                        fi
-                    fi
-                fi
-                ;;
-        esac
+        count_ok=0; count_drift=0; count_missing=0; total=0
+        while IFS=$'\t' read -r state name; do
+            [[ -z "$state" ]] && continue
+            total=$(( total + 1 ))
+            case "$state" in
+                deployed|present) count_ok=$(( count_ok + 1 )) ;;
+                not-deployed)     count_missing=$(( count_missing + 1 )) ;;
+                drifted-*)        count_drift=$(( count_drift + 1 )) ;;
+            esac
+        done <<< "$lines"
 
-        # Print with colour
-        if [[ "$is_installed" == "true" ]]; then
-            printf "  %b %s\n" "$(colour_green "$SYMBOL_OK")" "$plugin deployed"
+        if [[ $total -eq 0 ]]; then
+            printf "  - %s (no modules in global.json)\n" "$plugin"
+        elif [[ $count_drift -gt 0 ]]; then
+            printf "  %b %s drifted (%d/%d ok)\n" "$(colour_yellow "$SYMBOL_DRIFT")" "$plugin" "$count_ok" "$total"
+        elif [[ $count_missing -eq $total ]]; then
+            printf "  %b %s not deployed\n" "$(colour_red "$SYMBOL_MISSING")" "$plugin"
+        elif [[ $count_missing -gt 0 ]]; then
+            printf "  %b %s partially deployed (%d/%d)\n" "$(colour_yellow "$SYMBOL_DRIFT")" "$plugin" "$count_ok" "$total"
         else
-            printf "  %b %s\n" "$(colour_red "$SYMBOL_MISSING")" "$plugin not deployed"
+            printf "  %b %s deployed\n" "$(colour_green "$SYMBOL_OK")" "$plugin"
         fi
     done < <(discover_plugins "$PLUGINS_DIR")
 }

@@ -427,6 +427,98 @@ deploy_module() {
     esac
 }
 
+# Check the deployment state of a single module, by method.
+# Echoes one state token per source-file (for directory symlinks, one per
+# included file). Each line: "<state>\t<display_name>".
+#
+# States: deployed, drifted-broken, drifted-foreign, drifted-wrong-target,
+#         not-deployed, present (for merge/append/copy where we can't compare
+#         against a symlink target).
+#
+# Args: source, target, method, include_csv, dotconfigs_root, [project_root]
+check_module_state() {
+    local source="$1"
+    local target="$2"
+    local method="$3"
+    local include_csv="$4"
+    local dotconfigs_root="$5"
+    local project_root="${6:-}"
+    local abs_source abs_target
+
+    # Resolve absolute source
+    if [[ "$source" != /* ]]; then
+        abs_source="$dotconfigs_root/$source"
+    else
+        abs_source="$source"
+    fi
+
+    # Resolve absolute target (tilde + project_root)
+    abs_target=$(expand_tilde "$target")
+    if [[ -n "$project_root" && "$abs_target" != /* ]]; then
+        abs_target="$project_root/$abs_target"
+    fi
+
+    local rel_src="${abs_source#$dotconfigs_root/}"
+
+    case "$method" in
+        symlink)
+            if [[ -d "$abs_source" ]]; then
+                # Directory module: enumerate expected files
+                local files=()
+                if [[ "$include_csv" == "__NONE__" ]]; then
+                    return 0
+                elif [[ -n "$include_csv" ]]; then
+                    local IFS=','
+                    for f in $include_csv; do files+=("$f"); done
+                    unset IFS
+                else
+                    local f
+                    for f in "$abs_source"/*; do
+                        [[ ! -e "$f" ]] && continue
+                        [[ -d "$f" ]] && continue
+                        files+=("$(basename "$f")")
+                    done
+                fi
+                local name expected state
+                for name in "${files[@]}"; do
+                    expected="$abs_source/$name"
+                    state=$(check_file_state "$abs_target/$name" "$expected" "$dotconfigs_root")
+                    printf "%s\t%s/%s\n" "$state" "$(basename "$abs_target")" "$name"
+                done
+            else
+                local state
+                state=$(check_file_state "$abs_target" "$abs_source" "$dotconfigs_root")
+                printf "%s\t%s\n" "$state" "$rel_src"
+            fi
+            ;;
+        merge)
+            # Merge files are intentionally regular files (a superset of source);
+            # we can only confirm the target exists.
+            if [[ -f "$abs_target" ]]; then
+                printf "%s\t%s\n" "present" "$rel_src"
+            else
+                printf "%s\t%s\n" "not-deployed" "$rel_src"
+            fi
+            ;;
+        append)
+            if [[ -f "$abs_target" ]] && grep -qF "$(cat "$abs_source")" "$abs_target" 2>/dev/null; then
+                printf "%s\t%s\n" "present" "$rel_src"
+            else
+                printf "%s\t%s\n" "not-deployed" "$rel_src"
+            fi
+            ;;
+        copy)
+            if [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target" 2>/dev/null; then
+                printf "%s\t%s\n" "deployed" "$rel_src"
+            elif [[ -e "$abs_target" ]]; then
+                printf "%s\t%s\n" "drifted-foreign" "$rel_src"
+            else
+                printf "%s\t%s\n" "not-deployed" "$rel_src"
+            fi
+            ;;
+    esac
+}
+
 # Main deployment entry point
 # Args: config_file, dotconfigs_root, [group_key], [dry_run], [force], [project_root]
 deploy_from_json() {
