@@ -256,12 +256,12 @@ else
     check_fail ".claude/settings.local.json does not exist"
 fi
 
-# --- Global settings template check ---
-echo " Global template:"
-if grep -q 'CLAUDE_PROJECT_DIR' "$REPO_ROOT/plugins/claude/templates/settings/settings-template.json" 2>/dev/null; then
-    check_fail "settings-template.json contains \$CLAUDE_PROJECT_DIR (should use ~/.claude/hooks/)"
+# --- Global settings path check ---
+echo " Global settings:"
+if grep -q 'CLAUDE_PROJECT_DIR' "$REPO_ROOT/plugins/claude/settings.json" 2>/dev/null; then
+    check_fail "settings.json contains \$CLAUDE_PROJECT_DIR (should use ~/.claude/hooks/)"
 else
-    check_pass "settings-template.json uses resolved paths (no \$CLAUDE_PROJECT_DIR)"
+    check_pass "settings.json uses resolved paths (no \$CLAUDE_PROJECT_DIR)"
 fi
 
 # --- .claude/hooks/ ---
