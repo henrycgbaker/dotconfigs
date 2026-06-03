@@ -14,7 +14,6 @@
 | `cleanup [path]` | | Remove deployed symlinks dotconfigs owns |
 | `status [plugin]` | | Show deployment status / drift |
 | `list` | | List plugins and whether they're configured |
-| `global-configs <plugin>` | | Interactive wizard (legacy `.env` path) |
 | `help [command]` | | Detailed help |
 
 ## setup
@@ -72,7 +71,7 @@ Removes the symlinks dotconfigs created (leaving foreign files untouched). Use t
 dotconfigs status
 dotconfigs status claude
 ```
-Shows per-file state: **✓ deployed** (symlink correct), **△ drifted** (broken/foreign/wrong target), **✗ not deployed**. (Legacy: relies on `.env`; merge-managed files like `settings.json` are reported by deploy, not here.)
+Shows per-file state: **✓ deployed** (symlink correct), **△ drifted** (broken/foreign/wrong target), **✗ not deployed**. Merge-managed files like `settings.json` are reported by deploy, not here.
 
 ## list
 
@@ -80,13 +79,6 @@ Shows per-file state: **✓ deployed** (symlink correct), **△ drifted** (broke
 dotconfigs list
 ```
 Lists available plugins and whether each is configured.
-
-## global-configs `<plugin>`
-
-```bash
-dotconfigs global-configs claude
-```
-Interactive wizard that writes to `.env`. This is the legacy path; the manifest-driven `global.json` flow above is primary.
 
 ## help `[command]`
 

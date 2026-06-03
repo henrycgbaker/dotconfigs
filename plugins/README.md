@@ -10,11 +10,9 @@ The CLI walks manifests directly: `global-init` assembles `.dotconfigs/global.js
 
 ## Optional
 
-- **`setup.sh`** -- Interactive configuration wizard. Must export `plugin_<name>_setup()`. Called via `dotconfigs global-configs <name>`. Writes user choices to `.env` for the plugin's hooks/templates to read at runtime.
 - **`DESCRIPTION`** -- One-line summary.
 
-Current plugins with a wizard: `claude`, `git`.
-Current data-only plugins (manifest + files): `shell`.
+All current plugins (`claude`, `git`, `shell`) are manifest-driven (manifest + files), with no interactive setup step.
 
 ## Conventions
 
