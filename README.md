@@ -117,9 +117,9 @@ dotconfigs uses per-file symlinks (not directory-level), tracked by target resol
   ├── hooks/
   │   ├── block-destructive.sh ──→ dotconfigs/plugins/claude/hooks/...  (ours)
   │   └── some-other-hook.sh   ──→ /other/tool/...               (foreign, untouched)
-  └── commands/
-      ├── commit.md            ──→ dotconfigs/plugins/claude/cmds/...   (ours)
-      └── other-skill.md       ──→ /other/tool/...               (foreign, untouched)
+  └── skills/
+      ├── commit/              ──→ dotconfigs/plugins/claude/skills/... (ours)
+      └── other-skill/         ──→ /other/tool/...               (foreign, untouched)
 ```
 
 Deploy only touches files it owns. Foreign files are never overwritten without prompting.
@@ -235,11 +235,11 @@ Manages Claude Code configuration via symlinks.
 |--------|--------|--------|
 | hooks | `plugins/claude/hooks/` | `~/.claude/hooks/` (global), `.claude/hooks/` (project) |
 | settings | `plugins/claude/settings.json` | `~/.claude/settings.json` |
-| skills | `plugins/claude/commands/` | `~/.claude/commands/` (global), `.claude/commands/` (project) |
+| skills | `plugins/claude/skills/` | `~/.claude/skills/` (global), `.claude/skills/` (project) |
 | CLAUDE.md | `plugins/claude/CLAUDE.md` | `~/.claude/CLAUDE.md` |
 
 **Hooks:** `block-destructive.sh` (PreToolUse guard — blocks destructive commands and protects sensitive files)
-**Skills:** `/commit`, `/squash-merge`, `/pr-review`, `/simplicity-check`
+**Skills:** `/commit`, `/squash-merge`, `/check-resolution`, `/preflight-merge`, `/rebase-stacked-prs`
 
 Project scope supports exclude lists to skip specific hooks or skills per-repo.
 
@@ -366,7 +366,7 @@ dotconfigs/
 │   ├── claude/
 │   │   ├── manifest.json         # SSOT: global + project module declarations
 │   │   ├── hooks/                # block-destructive.sh
-│   │   ├── commands/             # commit.md, squash-merge.md, pr-review.md, simplicity-check.md
+│   │   ├── skills/               # <name>/SKILL.md: commit, squash-merge, check-resolution, preflight-merge, rebase-stacked-prs
 │   │   ├── agents/               # Per-project agent personas (stub, not yet wired)
 │   │   ├── settings.json         # Claude Code settings
 │   │   ├── CLAUDE.md             # Global Claude instructions

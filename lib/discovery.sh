@@ -53,19 +53,18 @@ discover_hooks() {
 
 # Find available skills in commands/ directory
 # Args: plugin_dir
-# Returns: List of skill names without .md extension (one per line)
+# Returns: List of skill names (one per line). Each skill is a
+#          skills/<name>/SKILL.md directory; the directory name is the name.
 discover_skills() {
     local plugin_dir="$1"
-    local commands_dir="$plugin_dir/commands"
+    local skills_dir="$plugin_dir/skills"
 
-    if [[ ! -d "$commands_dir" ]]; then
+    if [[ ! -d "$skills_dir" ]]; then
         return 0
     fi
 
-    find "$commands_dir" -type f -name "*.md" | while read -r skill_path; do
-        local filename
-        filename=$(basename "$skill_path")
-        echo "${filename%.md}"
+    find "$skills_dir" -mindepth 1 -maxdepth 1 -type d | while read -r skill_path; do
+        basename "$skill_path"
     done | sort
 }
 

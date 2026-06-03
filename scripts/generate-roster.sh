@@ -22,11 +22,11 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
 
 # Start building roster content
 cat > "$OUTPUT_FILE" << 'HEADER'
-# dotconfigs Hook & Command Roster
+# dotconfigs Hook & Skill Roster
 
 **Auto-generated reference** — Do not edit manually. Run `scripts/generate-roster.sh` to regenerate.
 
-This document lists all available hooks, commands, and configuration options in dotconfigs.
+This document lists all available hooks, skills, and configuration options in dotconfigs.
 
 HEADER
 
@@ -47,8 +47,8 @@ GIT_MANIFEST="$REPO_ROOT/plugins/git/manifest.json"
 while IFS= read -r hook_name; do
     hook_file="$REPO_ROOT/plugins/git/hooks/$hook_name"
     if [[ -f "$hook_file" ]]; then
-        name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //')
-        desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //')
+        name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //' || true)
+        desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //' || true)
 
         # Extract config key names from CONFIG lines
         config=$(grep "^# CONFIG:" "$hook_file" 2>/dev/null | sed 's/^# CONFIG: //' | cut -d= -f1 | paste -sd',' - | sed 's/,/, /g' || true)
@@ -76,8 +76,8 @@ CLAUDE_MANIFEST="$REPO_ROOT/plugins/claude/manifest.json"
 while IFS= read -r hook_name; do
     hook_file="$REPO_ROOT/plugins/claude/hooks/$hook_name"
     if [[ -f "$hook_file" ]]; then
-        name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //')
-        desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //')
+        name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //' || true)
+        desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //' || true)
 
         # Extract config key names from CONFIG lines
         config=$(grep "^# CONFIG:" "$hook_file" 2>/dev/null | sed 's/^# CONFIG: //' | cut -d= -f1 | paste -sd',' - | sed 's/,/, /g' || true)
@@ -93,24 +93,21 @@ done < <(jq -r '.global.hooks.include[]' "$CLAUDE_MANIFEST" | sort)
 # ============================================================================
 
 echo "" >> "$OUTPUT_FILE"
-echo "## Commands" >> "$OUTPUT_FILE"
+echo "## Skills" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
-echo "Custom Claude Code commands (skills) for common workflows." >> "$OUTPUT_FILE"
+echo "Custom Claude Code skills (\`/name\`) for common workflows." >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 echo "| Command | Description |" >> "$OUTPUT_FILE"
 echo "|---------|-------------|" >> "$OUTPUT_FILE"
 
-while IFS= read -r cmd_file_name; do
-    cmd_file="$REPO_ROOT/plugins/claude/commands/$cmd_file_name"
-    if [[ -f "$cmd_file" ]]; then
-        # Extract command name from filename (remove .md extension)
-        cmd_name=$(basename "$cmd_file" .md)
-
+while IFS= read -r skill_name; do
+    skill_file="$REPO_ROOT/plugins/claude/skills/$skill_name/SKILL.md"
+    if [[ -f "$skill_file" ]]; then
         # Extract description from YAML frontmatter
-        desc=$(awk '/^---$/ {p=1; next} p && /^---$/ {p=0} p && /^description:/ {sub(/^description: */, ""); print; exit}' "$cmd_file")
+        desc=$(awk '/^---$/ {p=1; next} p && /^---$/ {p=0} p && /^description:/ {sub(/^description: */, ""); print; exit}' "$skill_file")
 
         if [[ -n "$desc" ]]; then
-            echo "| /$cmd_name | $desc |" >> "$OUTPUT_FILE"
+            echo "| /$skill_name | $desc |" >> "$OUTPUT_FILE"
         fi
     fi
 done < <(jq -r '.global.skills.include[]' "$CLAUDE_MANIFEST" | sort)

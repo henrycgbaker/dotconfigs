@@ -1,8 +1,8 @@
-# dotconfigs Hook & Command Roster
+# dotconfigs Hook & Skill Roster
 
 **Auto-generated reference** — Do not edit manually. Run `scripts/generate-roster.sh` to regenerate.
 
-This document lists all available hooks, commands, and configuration options in dotconfigs.
+This document lists all available hooks, skills, and configuration options in dotconfigs.
 
 
 ## Git Hooks
@@ -26,17 +26,20 @@ Claude hooks run during Claude Code operations for code quality and safety.
 
 | Hook | Description | Configuration Keys |
 |------|-------------|-------------------|
+| block-ai-pr-attribution | PreToolUse hook to block AI attribution in PR titles and descriptions | CLAUDE_HOOK_PR_ATTRIBUTION_GUARD |
 | block-destructive | PreToolUse hook to block destructive commands and protect sensitive files | CLAUDE_HOOK_DESTRUCTIVE_GUARD, CLAUDE_HOOK_FILE_PROTECTION |
+| block-gh-pr-write | PreToolUse hook to block GitHub PR/issue write operations (comments, reviews, replies) unless explicitly authorised via GH_PR_COMMENT_OK=1 | CLAUDE_HOOK_GH_PR_WRITE_GUARD |
 
-## Commands
+## Skills
 
-Custom Claude Code commands (skills) for common workflows.
+Custom Claude Code skills (`/name`) for common workflows.
 
 | Command | Description |
 |---------|-------------|
-| /commit | Help create a well-formatted commit |
-| /pr-review | Review current branch changes for PR readiness |
-| /simplicity-check | Review code or architecture for unnecessary complexity |
+| /check-resolution | After resolving merge/rebase conflicts locally, verify the resolution didn't silently resurrect old code the branch removed or undo a fix that landed on main |
+| /commit | Help create a well-formatted conventional commit |
+| /preflight-merge | Pre-merge gate Claude runs before completing any squash merge to main - simulates the merge and flags silent auto-merge regressions that would reintroduce code the base already fixed |
+| /rebase-stacked-prs | Safely rebase a stacked PR onto main, dropping already-merged stacked-below work without reintroducing legacy code |
 | /squash-merge | Squash merge current branch to main via GitHub PR |
 
 ## Customisation
@@ -51,4 +54,4 @@ To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deployi
 
 ---
 
-*Generated: 2026-03-04 10:24:05 UTC*
+*Generated: 2026-06-03 10:31:26 UTC*

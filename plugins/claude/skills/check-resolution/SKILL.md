@@ -1,3 +1,9 @@
+---
+name: check-resolution
+description: After resolving merge/rebase conflicts locally, verify the resolution didn't silently resurrect old code the branch removed or undo a fix that landed on main
+allowed-tools: Bash
+---
+
 # Check Resolution
 
 Verify a recent merge/rebase conflict resolution did not silently resurrect
@@ -94,6 +100,10 @@ non-zero. The point is to make the choice visible, not to gate it.
 - `/squash-merge` step 2.5 catches WHETHER conflicts exist before merging
   (via `git merge-tree`). This skill catches whether the RESOLUTION was
   correct after conflicts are resolved.
+- `/rebase-stacked-prs` is the full workflow for rebasing a stacked PR onto
+  main; its added-line audit is a specialised form of this skill's 3-way diff.
+- `/preflight-merge` is the same resurrection check, but run as Claude's gate at
+  squash-merge time rather than during a local hand-resolution.
 - Memory: `feedback_conflict_resurrection.md` records the principle and
   the canonical command.
 - Hook: a pre-commit hook gated on `.git/MERGE_HEAD` / `.git/rebase-merge/`

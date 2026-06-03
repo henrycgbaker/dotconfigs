@@ -143,7 +143,7 @@ _claude_preview_hook() {
 # Preview callback for skills
 _claude_preview_skill() {
     local skill="$1"
-    local skill_file="$_CLAUDE_PLUGIN_DIR/commands/${skill}.md"
+    local skill_file="$_CLAUDE_PLUGIN_DIR/skills/${skill}/SKILL.md"
     if [[ -f "$skill_file" ]]; then
         echo "  ─── ${skill} ───"
         head -20 "$skill_file" | sed 's/^/  /'
@@ -220,12 +220,12 @@ _claude_configure_content() {
     done < <(discover_skills "$PLUGIN_DIR")
 
     if [[ ${#available_skills[@]} -eq 0 ]]; then
-        echo "  No skills found in commands directory"
+        echo "  No skills found in skills directory"
     else
         # Show content preview for each available skill
         echo "Available skills:"
         for skill in "${available_skills[@]}"; do
-            local skill_file="$PLUGIN_DIR/commands/${skill}.md"
+            local skill_file="$PLUGIN_DIR/skills/${skill}/SKILL.md"
             if [[ -f "$skill_file" ]]; then
                 # Read description from frontmatter
                 local preview=$(grep "^description:" "$skill_file" | sed 's/^description: //' | cut -c1-60)

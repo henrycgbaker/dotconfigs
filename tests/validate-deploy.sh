@@ -137,9 +137,9 @@ fi
 if [[ -n "${CLAUDE_SKILLS_ENABLED:-}" ]]; then
     IFS=' ' read -ra skill_list <<< "$CLAUDE_SKILLS_ENABLED"
     for skill_name in "${skill_list[@]}"; do
-        check_symlink "skill/${skill_name}.md" \
-            "$deploy_target/commands/${skill_name}.md" \
-            "$REPO_ROOT/plugins/claude/commands/${skill_name}.md"
+        check_symlink "skill/${skill_name}" \
+            "$deploy_target/skills/${skill_name}" \
+            "$REPO_ROOT/plugins/claude/skills/${skill_name}"
     done
 else
     check_skip "claude skills (none configured)"
