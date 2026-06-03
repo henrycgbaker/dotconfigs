@@ -212,6 +212,5 @@
       "docker"
     ]
   },
-  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true
 }
