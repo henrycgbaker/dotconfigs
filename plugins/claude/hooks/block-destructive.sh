@@ -35,10 +35,14 @@ stdin_data=$(cat)
 tool_name=$(echo "$stdin_data" | jq -r '.tool_name // empty')
 tool_input=$(echo "$stdin_data" | jq -c '.tool_input // {}')
 
-# Deny helper — outputs new-format PreToolUse deny decision
+# Deny helper — outputs new-format PreToolUse deny decision. Uses jq to
+# JSON-escape the reason so quotes, backslashes, and newlines can't break the
+# emitted payload.
 deny() {
     local reason="$1"
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"$reason\"}}"
+    local escaped
+    escaped=$(printf '%s' "$reason" | jq -Rs '.')
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": $escaped}}"
     exit 0
 }
 

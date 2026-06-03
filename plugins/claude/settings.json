@@ -71,10 +71,6 @@
       }
     ]
   },
-  "statusLine": {
-    "type": "command",
-    "command": "~/.claude/hooks/gsd-statusline.js"
-  },
   "sandbox": {
     "enabled": true,
     "excludedCommands": [

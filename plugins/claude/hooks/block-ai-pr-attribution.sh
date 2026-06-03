@@ -39,7 +39,9 @@ fi
 
 deny() {
     local reason="$1"
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"$reason\"}}"
+    local escaped
+    escaped=$(printf '%s' "$reason" | jq -Rs '.')
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": $escaped}}"
     exit 0
 }
 
