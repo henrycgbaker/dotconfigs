@@ -611,6 +611,186 @@ _tally_states() {
     eval "$total_var=\$n_total"
 }
 
+# Undeploy a single module (inverse of deploy_module).
+# Removes dotconfigs-owned artefacts; preserves anything we can't safely reverse.
+# - symlink:  remove dotconfigs-owned symlinks (file or directory module)
+# - copy:     remove iff target byte-matches source (untouched copy); else warn+skip
+# - merge:    not safely reversible (target may carry local additions); warn+skip
+# - append:   not safely reversible (appended lines may interleave); warn+skip
+# Counters used: removed, skipped, unchanged
+# Args: source, target, method, include_csv, dotconfigs_root, dry_run
+undeploy_module() {
+    local source="$1"
+    local target="$2"
+    local method="$3"
+    local include_csv="$4"
+    local dotconfigs_root="$5"
+    local dry_run="$6"
+    local abs_source abs_target rel_src
+
+    abs_target=$(expand_tilde "$target")
+    if [[ "$source" != /* ]]; then
+        abs_source="$dotconfigs_root/$source"
+    else
+        abs_source="$source"
+    fi
+    rel_src="${abs_source#$dotconfigs_root/}"
+
+    case "$method" in
+        symlink)
+            if [[ -d "$abs_source" ]]; then
+                # Directory module: walk expected files
+                if [[ "$include_csv" == "__NONE__" ]]; then
+                    return
+                fi
+                local files=() name
+                if [[ -n "$include_csv" ]]; then
+                    local IFS=','
+                    set -f
+                    for name in $include_csv; do files+=("$name"); done
+                    set +f
+                else
+                    local f
+                    for f in "$abs_source"/*; do
+                        [[ ! -e "$f" ]] && continue
+                        [[ -d "$f" ]] && continue
+                        files+=("${f##*/}")
+                    done
+                fi
+                for name in "${files[@]}"; do
+                    _undeploy_symlink "$abs_target/$name" "$dotconfigs_root" "$dry_run" "$rel_src/$name"
+                done
+            else
+                _undeploy_symlink "$abs_target" "$dotconfigs_root" "$dry_run" "$rel_src"
+            fi
+            ;;
+        copy)
+            if [[ ! -e "$abs_target" ]]; then
+                eval "unchanged=\$(( \$unchanged + 1 ))"
+            elif [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target" 2>/dev/null; then
+                if [[ "$dry_run" == "true" ]]; then
+                    echo "  Would remove copy: $abs_target"
+                else
+                    rm -f "$abs_target"
+                    echo "  ✓ Removed copy: $abs_target"
+                fi
+                eval "removed=\$(( \$removed + 1 ))"
+            else
+                echo "  - Skipped (modified): $abs_target"
+                eval "skipped=\$(( \$skipped + 1 ))"
+            fi
+            ;;
+        merge|append)
+            if [[ -e "$abs_target" ]]; then
+                echo "  - Skipped ($method not safely reversible): $abs_target"
+                eval "skipped=\$(( \$skipped + 1 ))"
+            else
+                eval "unchanged=\$(( \$unchanged + 1 ))"
+            fi
+            ;;
+        *)
+            echo "  ! Warning: unknown method '$method' for $rel_src"
+            eval "skipped=\$(( \$skipped + 1 ))"
+            ;;
+    esac
+}
+
+# Helper: remove one symlink target if dotconfigs-owned; warn on foreign content.
+# Args: target_path, dotconfigs_root, dry_run, display_name
+_undeploy_symlink() {
+    local tgt="$1" root="$2" dry="$3" name="$4"
+
+    if [[ ! -e "$tgt" && ! -L "$tgt" ]]; then
+        eval "unchanged=\$(( \$unchanged + 1 ))"
+        return
+    fi
+    if [[ -L "$tgt" ]] && is_dotconfigs_owned "$tgt" "$root"; then
+        if [[ "$dry" == "true" ]]; then
+            echo "  Would remove symlink: $tgt"
+        else
+            rm -f "$tgt"
+            echo "  ✓ Removed symlink: $tgt"
+        fi
+        eval "removed=\$(( \$removed + 1 ))"
+        return
+    fi
+    # Broken dotconfigs-owned symlink: remove if it pointed back into the repo
+    if [[ -L "$tgt" && ! -e "$tgt" ]]; then
+        local raw_target
+        raw_target=$(readlink "$tgt" 2>/dev/null)
+        if [[ "$raw_target" == "$root"* ]]; then
+            if [[ "$dry" == "true" ]]; then
+                echo "  Would remove broken symlink: $tgt"
+            else
+                rm -f "$tgt"
+                echo "  ✓ Removed broken symlink: $tgt"
+            fi
+            eval "removed=\$(( \$removed + 1 ))"
+            return
+        fi
+    fi
+    echo "  - Skipped (foreign): $tgt"
+    eval "skipped=\$(( \$skipped + 1 ))"
+}
+
+# Walk a config and undeploy every module. Mirror of deploy_from_json.
+# Args: config_file, dotconfigs_root, [group_key], [dry_run], [project_root]
+undeploy_from_json() {
+    local config_file="$1"
+    local dotconfigs_root="$2"
+    local group_key="${3:-}"
+    local dry_run="${4:-true}"
+    local project_root="${5:-}"
+    local modules_data source target method include_csv
+
+    if ! check_jq; then
+        return 1
+    fi
+    if [[ ! -f "$config_file" ]]; then
+        echo "Error: config file not found: $config_file"
+        return 1
+    fi
+
+    removed=0
+    skipped=0
+    unchanged=0
+
+    modules_data=$(parse_modules "$config_file" "$group_key")
+    if [[ -z "$modules_data" ]]; then
+        echo "No modules found in $config_file"
+        [[ -n "$group_key" ]] && echo "(group: $group_key)"
+        return 0
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Dry-run mode: no changes will be made"
+        echo ""
+    fi
+    if [[ -n "$group_key" ]]; then
+        echo "Undeploying group: $group_key"
+    else
+        echo "Undeploying all modules"
+    fi
+    echo ""
+
+    while IFS=$'\t' read -r source target method include_csv; do
+        if [[ -n "$project_root" && "$target" != /* && "$target" != ~* ]]; then
+            target="$project_root/$target"
+        fi
+        undeploy_module "$source" "$target" "$method" "$include_csv" "$dotconfigs_root" "$dry_run"
+    done <<< "$modules_data"
+
+    echo ""
+    echo "Undeploy summary:"
+    if [[ "$dry_run" == "true" ]]; then
+        echo "  Would remove: $removed"
+    else
+        echo "  Removed:      $removed"
+    fi
+    echo "  Unchanged:    $unchanged"
+    echo "  Skipped:      $skipped"
+}
+
 # Main deployment entry point
 # Args: config_file, dotconfigs_root, [group_key], [dry_run], [force], [project_root]
 deploy_from_json() {

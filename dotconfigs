@@ -34,6 +34,7 @@ Usage:
   dotconfigs project-init [path]                Scaffold per-project config
   dotconfigs project-deploy [path] [options]    Deploy per-project configuration
   dotconfigs cleanup [options]                  Remove stale/broken symlinks
+  dotconfigs undeploy [group] [options]         Remove deployed config (inverse of deploy)
   dotconfigs status [plugin]                    Show deployment status
   dotconfigs list                               List available plugins
   dotconfigs help [command]                     Show help for command
@@ -50,6 +51,9 @@ Commands:
                   Options: --force, --dry-run
                   Aliases: project
   cleanup         Remove stale dotconfigs symlinks and broken symlinks
+                  Default: dry-run. Use --apply to actually remove.
+                  Options: --apply, --dry-run, --project <path>
+  undeploy        Remove deployed artefacts (inverse of deploy)
                   Default: dry-run. Use --apply to actually remove.
                   Options: --apply, --dry-run, --project <path>
   status          Check deployment status
@@ -156,6 +160,34 @@ Examples:
   dotconfigs project-deploy .                Deploy current project
   dotconfigs project-deploy ~/myrepo --force Deploy, skip conflict prompts
   dotconfigs project-deploy . --dry-run      Preview deployment
+EOF
+            ;;
+        undeploy)
+            cat <<EOF
+dotconfigs undeploy — Remove deployed configuration
+
+Usage:
+  dotconfigs undeploy [group] [--apply] [--dry-run] [--project <path>]
+
+Description:
+  Inverse of deploy. Walks the manifest and removes deployed artefacts:
+  - symlink modules: removes dotconfigs-owned symlinks (foreign files preserved)
+  - copy modules:    removes file only if byte-identical to source (untouched)
+  - merge/append:    skipped (not safely reversible without losing local edits)
+
+  Without a group name, undeploys all groups.
+  Default mode is dry-run. Use --apply to actually remove files.
+
+Options:
+  --apply          Actually remove files (default: dry-run)
+  --dry-run        Preview what would be removed (default)
+  --project <path> Undeploy a project config instead of global
+
+Examples:
+  dotconfigs undeploy                      Preview undeploy of all groups
+  dotconfigs undeploy --apply              Undeploy all groups
+  dotconfigs undeploy claude --apply       Undeploy claude group only
+  dotconfigs undeploy --project . --apply  Undeploy current project
 EOF
             ;;
         cleanup)
@@ -425,6 +457,56 @@ _create_path_symlink() {
             echo "Warning: Failed to create $name symlink at $sym" >&2
         fi
     done
+}
+
+cmd_undeploy() {
+    local dry_run="true"
+    local config_file="$GLOBAL_CONFIG"
+    local project_path=""
+    local group=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --apply)   dry_run="false"; shift ;;
+            --dry-run) dry_run="true"; shift ;;
+            --project)
+                shift
+                project_path="${1:-.}"
+                shift
+                ;;
+            -*)
+                echo "Error: Unknown option '$1'" >&2
+                echo "Usage: dotconfigs undeploy [group] [--apply] [--dry-run] [--project <path>]" >&2
+                exit 1
+                ;;
+            *)
+                if [[ -z "$group" ]]; then
+                    group="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -n "$project_path" ]]; then
+        project_path=$(expand_path "$project_path")
+        config_file="$project_path/.dotconfigs/project.json"
+    fi
+
+    if ! check_jq; then
+        return 1
+    fi
+    if [[ ! -f "$config_file" ]]; then
+        echo "Error: config file not found: $config_file" >&2
+        exit 1
+    fi
+
+    undeploy_from_json "$config_file" "$SCRIPT_DIR" "$group" "$dry_run" "$project_path"
+
+    if [[ "$dry_run" == "true" && "${removed:-0}" -gt 0 ]]; then
+        echo ""
+        echo "Run 'dotconfigs undeploy --apply' to remove."
+    fi
 }
 
 cmd_cleanup() {
@@ -854,6 +936,9 @@ main() {
             ;;
         cleanup)
             cmd_cleanup "${@:2}"
+            ;;
+        undeploy)
+            cmd_undeploy "${@:2}"
             ;;
         global-deploy|deploy)
             cmd_deploy "${@:2}"
