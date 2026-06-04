@@ -43,6 +43,17 @@ Per-project hooks/skills, from inside a repo: `dotconfigs project-init . && dotc
 
 See [Plugins](docs/plugins.md) for the full module tables.
 
+## Install the claude plugin via Claude Code
+
+The claude plugin is also published as a native Claude Code plugin named **`dots`**, for use without the full dotconfigs deploy. From inside Claude Code:
+
+```
+/plugin marketplace add henrycgbaker/dotconfigs
+/plugin install dots
+```
+
+It ships the same hooks, skills, output style, and (hook-free) `settings.json`, generated from `plugins/claude/` into the committed `claude-plugin/` artifact by `scripts/build-claude-plugin.sh`. Installed this way the skills are namespaced - `/dots:commit`, `/dots:squash-merge`, etc. (the dotconfigs deploy installs them un-namespaced). Re-run the build script after editing the source to refresh the artifact.
+
 ## How it works (in one breath)
 
 Plugin **manifests** (`plugins/*/manifest.json`) are the single source of truth. `global-init`/`project-init` assemble them into `.dotconfigs/global.json` / `.dotconfigs/project.json` (your editable include/exclude lists), and `global-deploy`/`project-deploy` link each module to its target. Deploy only touches files it owns and never clobbers foreign files without asking. Full picture → [Architecture](docs/architecture.md).
