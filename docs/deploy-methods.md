@@ -32,6 +32,11 @@ Both place managed lines into a file the user also touches. The deciding questio
 
 Rule of thumb: **may a rewrite leak into shared history or others' machines? → `append` (seed). Is it private and evolving? → `managed`.**
 
+Two behaviour notes:
+
+- **Reversibility.** `undeploy` strips a `managed` block (and any stray markers), so the dotconfigs-managed lines are removed while the user's other lines stay. `append` and `merge` are *not* reversed (their lines can't be told apart from the user's). That means undeploying a project removes dotconfigs' `.git/info/exclude` patterns - intended, but re-run the deploy to restore them.
+- **Migration from `append`.** A target that was previously `append`-deployed has the old lines *unmarked*. The first `managed` deploy can't recognise them, so it adds a fresh marked block alongside - leaving the legacy copy as plain user lines. For a machine-local file like `.git/info/exclude` the duplicate ignore patterns are harmless; delete the file and redeploy if you want a clean single block.
+
 ## The `settings.json` case (why `merge` exists)
 
 Claude Code's `~/.claude/settings.json` is **co-owned**: the user/app appends permission grants over time (the `permissions.allow` array). Both naive methods fail it:
