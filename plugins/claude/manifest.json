@@ -46,7 +46,8 @@
         "rebase-stacked-prs",
         "branch-cleanup",
         "pr-create",
-        "fix-pr-feedback"
+        "fix-pr-feedback",
+        "diagnose-missing-work"
       ]
     },
     "claude-md": {
@@ -97,7 +98,8 @@
         "rebase-stacked-prs",
         "branch-cleanup",
         "pr-create",
-        "fix-pr-feedback"
+        "fix-pr-feedback",
+        "diagnose-missing-work"
       ],
       "exclude": []
     }

@@ -22,27 +22,27 @@
 
 ## Git
 
-Workflow: Feature branches (`feature/*`, `fix/*`, `refactor/*`, `docs/*`) + squash merge to main. Commit freely on branches (WIP, notes, experiments fine), squash merge with clean conventional commit, delete branch. Use `/commit` and `/squash-merge`.
+Workflow: feature branches (`feature/*`, `fix/*`, `refactor/*`, `docs/*`), squash-merged to
+main via PR. Commit freely on branches; squash to one clean conventional commit. Skills own
+the mechanics - reach for them by name: `/commit`, `/pr-create`, `/squash-merge` (gated by
+`/preflight-merge`), `/fix-pr-feedback`, `/rebase-stacked-prs`, `/branch-cleanup`,
+`/check-resolution`.
 
-Be accretive with commits on branches/PRs. New review feedback, polish, /simplify findings, follow-up fixes - these go in new commits, not amends. Branches squash-merge, so commit count is free during review and discrete commits make changes visible to the reviewer. Amend only for tiny cosmetic fixes to a freshly-pushed commit (typo in message, fixing a stray whitespace) or when the user explicitly asks. "Yes" to "push when ready" is not "yes, amend" - confirm explicitly before amending.
+Always-on rules (skills and hooks do not enforce these):
+- Squash-merge PRs only. Never push direct to main.
+- Be accretive: review feedback, polish, follow-up fixes go in new commits, not amends.
+  Amend only for a tiny cosmetic fix to a freshly-pushed commit, or when explicitly asked.
+  "Push when ready" is not "amend" - confirm first.
+- Commit subjects `type(scope): description` (feat/fix/docs/refactor/test, <72 chars,
+  imperative). No phase numbers, milestone IDs, or workflow references. (The `type(scope)`
+  format and AI-attribution block are hook-enforced; `/commit` applies them.)
+- Do not comment on GitHub unless explicitly asked.
+- "I thought we did X" / work seems lost: `git fetch origin` FIRST, never reason from stale
+  local refs. After a squash-merge the source-branch commits go dangling - that is normal,
+  not loss. Diff the dangling commit against `origin/main` before concluding anything.
 
-Merges to main: Always via squash-merge PR (`/squash-merge`). Branch protection enforces CI pass. No direct pushes to main.
-
-Commits (main/squash): `type(scope): description` - types: feat, fix, docs, refactor, test. Subject <72 chars, imperative mood. No AI attribution. Never include phase numbers, milestone IDs, or GSD workflow references in commit messages.
-
-Hooks: Per-project via `.git/hooks/`. Install with `dotconfigs project .` or manually:
-`cp ~/.dotconfigs/git-hooks/{pre-commit,commit-msg,pre-push} .git/hooks/ && chmod +x .git/hooks/*`
-- Pre-commit: Identity check, secrets scan, block main commits, Ruff format+lint on staged files
-- Commit-msg: Blocks AI attribution
-- Pre-push: Fast lint + format check, force-push protection (tests + types run in CI)
-
-Exclusions: Add CLAUDE.md and .claude/ to `.git/info/exclude` in projects (not .gitignore).
-
-Do NOT comment directly on GitHub, unless requested to explicitly.
-
-Rebasing a stale PR: if a PR branch has diverged from main by more than a handful of merges, check `git log origin/main..HEAD` and `git log HEAD..origin/main` before `git rebase origin/main`. Commits on the branch that duplicate work already merged on main (similar titles, overlapping file changes) need to be explicitly dropped via `git rebase -i origin/main` with `drop` directives - don't rely on conflict resolution to sort it out. When conflicts arise from review-polish commits that only exist on main, take main's version rather than trying to merge the two forms.
-
-Missing-work diagnosis: When a user says "I thought we did X" or "this seems to have got lost", the FIRST step is `git fetch origin` - do not reason about main from stale local refs. Then check `git log origin/main` and `gh pr list --state merged --search "<keyword>"`. In a squash-merge workflow, merged PRs create new commits on main with different SHAs; the original source-branch commits persist in the loose object store as "dangling" and this is the normal post-merge state, NOT evidence of loss. Before ever concluding work is lost from `git fsck --lost-found --unreachable` output, diff the dangling commits' content against `origin/main` to check for overlap - in a squash-merge repo they are almost always already integrated.
+Setup: hooks and `.git/info/exclude` entries (CLAUDE.md, .claude/) are installed by
+`dotconfigs project .`. The live hook roster lives in docs/ROSTER.md.
 
 ## Code Style
 
