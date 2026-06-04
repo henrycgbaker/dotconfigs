@@ -18,6 +18,28 @@ def requires_cmd(name: str) -> None:
         pytest.skip(f"{name} not available")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _hermetic_git(tmp_path_factory):
+    """Isolate git from the developer's real ~/.gitconfig for the whole session.
+
+    Once dotconfigs sets `init.templateDir` globally, every `git init` seeds the
+    git hooks - which would silently contaminate any test that creates a repo
+    (e.g. the status audit's "bare" repo would arrive pre-populated). Point
+    GIT_CONFIG_GLOBAL/SYSTEM at empty files so test repos are genuinely clean.
+    """
+    empty = tmp_path_factory.mktemp("gitconfig") / "empty"
+    empty.write_text("")
+    saved = {k: os.environ.get(k) for k in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM")}
+    os.environ["GIT_CONFIG_GLOBAL"] = str(empty)
+    os.environ["GIT_CONFIG_SYSTEM"] = str(empty)
+    yield
+    for key, val in saved.items():
+        if val is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = val
+
+
 @dataclass
 class BashResult:
     returncode: int
@@ -126,8 +148,13 @@ def fake_source_tree(tmp_path: Path):
 
 
 @pytest.fixture(scope="session")
-def run_dotconfigs(dotconfigs_root: Path):
-    """Run the real dotconfigs CLI entry point."""
+def run_dotconfigs(dotconfigs_root: Path, tmp_path_factory):
+    """Run the real dotconfigs CLI entry point.
+
+    Isolates the project registry to a temp file by default so `project-deploy`
+    in tests never mutates the developer's real ~/.dotconfigs/projects.list.
+    """
+    default_registry = tmp_path_factory.mktemp("registry") / "projects.list"
 
     def _run(
         args: list[str] | None = None,
@@ -136,6 +163,9 @@ def run_dotconfigs(dotconfigs_root: Path):
     ) -> BashResult:
         cli = str(dotconfigs_root / "dotconfigs")
         cmd_args = " ".join(f'"{a}"' for a in (args or []))
-        return run_bash(f'"{cli}" {cmd_args}', cwd=cwd, env=env)
+        merged_env = {"DOTCONFIGS_PROJECT_REGISTRY": str(default_registry)}
+        if env:
+            merged_env.update(env)
+        return run_bash(f'"{cli}" {cmd_args}', cwd=cwd, env=merged_env)
 
     return _run

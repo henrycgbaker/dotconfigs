@@ -215,55 +215,64 @@ def test_dup_guard_same_script_different_event_ok(dotconfigs_root, tmp_path: Pat
 # ---------------------------------------------------------------------------
 
 
-def _init_repo_with_hooks(path: Path, hooks: list[str]):
-    subprocess.run(["git", "init", str(path)], capture_output=True, check=True)
-    hookdir = path / ".git" / "hooks"
-    hookdir.mkdir(parents=True, exist_ok=True)
-    for h in hooks:
-        f = hookdir / h
-        f.write_text("#!/bin/bash\nexit 0\n")
-        f.chmod(0o755)
+def _audit_only(dotconfigs_root: Path, registry: Path, home: Path):
+    """Run `status git` against a specific registry and return combined output."""
+    res = run_bash(
+        f'"{dotconfigs_root}/dotconfigs" status git',
+        env={"HOME": str(home), "DOTCONFIGS_PROJECT_REGISTRY": str(registry)},
+    )
+    return res.stdout + res.stderr
 
 
 def test_status_audit_flags_missing_hooks(dotconfigs_root, tmp_path: Path):
-    """A registered repo lacking its git hooks is reported as missing."""
-    repo = tmp_path / "barerepo"
-    _init_repo_with_hooks(repo, [])  # git repo, but no dotconfigs hooks
+    """A registered repo with no dotconfigs hooks is reported as missing.
 
+    `--template=` disables templateDir seeding so the repo is genuinely bare —
+    no stub files are fabricated, and nothing is ever written into .git/hooks.
+    """
+    repo = tmp_path / "barerepo"
+    subprocess.run(
+        ["git", "init", "--template=", str(repo)], capture_output=True, check=True
+    )
     registry = tmp_path / "projects.list"
     registry.write_text(str(repo) + "\n")
 
-    res = run_bash(
-        f'"{dotconfigs_root}/dotconfigs" status git',
-        env={
-            "HOME": str(tmp_path / "home"),
-            "DOTCONFIGS_PROJECT_REGISTRY": str(registry),
-        },
-    )
-    out = res.stdout + res.stderr
+    out = _audit_only(dotconfigs_root, registry, tmp_path / "home")
     assert "project git-hook audit" in out
     assert str(repo) in out
     assert "missing" in out
 
 
-def test_status_audit_passes_repo_with_hooks(dotconfigs_root, tmp_path: Path):
-    """A registered repo with all expected hooks present audits clean."""
-    manifest = json.loads((dotconfigs_root / "plugins/git/manifest.json").read_text())
-    expected = manifest["project"]["hooks"]["include"]
+def test_status_audit_clean_then_flags_drift_after_hook_removed(
+    dotconfigs_root, run_dotconfigs, tmp_path: Path
+):
+    """End-to-end against the real install path: project-deploy installs hooks
+    (audit clean), and removing one later (e.g. a re-clone) is flagged as drift.
 
-    repo = tmp_path / "goodrepo"
-    _init_repo_with_hooks(repo, expected)
-
-    registry = tmp_path / "projects.list"
-    registry.write_text(str(repo) + "\n")
-
-    res = run_bash(
-        f'"{dotconfigs_root}/dotconfigs" status git',
-        env={
-            "HOME": str(tmp_path / "home"),
-            "DOTCONFIGS_PROJECT_REGISTRY": str(registry),
-        },
+    Uses the real CLI for setup so the test exercises registration + install +
+    audit together, and the isolated registry shared by the run_dotconfigs
+    fixture — no hand-fabricated .git/hooks content.
+    """
+    repo = tmp_path / "repo"
+    subprocess.run(
+        ["git", "init", "--template=", str(repo)], capture_output=True, check=True
     )
-    out = res.stdout + res.stderr
-    assert str(repo) in out
-    assert "missing" not in out.split("project git-hook audit", 1)[-1]
+    # Per-test registry so the audit sees only this repo (the run_dotconfigs
+    # default registry is session-shared).
+    env = {"DOTCONFIGS_PROJECT_REGISTRY": str(tmp_path / "projects.list")}
+    assert run_dotconfigs(["project-init", str(repo)], env=env).returncode == 0
+    assert run_dotconfigs(["project", str(repo), "--force"], env=env).returncode == 0
+
+    # After a real deploy the audit is clean for this repo.
+    clean = run_dotconfigs(["status", "git"], env=env)
+    audit = (clean.stdout + clean.stderr).split("project git-hook audit", 1)[-1]
+    assert str(repo) in audit
+    assert "missing" not in audit and "dangling" not in audit
+
+    # Simulate drift: drop the commit-msg hook (rm the symlink, not its target).
+    (repo / ".git" / "hooks" / "commit-msg").unlink()
+    drifted = run_dotconfigs(["status", "git"], env=env)
+    drift_audit = (drifted.stdout + drifted.stderr).split("project git-hook audit", 1)[-1]
+    assert str(repo) in drift_audit
+    assert "commit-msg" in drift_audit
+    assert "missing" in drift_audit

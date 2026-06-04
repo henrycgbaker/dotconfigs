@@ -1024,9 +1024,13 @@ cmd_project() {
     fi
 }
 
-# Append a repo path to the project registry (deduplicated). Args: abs_path
+# Append a repo path to the project registry (deduplicated). Canonicalises to an
+# absolute path so the status audit can resolve it from any cwd. Args: path
 _register_project() {
     local path="$1"
+    # Absolutise: expand_path only handles ~, so a relative "." would be stored
+    # verbatim and break the audit. cd into the repo and read its real path.
+    path=$(cd "$path" 2>/dev/null && pwd -P) || return 0
     mkdir -p "$(dirname "$PROJECT_REGISTRY")"
     if ! grep -qxF "$path" "$PROJECT_REGISTRY" 2>/dev/null; then
         echo "$path" >> "$PROJECT_REGISTRY"
