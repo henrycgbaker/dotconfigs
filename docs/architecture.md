@@ -13,31 +13,20 @@ Plugin manifests (`plugins/*/manifest.json`) declare all available functionality
 - **Hook METADATA** (`# CONFIG:` lines in hook files) - the SSOT for hook descriptions and config keys.
 - **`generate-roster.sh`** - reads manifests + hook METADATA to produce [ROSTER.md](ROSTER.md).
 
-```
-                         SSOT: Plugin Manifests
-                      plugins/*/manifest.json
-                                │
-          ┌─────────────────────┼─────────────────────┐
-          │                     │                     │
-          ▼                     ▼                     ▼
-   .global sections      .project sections     Hook METADATA
-          │                     │              (# CONFIG: lines)
-          ▼                     ▼                     │
-   ┌──────────────────┐ ┌────────────────────┐        ▼
-   │ .dotconfigs/     │ │ .dotconfigs/       │ generate-roster.sh
-   │  global.json     │ │  project.json      │        │
-   └──────┬───────────┘ └───────┬────────────┘        ▼
-          │                     │              ┌────────────────┐
-  dotconfigs global-deploy  dotconfigs project-deploy  │ docs/ROSTER.md │
-          │                     │              └────────────────┘
-          ▼                     ▼
-   ┌──────────────┐    ┌────────────────┐
-   │ ~/.claude/   │    │ .git/hooks/    │
-   │ ~/.gitconfig │    │ .claude/hooks/ │
-   │ ~/.dotconfigs│    │ .claude/skills/│
-   │ ~/Library/   │    │ .git/info/excl │
-   └──────────────┘    └────────────────┘
-    Filesystem             Filesystem
+```mermaid
+flowchart TD
+    SSOT["SSOT: Plugin Manifests<br/>plugins/*/manifest.json"]
+    SSOT --> G[".global sections"]
+    SSOT --> P[".project sections"]
+    SSOT --> M["Hook METADATA<br/>(# CONFIG: lines)"]
+
+    G --> GJ[".dotconfigs/global.json"]
+    P --> PJ[".dotconfigs/project.json"]
+    M --> RS["generate-roster.sh"]
+
+    GJ -->|dotconfigs global-deploy| GFS["~/.claude/<br/>~/.gitconfig<br/>~/.dotconfigs<br/>~/Library/"]
+    PJ -->|dotconfigs project-deploy| PFS[".git/hooks/<br/>.claude/hooks/<br/>.claude/skills/<br/>.git/info/exclude"]
+    RS --> ROSTER["docs/ROSTER.md"]
 ```
 
 Each manifest declares modules with `source`, `target`, `method`, and `include`/`exclude` lists - see [Manifest format](manifest.md).
@@ -68,7 +57,7 @@ dotconfigs tracks ownership **per file** (not per directory) by resolving each t
 ```
   ~/.claude/
   ├── hooks/
-  │   ├── block-destructive.sh ──→ dotconfigs/plugins/claude/hooks/...  (ours)
+  │   ├── block-rm-rf-root.sh  ──→ dotconfigs/plugins/claude/hooks/...  (ours)
   │   └── some-other-hook.sh   ──→ /other/tool/...               (foreign, untouched)
   └── skills/
       ├── commit/              ──→ dotconfigs/plugins/claude/skills/... (ours)

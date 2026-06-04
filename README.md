@@ -37,7 +37,7 @@ Per-project hooks/skills, from inside a repo: `dotconfigs project-init . && dotc
 
 | Plugin | Deploys |
 |--------|---------|
-| **claude** | Claude Code hooks, skills (`/commit`, `/squash-merge`, `/preflight-merge`, `/check-resolution`, `/rebase-stacked-prs`), `settings.json`, global `CLAUDE.md` |
+| **claude** | Claude Code hooks (per-pattern safety guards + lifecycle hooks), skills (`/commit`, `/squash-merge`, `/preflight-merge`, `/check-resolution`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback`), `settings.json`, the `concise-execution` output style, global `CLAUDE.md`, and `claude-hooks.conf` |
 | **git** | `~/.gitconfig`, global excludes (`~/.config/git/ignore`), 8 branch-aware hooks (pre-commit, pre-push, commit-msg, …), and per-project `.git/info/exclude` + `.gitignore` |
 | **shell** | zsh `init.zsh` + `aliases.zsh` (source them from `.zshrc`) |
 

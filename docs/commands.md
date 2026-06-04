@@ -13,6 +13,7 @@
 | `project-deploy [path]` | `project` | Deploy per-project config |
 | `cleanup [path]` | | Remove deployed symlinks dotconfigs owns |
 | `status [plugin]` | | Show deployment status / drift |
+| `validate [--strict]` | | Lint manifests + scan deployed JSON for dangling references |
 | `list` | | List plugins and whether they're configured |
 | `help [command]` | | Detailed help |
 
@@ -72,6 +73,14 @@ dotconfigs status
 dotconfigs status claude
 ```
 Shows per-file state: **✓ deployed** (symlink correct), **△ drifted** (broken/foreign/wrong target), **✗ not deployed**. Merge-managed files like `settings.json` are reported by deploy, not here.
+
+## validate `[--strict]`
+
+```bash
+dotconfigs validate            # lint manifests + scan deployed config
+dotconfigs validate --strict   # treat warnings as failures too
+```
+Lints every plugin manifest (valid JSON, known `method`, whitelisted keys, source exists) and scans deployed merge-managed JSON (e.g. `~/.claude/settings.json`) for dangling command references - a `statusLine.command` or hook `command` pointing at a script that isn't actually deployed. Exits non-zero on any error; `--strict` also fails on warnings. Runs without deploying.
 
 ## list
 
