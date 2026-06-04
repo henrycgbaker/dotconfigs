@@ -51,7 +51,8 @@ Custom Claude Code skills (`/name`) for common workflows.
 | /branch-cleanup | Delete local branches already merged into main and prune stale remote-tracking refs. Use after squash-merging a PR, when local `git branch` is cluttered with leftovers, or when the user says "clean up branches". |
 | /check-resolution | Audit a just-resolved merge or rebase locally to confirm the resolution didn't silently resurrect code the branch removed or revert a fix that landed on main. Use after `git add` of resolved files and before `git rebase --continue` / `git commit`. |
 | /commit | Stage changes and create a conventional commit on the current branch. Use when wrapping up a logical unit of work or when the user says "commit". |
-| /fix-pr-feedback | Walk through unresolved review comments on a PR and address each one as a discrete commit on the branch. Use when a reviewer has left comments / requested changes and the user says "address the feedback", "fix the comments", or "respond to the review". |
+| /diagnose-missing-work | Diagnose a "I thought we did X" / "this got lost" report before concluding work is missing. Fetches first, distinguishes squash-merge dangling commits (normal) from genuine loss, and checks merged PRs and the reflog. Use when the user says work seems gone, a change isn't on main, or a branch "disappeared" - and BEFORE any destructive recovery or re-doing the work. |
+| /fix-pr-feedback | Sync a PR branch, triage its unresolved review comments, let the user pick which to address (mechanical via checklist, judgement-calls via options), fix each as a discrete commit, then audit and offer to push. Runs interactively by default; --semi-auto and --auto reduce or remove the prompts for unattended runs. Use when a reviewer has left comments / requested changes and the user says "address the feedback", "fix the comments", or "respond to the review". |
 | /pr-create | Open a GitHub PR for the current branch with a derived title and a structured Summary / Test plan / Doc audit body. Use when the user says "open a PR", "draft a PR", or after a feature branch is ready for review but not yet merged. |
 | /preflight-merge | Simulate the squash of a PR against its current base and flag silent auto-merge regressions that would reintroduce code the base has since fixed. Use as the mandatory gate inside `/squash-merge` before `gh pr merge`, or before completing any merge of a long-running or stacked PR. |
 | /rebase-stacked-prs | Rebase a stacked PR onto current main by cherry-picking only its genuinely-new commits and auditing the result, dropping already-merged stacked-below work without reintroducing legacy code. Use when a stacked PR's lower PRs have merged (often in modified form) and a naive `git rebase --onto` would replay superseded commits. |
@@ -69,4 +70,4 @@ To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deployi
 
 ---
 
-*Generated: 2026-06-04 08:30:14 UTC*
+*Generated: 2026-06-04 10:26:43 UTC*
