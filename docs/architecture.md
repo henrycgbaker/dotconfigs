@@ -31,6 +31,14 @@ flowchart TD
 
 Each manifest declares modules with `source`, `target`, `method`, and `include`/`exclude` lists - see [Manifest format](manifest.md).
 
+### Three files, three jobs
+
+These are easy to conflate but operate at different stages:
+
+- **`plugins/*/manifest.json` (the catalogue)** - declares everything a plugin *can* deploy. Committed, identical on every machine. Read at `global-init`/`project-init` time, **never at deploy time**.
+- **`.dotconfigs/global.json` / `project.json` (the selection)** - assembled from the manifest by `init`, then *edited by you* (`include`/`exclude`) to pick the subset that actually deploys. Local, gitignored. **`deploy` reads only this** - so editing the manifest alone changes nothing until you re-run `init`, and to stop deploying something you edit the selection, not the catalogue.
+- **`claude-hooks.conf` (runtime toggles)** - `KEY=VALUE` switches the *hooks* read when they execute (e.g. `CLAUDE_HOOK_VENV_AUTO=true`). Nothing to do with what gets deployed; it tunes how already-deployed hooks behave.
+
 ## Data flow
 
 ```
