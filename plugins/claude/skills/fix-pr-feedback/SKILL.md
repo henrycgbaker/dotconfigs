@@ -1,8 +1,8 @@
 ---
 name: fix-pr-feedback
-description: Sync a PR branch, triage its unresolved review comments, let the user pick which to address (mechanical via checklist, judgement-calls via options), fix each as a discrete commit, then audit and offer to push. Use when a reviewer has left comments / requested changes and the user says "address the feedback", "fix the comments", or "respond to the review".
+description: Sync a PR branch, triage its unresolved review comments, let the user pick which to address (mechanical via checklist, judgement-calls via options), fix each as a discrete commit, then audit and offer to push. Runs interactively by default; --semi-auto and --auto reduce or remove the prompts for unattended runs. Use when a reviewer has left comments / requested changes and the user says "address the feedback", "fix the comments", or "respond to the review".
 allowed-tools: Bash, Read, Edit, Write, Task, AskUserQuestion
-argument-hint: [PR-number]
+argument-hint: "[PR-number] [--auto|--semi-auto]"
 ---
 
 # Fix PR Feedback
@@ -28,15 +28,51 @@ prefix the single command, e.g.:
 - Not for the user's own self-review notes mid-development; that's just
   normal commits.
 
+## Modes
+
+Selected by a flag in the arguments; default is **interactive**.
+
+| Mode | Mechanical fixes (step 5) | Judgement calls (step 6) | Push (step 9) |
+|------|---------------------------|--------------------------|---------------|
+| **interactive** (default) | checklist — user picks | option menu — user picks | always ask |
+| `--semi-auto` | apply all automatically | best-assumption for low/medium-uncertainty; **stop and ask** only on high-uncertainty | push iff audit all-✓, else stop + report |
+| `--auto` | apply all automatically | best-assumption for **all**; never stop for a comment decision | push iff audit all-✓, else stop + report |
+
+**High-uncertainty** (the only thing `--semi-auto` stops for): the comment is
+ambiguous, has more than one reasonable response, asks a question that needs a
+human answer, or the fix would meaningfully change behaviour, architecture, or
+a public interface. Clear code suggestions and soft nits are *not*
+high-uncertainty.
+
+**Best-assumption** (how the non-interactive modes resolve a judgement call
+without asking): apply a concrete code suggestion as given; for a soft nit with
+no clear win, keep the current approach; for a question, note the answer in the
+commit message / report rather than posting it. Record every assumption made in
+the final report so the user can review what was decided for them.
+
+**Fail-safes apply in every mode, including `--auto`:**
+- A rebase conflict that isn't trivially resolvable (step 2) stops the run —
+  never auto-resolve a conflict.
+- If the audit (step 8) marks any comment ✗, do **not** push. `--auto` /
+  `--semi-auto` may attempt one fix-up loop; if it's still ✗, stop and report.
+
 ## Process
 
-### 1. Identify the PR
-PR number from `$ARGUMENTS`. If empty, infer from current branch:
+### 1. Parse mode and identify the PR
+Pull the mode flag out of `$ARGUMENTS` first (default interactive), then take
+the PR number from the remainder; if empty, infer from the current branch:
 ```bash
-PR="$ARGUMENTS"
+MODE=interactive
+ARGS="$ARGUMENTS"
+case "$ARGS" in
+  *--semi-auto*) MODE=semi-auto; ARGS="${ARGS//--semi-auto/}" ;;
+  *--auto*)      MODE=auto;      ARGS="${ARGS//--auto/}" ;;
+esac
+PR="$(echo "$ARGS" | tr -d '[:space:]')"
 [ -z "$PR" ] && PR=$(gh pr view --json number --jq .number)
 [ -z "$PR" ] && { echo "No PR for current branch - pass a PR number"; exit 1; }
 ```
+`$MODE` governs steps 5, 6, and 9 (see [Modes](#modes)).
 
 ### 2. Sync the branch before touching anything
 Never address feedback on a stale branch - fixes built on an old base waste a
@@ -106,7 +142,9 @@ When in doubt, classify as input-required. Never silently skip or silently
 comply with a contested comment.
 
 ### 5. Mechanical fixes - user picks via checklist
-Present the mechanical rows through `AskUserQuestion` with `multiSelect: true`
+**`--auto` / `--semi-auto`:** skip the checklist - apply every mechanical fix.
+
+**interactive:** present the mechanical rows through `AskUserQuestion` with `multiSelect: true`
 so the user ticks which to apply. `AskUserQuestion` allows at most 4 options
 per question, so **batch in groups of ≤4** (several questions if needed) -
 never truncate the list to fit. Each option label = the fix; description =
@@ -114,12 +152,15 @@ the file:line and what changes. Unticked items are left for the user to
 revisit; note them in the final report rather than dropping them.
 
 ### 6. Input-required fixes - user picks an option per comment
-For each input-required row, present a single-select `AskUserQuestion` with
-2-4 concrete options - typically: apply the reviewer's suggestion / keep the
-current approach (optionally with a reply drafted for the user to post) / a
-named alternative. Use the user's choice as the instruction for that fix. If
-the user picks "keep current approach", that comment gets no commit; record it
-for the report.
+**`--auto`:** resolve every row by best-assumption (see [Modes](#modes)); never
+prompt. **`--semi-auto`:** best-assumption for low/medium-uncertainty rows;
+prompt only on high-uncertainty ones. **interactive:** prompt on every row.
+
+When prompting, present a single-select `AskUserQuestion` with 2-4 concrete
+options - typically: apply the reviewer's suggestion / keep the current
+approach (optionally with a reply drafted for the user to post) / a named
+alternative. Use the choice as the instruction for that fix. "Keep current
+approach" means no commit for that comment; record it for the report.
 
 ### 7. Implement - one commit per chosen fix
 Work through the selected fixes. One commit per comment (or per tight cluster
@@ -151,9 +192,11 @@ deliberate user "keep" decision, ✗ for anything left open. Show the table to
 the user. If the auditor marks something ✗ that should have been fixed, loop
 back to step 7.
 
-### 9. Ask before pushing
-Do not push automatically. After the audit, ask the user via `AskUserQuestion`
-whether to push the feedback commits:
+### 9. Push
+**interactive:** do not push automatically - after the audit, ask via
+`AskUserQuestion` whether to push. **`--auto` / `--semi-auto`:** if the audit
+in step 8 is all-✓, push without asking; if it has any ✗, do not push - stop
+and report (the fail-safe from [Modes](#modes)).
 ```bash
 git push origin HEAD
 ```
