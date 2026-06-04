@@ -35,6 +35,7 @@ Project flow: manifests -> `project-init` -> `.dotconfigs/project.json` -> `proj
 - `dotconfigs project-init [path]` -- scaffold project.json for a repo
 - `dotconfigs project [path]` -- deploy project config (.git/hooks/, .claude/, etc.)
 - `dotconfigs status` -- check deployment status
+- `dotconfigs validate [--strict]` -- lint manifests + scan deployed JSON for dangling references
 - `dotconfigs list` -- list available plugins
 
 ## Testing

@@ -13,10 +13,13 @@ Manages Claude Code configuration.
 | hooks | `plugins/claude/hooks/` | `~/.claude/hooks/` (global), `.claude/hooks/` (project) | symlink |
 | skills | `plugins/claude/skills/` | `~/.claude/skills/` (global), `.claude/skills/` (project) | symlink |
 | settings | `plugins/claude/settings.json` | `~/.claude/settings.json` | [merge](deploy-methods.md#the-settingsjson-case-why-merge-exists) |
+| output-styles | `plugins/claude/output-styles/` | `~/.claude/output-styles/` | symlink |
 | CLAUDE.md | `plugins/claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | symlink |
+| hooks-conf | `plugins/claude/templates/claude-hooks.conf` | `~/.claude/claude-hooks.conf` | copy |
 
-- **Hooks:** `block-destructive.sh`, `block-ai-pr-attribution.sh`, `block-gh-comment.sh`, `facade-check.sh` (PreToolUse guards).
-- **Skills:** `/commit`, `/squash-merge`, `/check-resolution`, `/preflight-merge`, `/rebase-stacked-prs` (each a `skills/<name>/SKILL.md`).
+- **Hooks:** per-pattern Bash guards (`block-rm-rf-root`, `block-force-push`, `block-hard-reset`, `block-git-clean`, `block-drop-table`, `block-chmod-777`), a Write/Edit guard (`block-sensitive-write`), attribution/comment guards, and lifecycle hooks (`inject-context`, `session-start-env`, `session-end-log`, `pre-compact-snapshot`, `notify`). Full table with descriptions and config keys: [ROSTER](ROSTER.md).
+- **Skills:** `/commit`, `/squash-merge`, `/check-resolution`, `/preflight-merge`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback` (each a `skills/<name>/SKILL.md`).
+- **Output style:** `concise-execution` (default execution-mode style; carries the communication/language rules formerly inline in CLAUDE.md).
 
 `settings.json` uses `merge` (not symlink/copy) because Claude Code writes permission grants into it - see [Deploy methods](deploy-methods.md). Project scope supports exclude lists to skip specific hooks/skills per repo.
 

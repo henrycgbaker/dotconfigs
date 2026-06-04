@@ -286,6 +286,36 @@ _merge_to_tmp() {
     return 1
 }
 
+# Warn when a deploy is about to clobber a live edit. The merge keeps the
+# plugin source as the winner on every managed key except the unioned
+# permissions arrays, so a top-level key whose deployed value differs from the
+# source value will be silently overwritten on the next deploy. This is exactly
+# the "/update-config edited ~/.claude/settings.json, dotconfigs deploy reverts
+# it" footgun — surface it as a warning so the user ports the change back into
+# the plugin source. Top-level keys only (the merge is shallow except for
+# permissions); `.permissions` is excluded since it's unioned, not overwritten.
+# Args: source (substituted), target. Tallies into caller's `warnings`.
+_warn_merge_collisions() {
+    local source="$1" target="$2"
+    [[ -f "$target" && ! -L "$target" ]] || return 0
+    local collisions
+    collisions=$(jq -rn --slurpfile s "$source" --slurpfile t "$target" '
+        ($s[0] // {}) as $src | ($t[0] // {}) as $tgt
+        | $src | keys[] as $k
+        | select($k != "permissions")
+        | select(($tgt | has($k)) and ($tgt[$k] != $src[$k]))
+        | $k
+    ' 2>/dev/null)
+    [[ -z "$collisions" ]] && return 0
+    local key
+    while IFS= read -r key; do
+        [[ -z "$key" ]] && continue
+        printf "  %b! merge-collision: '%s' differs in %s; deploy will overwrite the live value with the plugin source%b\n" \
+            "${COLOUR_YELLOW:-}" "$key" "$(basename "$target")" "${COLOUR_RESET:-}" >&2
+        if [[ -n "${warnings+x}" ]]; then warnings=$(( warnings + 1 )); fi
+    done <<< "$collisions"
+}
+
 # Substitute well-known deploy-time placeholders in a JSON source.
 # Currently handles:
 #   {{AUTHOR_NAME}}  -> git config --global user.name (fallback: Henry Baker)
@@ -396,10 +426,13 @@ deploy_module() {
     # Compute relative source for display
     rel_src="${abs_source#$dotconfigs_root/}"
 
-    # Validate source exists
+    # Validate source exists. A missing source is a hard error (fail-loud):
+    # a manifest entry pointing at a file that isn't there is a packaging bug,
+    # not something to silently skip. Tally into `errors` so the deploy exits
+    # non-zero (see deploy_from_json summary).
     if [[ ! -e "$abs_source" ]]; then
-        echo "  ! Warning: source not found: $rel_src"
-        eval "skipped=\$(( \$skipped + 1 ))"
+        printf "  %b✗ Error: source not found: %s%b\n" "${COLOUR_RED:-}" "$rel_src" "${COLOUR_RESET:-}" >&2
+        eval "errors=\$(( \$errors + 1 ))"
         return
     fi
 
@@ -458,6 +491,7 @@ deploy_module() {
             # unchanged (no temp file created).
             local _merge_src
             _merge_src=$(_substitute_placeholders "$abs_source")
+            _warn_merge_collisions "$_merge_src" "$abs_target"
             if [[ "$dry_run" == "true" ]]; then
                 if [[ ! -f "$abs_target" || -L "$abs_target" ]]; then
                     echo "  Would create $abs_target from $rel_src (merge)"
@@ -846,6 +880,23 @@ undeploy_from_json() {
     echo "  Skipped:      $skipped"
 }
 
+# Scan merge-method targets for dangling command references (the statusLine /
+# hook-command class of bug). Shared by deploy_from_json (post-deploy) and
+# `dotconfigs validate`; takes the already-parsed module rows so neither caller
+# re-parses. No-op if refcheck.sh isn't sourced — deploy.sh only soft-depends
+# on it, so standalone-sourced callers (and tests) still work.
+# Args: modules_data (TSV rows: source<TAB>target<TAB>method<TAB>include_csv)
+_refcheck_merge_targets() {
+    local modules_data="$1"
+    declare -f refcheck_settings_json >/dev/null 2>&1 || return 0
+    local source target method include_csv rc_target
+    while IFS=$'\t' read -r source target method include_csv; do
+        [[ "$method" == "merge" ]] || continue
+        rc_target=$(expand_tilde "$target")
+        refcheck_settings_json "$rc_target" "$(dirname "$rc_target")" || true
+    done <<< "$modules_data"
+}
+
 # Main deployment entry point
 # Args: config_file, dotconfigs_root, [group_key], [dry_run], [force], [project_root]
 deploy_from_json() {
@@ -887,6 +938,8 @@ deploy_from_json() {
     unchanged=0
     skipped=0
     removed=0
+    errors=0
+    warnings=0
 
     # Parse modules
     modules_data=$(parse_modules "$config_file" "$group_key")
@@ -922,6 +975,14 @@ deploy_from_json() {
         deploy_module "$source" "$target" "$method" "$include_csv" "$dotconfigs_root" "$dry_run" "$interactive_mode"
     done <<< "$modules_data"
 
+    # Post-deploy: scan deployed JSON settings targets for dangling command
+    # references (the statusLine/hook-command class of bug). Warnings only —
+    # never blocks a deploy — but tallies into `warnings`. Skipped on dry-run
+    # since nothing was actually written.
+    if [[ "$dry_run" != "true" ]]; then
+        _refcheck_merge_targets "$modules_data"
+    fi
+
     # Print summary
     echo ""
     echo "Deployment summary:"
@@ -930,4 +991,14 @@ deploy_from_json() {
     echo "  Unchanged: $unchanged"
     echo "  Removed:   $removed"
     echo "  Skipped:   $skipped"
+    if [[ "$warnings" -gt 0 ]]; then
+        printf "  %bWarnings:  %s%b\n" "${COLOUR_YELLOW:-}" "$warnings" "${COLOUR_RESET:-}"
+    fi
+    if [[ "$errors" -gt 0 ]]; then
+        printf "  %bErrors:    %s%b\n" "${COLOUR_RED:-}" "$errors" "${COLOUR_RESET:-}"
+        echo ""
+        printf "%bDeploy completed with %s error(s).%b\n" "${COLOUR_RED:-}" "$errors" "${COLOUR_RESET:-}" >&2
+        return 1
+    fi
+    return 0
 }

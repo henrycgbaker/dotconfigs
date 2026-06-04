@@ -11,8 +11,10 @@
 | `global-deploy [group]` | `deploy` | Deploy global config |
 | `project-init [path]` | | Scaffold `.dotconfigs/project.json` for a repo |
 | `project-deploy [path]` | `project` | Deploy per-project config |
-| `cleanup [path]` | | Remove deployed symlinks dotconfigs owns |
+| `cleanup [--project P]` | | Remove stale/broken symlinks dotconfigs owns |
+| `undeploy [group]` | | Remove deployed artefacts (inverse of deploy) |
 | `status [plugin]` | | Show deployment status / drift |
+| `validate [--strict]` | | Lint manifests + scan deployed JSON for dangling references |
 | `list` | | List plugins and whether they're configured |
 | `help [command]` | | Detailed help |
 
@@ -57,13 +59,32 @@ dotconfigs project-deploy . --dry-run
 ```
 Deploys per-project config from `project.json` (hooks, skills, …), respecting include/exclude. Requires `project-init` first. Alias: `project`.
 
-## cleanup `[path]`
+## cleanup `[--apply]` `[--project <path>]`
 
 ```bash
-dotconfigs cleanup            # remove global symlinks dotconfigs owns
-dotconfigs cleanup ~/myrepo   # remove a project's deployed symlinks
+dotconfigs cleanup                      # preview stale/broken global symlinks (dry-run)
+dotconfigs cleanup --apply              # actually remove them
+dotconfigs cleanup --project . --apply  # clean a project's deployed symlinks
 ```
-Removes the symlinks dotconfigs created (leaving foreign files untouched). Use to undo a deploy or before relocating the repo.
+Removes **only stale and broken symlinks** that dotconfigs owns - links no longer in the deploy set (e.g. you dropped a file from an `include` list) or dangling ones. It does **not** remove copied files or merged-JSON entries, and never touches foreign files. Default is dry-run; pass `--apply` to remove. The target is chosen with `--project <path>` - a bare path argument is ignored. A clean, in-sync deployment correctly reports `Removed: 0` (a normal `deploy` already prunes stale symlinks as it runs).
+
+## undeploy `[group]` `[--apply]` `[--project <path>]`
+
+```bash
+dotconfigs undeploy                 # preview removing all deployed artefacts (dry-run)
+dotconfigs undeploy claude --apply  # remove the claude group's artefacts
+```
+Inverse of deploy. Removes symlink modules (foreign files preserved) and copy modules **only if byte-identical to source** (so your edits survive). Merge and append modules are skipped - they can't be reversed without losing local content. Default is dry-run.
+
+## Removing deployed config
+
+What it takes depends on the module's deploy method:
+
+- **symlink** (hooks, skills, output-styles, `CLAUDE.md`): drop the file from that module's `include` list in `.dotconfigs/global.json` (or add it to `exclude` in `project.json`), then `cleanup --apply` - a re-`deploy` prunes it too.
+- **copy** (`claude-hooks.conf`): `undeploy <group> --apply`, or just delete the file. `cleanup` does not touch copies.
+- **merge** (`settings.json`): neither command edits a merged file - remove the key by hand.
+
+To stop deploying something on *this machine*, edit `.dotconfigs/global.json` (your selection). To remove a capability *everywhere*, edit the plugin manifest (the catalogue) and re-run `global-init`.
 
 ## status `[plugin]`
 
@@ -72,6 +93,14 @@ dotconfigs status
 dotconfigs status claude
 ```
 Shows per-file state: **✓ deployed** (symlink correct), **△ drifted** (broken/foreign/wrong target), **✗ not deployed**. Merge-managed files like `settings.json` are reported by deploy, not here.
+
+## validate `[--strict]`
+
+```bash
+dotconfigs validate            # lint manifests + scan deployed config
+dotconfigs validate --strict   # treat warnings as failures too
+```
+Lints every plugin manifest (valid JSON, known `method`, whitelisted keys, source exists) and scans deployed merge-managed JSON (e.g. `~/.claude/settings.json`) for dangling command references - a `statusLine.command` or hook `command` pointing at a script that isn't actually deployed. Exits non-zero on any error; `--strict` also fails on warnings. Runs without deploying.
 
 ## list
 
