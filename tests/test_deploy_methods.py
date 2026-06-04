@@ -261,6 +261,53 @@ def test_managed_undeploy_noop_when_absent(dotconfigs_root, tmp_path):
     assert target.read_text() == "just-user-lines\n"
 
 
+def test_managed_broken_end_marker_preserves_user_lines(dotconfigs_root, tmp_path):
+    """A hand-broken block (begin present, end marker gone) must not swallow the
+    user's lines below it — malformed input is preserved, never deleted."""
+    source = tmp_path / "src"
+    source.write_text("fresh\n")
+    target = tmp_path / "exclude"
+    begin = f"# >>> dotconfigs:{source} >>>"  # marker key == abs source path here
+    # begin present, NO end marker, real user lines below it
+    target.write_text(f"{begin}\nstale-managed\nUSER-LINE-1\nUSER-LINE-2\n")
+
+    _deploy(dotconfigs_root, source, target, "managed")
+    text = target.read_text()
+    assert "USER-LINE-1" in text and "USER-LINE-2" in text  # not swallowed
+    assert "fresh" in text  # fresh block still written
+    # Converges: the orphan begin marker is stripped, leaving exactly one block.
+    assert text.count(BEGIN) == 1
+
+
+def test_managed_undeploy_broken_marker_keeps_user_lines(dotconfigs_root, tmp_path):
+    source = tmp_path / "src"
+    source.write_text("fresh\n")
+    target = tmp_path / "exclude"
+    begin = f"# >>> dotconfigs:{source} >>>"
+    target.write_text(f"{begin}\nstale\nUSER-LINE\n")  # unterminated block
+
+    _undeploy(dotconfigs_root, source, target, "managed")
+    text = target.read_text()
+    assert "USER-LINE" in text  # user content survives undeploy
+    assert BEGIN not in text  # stray begin marker cleaned up too
+
+
+def test_managed_reconverges_after_double_begin(dotconfigs_root, tmp_path):
+    """Two begin markers with one end (a corrupted state) must not swallow the
+    user line between them, and must collapse back to a single clean block."""
+    source = tmp_path / "src"
+    source.write_text("fresh\n")
+    target = tmp_path / "exclude"
+    begin = f"# >>> dotconfigs:{source} >>>"
+    end = f"# <<< dotconfigs:{source} <<<"
+    target.write_text(f"{begin}\nA\nKEEP-ME\n{begin}\nB\n{end}\n")
+
+    _deploy(dotconfigs_root, source, target, "managed")
+    text = target.read_text()
+    assert "KEEP-ME" in text  # user line between the two begins survives
+    assert text.count(BEGIN) == 1 and text.count(END) == 1  # single block again
+
+
 def test_managed_dry_run_writes_nothing(dotconfigs_root, tmp_path):
     source = tmp_path / "src"
     source.write_text("alpha\n")
