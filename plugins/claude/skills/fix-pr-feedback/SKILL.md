@@ -1,16 +1,17 @@
 ---
 name: fix-pr-feedback
-description: Walk through unresolved review comments on a PR and address each one as a discrete commit on the branch. Use when a reviewer has left comments / requested changes and the user says "address the feedback", "fix the comments", or "respond to the review".
-allowed-tools: Bash, Read, Edit, Write
-argument-hint: [PR-number]
+description: Sync a PR branch, triage its unresolved review comments, let the user pick which to address (mechanical via checklist, judgement-calls via options), fix each as a discrete commit, then audit and offer to push. Runs interactively by default; --semi-auto and --auto reduce or remove the prompts for unattended runs. Use when a reviewer has left comments / requested changes and the user says "address the feedback", "fix the comments", or "respond to the review".
+allowed-tools: Bash, Read, Edit, Write, Task, AskUserQuestion
+argument-hint: "[PR-number] [--auto|--semi-auto]"
 ---
 
 # Fix PR Feedback
 
-Fetch the unresolved review comments on a PR, work through each one as a
-small, separately-committed change, and push the result back to the branch.
-Addressing feedback in code (one commit per comment) is the default; posting
-a reply on GitHub is not - the diff IS the response.
+Sync the branch, fetch the unresolved review comments on a PR, let the user
+choose what to address, work through each chosen item as a small
+separately-committed change, audit the result, and push only on the user's
+say-so. Addressing feedback in code (one commit per comment) is the default;
+posting a reply on GitHub is not - the diff IS the response.
 
 **On posting replies:** the gh-comment hook blocks every `gh pr comment`,
 `gh issue comment`, `gh pr review`, and `gh api` comment-write unless the
@@ -27,17 +28,78 @@ prefix the single command, e.g.:
 - Not for the user's own self-review notes mid-development; that's just
   normal commits.
 
+## Modes
+
+Selected by a flag in the arguments; default is **interactive**.
+
+| Mode | Mechanical fixes (step 5) | Judgement calls (step 6) | Push (step 9) |
+|------|---------------------------|--------------------------|---------------|
+| **interactive** (default) | checklist — user picks | option menu — user picks | always ask |
+| `--semi-auto` | apply all automatically | best-assumption for low/medium-uncertainty; **stop and ask** only on high-uncertainty | push iff audit all-✓, else stop + report |
+| `--auto` | apply all automatically | best-assumption for **all**; never stop for a comment decision | push iff audit all-✓, else stop + report |
+
+**High-uncertainty** (the only thing `--semi-auto` stops for): the comment is
+ambiguous, has more than one reasonable response, asks a question that needs a
+human answer, or the fix would meaningfully change behaviour, architecture, or
+a public interface. Clear code suggestions and soft nits are *not*
+high-uncertainty.
+
+**Best-assumption** (how the non-interactive modes resolve a judgement call
+without asking): apply a concrete code suggestion as given; for a soft nit with
+no clear win, keep the current approach; for a question, note the answer in the
+commit message / report rather than posting it. Record every assumption made in
+the final report so the user can review what was decided for them.
+
+**Fail-safes apply in every mode, including `--auto`:**
+- A rebase conflict that isn't trivially resolvable (step 2) stops the run —
+  never auto-resolve a conflict.
+- If the audit (step 8) marks any comment ✗, do **not** push. `--auto` /
+  `--semi-auto` may attempt one fix-up loop; if it's still ✗, stop and report.
+
 ## Process
 
-### 1. Identify the PR
-PR number from `$ARGUMENTS`. If empty, infer from current branch:
+### 1. Parse mode and identify the PR
+Pull the mode flag out of `$ARGUMENTS` first (default interactive), then take
+the PR number from the remainder; if empty, infer from the current branch:
 ```bash
-PR="$ARGUMENTS"
+MODE=interactive
+ARGS="$ARGUMENTS"
+case "$ARGS" in
+  *--semi-auto*) MODE=semi-auto; ARGS="${ARGS//--semi-auto/}" ;;
+  *--auto*)      MODE=auto;      ARGS="${ARGS//--auto/}" ;;
+esac
+PR="$(echo "$ARGS" | tr -d '[:space:]')"
 [ -z "$PR" ] && PR=$(gh pr view --json number --jq .number)
 [ -z "$PR" ] && { echo "No PR for current branch - pass a PR number"; exit 1; }
 ```
+`$MODE` governs steps 5, 6, and 9 (see [Modes](#modes)).
 
-### 2. Fetch comments and reviews
+### 2. Sync the branch before touching anything
+Never address feedback on a stale branch - fixes built on an old base waste a
+review round. Fetch, check out the PR branch, and measure divergence from its
+base:
+```bash
+git fetch origin
+gh pr checkout "$PR"                       # checks out the PR's head branch
+BASE=$(gh pr view "$PR" --json baseRefName --jq .baseRefName)   # usually main
+git log --oneline "HEAD..origin/$BASE"     # commits on base not on branch
+git log --oneline "origin/$BASE..HEAD"     # commits on branch not on base
+```
+Decide and act:
+- **Up to date** (base has nothing new): proceed.
+- **Behind / simply diverged**: rebase onto the base. If the working tree is
+  dirty, stash first. `git rebase "origin/$BASE"`.
+- **Stacked PR, or diverged by more than a handful of merges**: do **not**
+  hand-rebase. Invoke **`/rebase-stacked-prs`** - it cherry-picks only the
+  branch's genuinely-new commits and drops work already merged (in possibly
+  modified form) on the base. Per the repo's rebasing policy, duplicate
+  commits must be explicitly dropped, not conflict-resolved.
+
+If a rebase conflicts and the resolution is non-trivial, run
+**`/check-resolution`** afterwards to confirm nothing was silently resurrected
+or reverted. Stop and surface to the user if the rebase can't complete cleanly.
+
+### 3. Fetch comments and reviews
 ```bash
 gh pr view "$PR" --json comments,reviews,reviewThreads > /tmp/pr-feedback.json
 ```
@@ -61,46 +123,87 @@ jq '.reviewThreads[] | select(.isResolved == false) | {
 Also surface any `reviews[].body` whose `state` is `CHANGES_REQUESTED` -
 the top-level review summary often says things the inline threads don't.
 
-### 3. Triage
-Print the unresolved set with file + line + comment snippet. For each:
-- **Code change needed**: address in the working tree (Edit / Write).
-- **Question / clarification**: flag for the user; do not silently skip.
-- **Nit / preference disagreement**: surface for the user to call.
+### 4. Triage and classify
+Build one row per unresolved item and present the whole set to the user as a
+table **before** changing anything. Each row:
 
-If anything is ambiguous, stop and ask before editing.
+| # | file:line | reviewer | what's asked | recommended fix | class |
+|---|-----------|----------|--------------|-----------------|-------|
 
-### 4. Address each comment as a discrete commit
-One commit per comment (or per tight cluster of related comments). This
-keeps each fix visible to the reviewer and easy to revert in isolation.
+Classify every row as exactly one of:
+- **mechanical** - a clear, deterministic code change with no real decision
+  (rename, typo, extract helper, add guard the reviewer spelled out). The
+  recommended fix is unambiguous.
+- **input-required** - needs a human call: a question to answer, a
+  preference/nit you might decline, a suggestion with more than one reasonable
+  response, or anything ambiguous.
 
+When in doubt, classify as input-required. Never silently skip or silently
+comply with a contested comment.
+
+### 5. Mechanical fixes - user picks via checklist
+**`--auto` / `--semi-auto`:** skip the checklist - apply every mechanical fix.
+
+**interactive:** present the mechanical rows through `AskUserQuestion` with `multiSelect: true`
+so the user ticks which to apply. `AskUserQuestion` allows at most 4 options
+per question, so **batch in groups of ≤4** (several questions if needed) -
+never truncate the list to fit. Each option label = the fix; description =
+the file:line and what changes. Unticked items are left for the user to
+revisit; note them in the final report rather than dropping them.
+
+### 6. Input-required fixes - user picks an option per comment
+**`--auto`:** resolve every row by best-assumption (see [Modes](#modes)); never
+prompt. **`--semi-auto`:** best-assumption for low/medium-uncertainty rows;
+prompt only on high-uncertainty ones. **interactive:** prompt on every row.
+
+When prompting, present a single-select `AskUserQuestion` with 2-4 concrete
+options - typically: apply the reviewer's suggestion / keep the current
+approach (optionally with a reply drafted for the user to post) / a named
+alternative. Use the choice as the instruction for that fix. "Keep current
+approach" means no commit for that comment; record it for the report.
+
+### 7. Implement - one commit per chosen fix
+Work through the selected fixes. One commit per comment (or per tight cluster
+of related comments) keeps each fix visible to the reviewer and revertible in
+isolation.
 ```bash
-# For each comment:
+# For each selected fix:
 # - Edit the affected file(s)
 # - Stage just those files
-# - Commit with a message that references what the comment asked for
 git add <files>
 git commit -m "fix: <short description of what the review asked for>"
 ```
+Conventional-commit types apply (`fix`, `refactor`, `docs`, …). Subject under
+72 chars, imperative mood, no AI attribution. Use **`/commit`** if you want the
+standard commit flow per fix. If pre-commit hooks (Ruff, secrets scan) fail,
+fix forward with a new commit - never `--amend`.
 
-Conventional-commit types apply (`fix`, `refactor`, `docs`, etc.). Subject
-under 72 chars, imperative mood, no AI attribution.
+### 8. Audit with a Sonnet subagent
+Before reporting done, spawn a quick **Sonnet** subagent (Task tool,
+`model: sonnet`) to independently verify coverage. Give it: the original
+unresolved comments (from step 3) and the commits just made
+(`git log --oneline "origin/$BASE..HEAD"` plus diffs). It returns a table:
 
-If the project has pre-commit hooks (Ruff format/lint, secrets scan), they
-run as normal - resolve any hook failures with a new commit, not `--amend`.
+| # | file:line | comment | addressed? | commit / note |
+|---|-----------|---------|:---------:|---------------|
 
-### 5. Push
+with a ✓ / ✗ in *addressed?* for every original comment - ✓ for a fix or a
+deliberate user "keep" decision, ✗ for anything left open. Show the table to
+the user. If the auditor marks something ✗ that should have been fixed, loop
+back to step 7.
+
+### 9. Push
+**interactive:** do not push automatically - after the audit, ask via
+`AskUserQuestion` whether to push. **`--auto` / `--semi-auto`:** if the audit
+in step 8 is all-✓, push without asking; if it has any ✗, do not push - stop
+and report (the fail-safe from [Modes](#modes)).
 ```bash
 git push origin HEAD
 ```
-
-Force-push is rarely needed here; review-feedback commits are accretive
-on the branch. Only use `--force-with-lease` if the user explicitly asks
-to squash or rewrite.
-
-### 6. Report
-Print, per comment: file:line, reviewer, what was asked, and the commit
-SHA(s) that addressed it. The reviewer will see the new commits in the PR
-and can resolve threads themselves.
+Force-push is rarely needed - review-feedback commits are accretive. Only use
+`--force-with-lease`, and only if the user explicitly asked to squash or
+rewrite. On "don't push", leave the commits local and tell the user the branch
+is ready to push when they are.
 
 ## Posting replies on GitHub
 
@@ -129,13 +232,16 @@ unless requested to explicitly".
   collapses them all.
 - Resolving threads on GitHub is the reviewer's call, not Claude's. Even
   with `GH_COMMENT_OK=1`, don't mark threads resolved.
-- If a comment asks for something the user disagrees with, surface it for
-  the user to decide. Do not silently skip or silently comply.
+- A comment the user chose to decline (step 6) is a legitimate outcome -
+  the audit marks it ✓ as a deliberate decision, not an open item.
 
 ## Related
 
+- `/rebase-stacked-prs` - the safe rebase invoked in step 2 for stacked or
+  badly-diverged branches.
+- `/check-resolution` - audit a non-trivial rebase/merge resolution.
+- `/commit` - the underlying commit step for each fix.
 - `/code-review` - reviews the LOCAL diff for bugs / simplifications. Run
   before pushing, to catch the obvious before a human reviewer does.
   `/fix-pr-feedback` is the inverse: address comments humans already left.
-- `/commit` - the underlying commit step for each fix.
 - `/squash-merge` - drive the now-feedback-addressed PR to merge.
