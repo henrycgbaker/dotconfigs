@@ -70,23 +70,3 @@ discover_skills() {
     done | sort
 }
 
-# Find available CLAUDE.md section templates
-# Args: plugin_dir
-# Returns: List of section names (extracted from filename, one per line)
-discover_claude_sections() {
-    local plugin_dir="$1"
-    local templates_dir="$plugin_dir/templates/claude-md"
-
-    if [[ ! -d "$templates_dir" ]]; then
-        return 0
-    fi
-
-    find "$templates_dir" -type f -name "*.md" | while read -r template_path; do
-        local filename section_name
-        filename=$(basename "$template_path")
-        # Extract section name: "01-communication.md" → "communication"
-        section_name=$(echo "$filename" | sed -E 's/^[0-9]+-(.*)\.md$/\1/')
-        echo "$section_name"
-    done | sort
-}
-
