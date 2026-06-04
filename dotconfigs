@@ -13,7 +13,8 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
 PLUGINS_DIR="$SCRIPT_DIR/plugins"
-GLOBAL_CONFIG="$SCRIPT_DIR/.dotconfigs/global.json"
+# Assembled global selection. Override for tests (DOTCONFIGS_GLOBAL_CONFIG).
+GLOBAL_CONFIG="${DOTCONFIGS_GLOBAL_CONFIG:-$SCRIPT_DIR/.dotconfigs/global.json}"
 # Registry of repos that have had `project-deploy` run, so `status` can audit
 # their git hooks for drift (missing/dangling) after the fact. Override for tests.
 PROJECT_REGISTRY="${DOTCONFIGS_PROJECT_REGISTRY:-$HOME/.dotconfigs/projects.list}"
@@ -689,9 +690,50 @@ cmd_deploy() {
     # Deploy from global.json
     deploy_from_json "$GLOBAL_CONFIG" "$SCRIPT_DIR" "$group" "$dry_run" "$force_mode"
 
+    # Reconcile git hook seeding (init.templateDir) with the selection.
+    _reconcile_git_templatedir "$dry_run"
+
     # Create PATH symlink (after all deploys)
     echo ""
     _create_path_symlink "$dry_run" "$force_mode"
+}
+
+# Couple init.templateDir to the git `hooks` module so new repos seed hooks iff
+# that module is selected. Set it in ~/.gitconfig when `hooks` is in global.json,
+# unset it (only if it is still our value) when it is excluded — so disabling git
+# seeding is just removing `hooks` from the selection, with no orphan config.
+_reconcile_git_templatedir() {
+    local dry_run="${1:-false}"
+    command -v git >/dev/null 2>&1 || return 0
+    [[ -f "$GLOBAL_CONFIG" ]] || return 0
+
+    local ours="~/.dotconfigs/git-template"
+    local ours_abs; ours_abs=$(expand_tilde "$ours")
+    local hooks_selected="false"
+    if jq -e '.git.hooks' "$GLOBAL_CONFIG" >/dev/null 2>&1; then
+        hooks_selected="true"
+    fi
+    # `|| true`: git config --get exits 1 when unset, which would trip `set -e`.
+    local current; current=$(git config --global --get init.templateDir 2>/dev/null || true)
+
+    if [[ "$hooks_selected" == "true" ]]; then
+        [[ "$current" == "$ours" || "$current" == "$ours_abs" ]] && return 0
+        if [[ "$dry_run" == "true" ]]; then
+            echo "  Would set init.templateDir → $ours (git hook seeding)"
+        else
+            git config --global init.templateDir "$ours"
+            echo "  Set init.templateDir → $ours (git hook seeding enabled)"
+        fi
+    else
+        # Only clear OUR value; never clobber a templateDir the user set themselves.
+        [[ "$current" == "$ours" || "$current" == "$ours_abs" ]] || return 0
+        if [[ "$dry_run" == "true" ]]; then
+            echo "  Would unset init.templateDir (git hooks module not selected)"
+        else
+            git config --global --unset init.templateDir || true
+            echo "  Unset init.templateDir (git hooks module not selected → no seeding)"
+        fi
+    fi
 }
 
 cmd_status() {

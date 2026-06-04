@@ -12,12 +12,11 @@
 
 [init]
 	defaultBranch = main
-	# Seed every new `git init` / `git clone` with the dotconfigs git hooks.
-	# Hooks live in ~/.dotconfigs/git-template/hooks (symlinks to the plugin
-	# source); git copies them (preserving the symlinks) into each new repo's
-	# .git/hooks, so hooks are personal/untracked and auto-update with the repo.
-	# Existing repos are covered by `dotconfigs project-deploy` + `dotconfigs status`.
-	templateDir = ~/.dotconfigs/git-template
+	# NOTE: init.templateDir (which seeds new repos with the git hooks) is NOT set
+	# here. global-deploy manages it imperatively in ~/.gitconfig, coupled to the
+	# git `hooks` module: it is set when `hooks` is selected and unset when you
+	# exclude it from .dotconfigs/global.json. That keeps "turn off git seeding"
+	# a one-line edit with no orphan config left behind.
 
 [pull]
 	rebase = true

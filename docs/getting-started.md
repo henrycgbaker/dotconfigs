@@ -28,18 +28,30 @@ dotconfigs global-deploy git    # Deploy one plugin
 dotconfigs global-deploy --dry-run  # Preview first
 ```
 
-This symlinks plugin files (hooks, settings, skills, gitconfig, etc.) to their global targets (`~/.claude/`, `~/.gitconfig`, `~/Library/...`).
+This symlinks plugin files (hooks, settings, skills, gitconfig, etc.) to their global targets (`~/.claude/`, `~/.gitconfig`, `~/Library/...`). For git it also installs `init.templateDir`, so **every git repo you create or clone from now on auto-installs the git hooks** into its own `.git/hooks/`. (Claude hooks fire machine-wide from `~/.claude/settings.json`; git hooks are inherently per-repo - see [Architecture](architecture.md#hook-activation-two-different-models).)
 
 ## Deploy per-project config
 
-From inside a git repo:
+New repos are already covered by `init.templateDir` above. For a repo that **existed before** you ran `global-deploy`, install the hooks into it once:
 
 ```bash
 dotconfigs project-init .       # Scaffold .dotconfigs/project.json
 dotconfigs project-deploy .     # Deploy hooks + skills into this repo
 ```
 
-To skip specific hooks or skills per-project, edit `.dotconfigs/project.json` exclude lists before deploying.
+`project-deploy` records the repo so `dotconfigs status` can later flag it if its git hooks go missing (e.g. after a re-clone). To skip specific hooks or skills per-project, edit `.dotconfigs/project.json` exclude lists before deploying.
+
+### Turn off automatic git-hook seeding
+
+If you'd rather *not* have every new repo auto-install the git hooks, remove the git `hooks` module from your selection and re-deploy:
+
+```bash
+# edit .dotconfigs/global.json → delete the "hooks" entry under "git"
+dotconfigs global-deploy        # unsets init.templateDir for you
+dotconfigs cleanup --apply      # removes the now-unused ~/.dotconfigs/git-template/hooks/
+```
+
+`init.templateDir` is coupled to that module, so excluding it makes `global-deploy` unset the templateDir automatically - no leftover config, and existing repos keep whatever hooks they already have. (Re-add the module and deploy to turn it back on.)
 
 ## Deploy methods
 
