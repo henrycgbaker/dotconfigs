@@ -783,7 +783,7 @@ cmd_validate() {
     done
 
     # Allowed module methods and keys (manifest schema whitelist).
-    local valid_methods="symlink copy merge append"
+    local valid_methods="symlink copy merge append managed"
     errors=0
     warnings=0
 
