@@ -177,42 +177,38 @@ def _settings_with_hook(path: Path, event: str, command: str):
     )
 
 
-def test_dup_guard_flags_same_hook_both_scopes(dotconfigs_root, tmp_path: Path):
-    """Same script + same event in global and project scope → flagged."""
+# (label, global event/cmd, project event/cmd, expected dup?)
+_DUP_CASES = [
+    # Same script basename, same event, different path prefixes = real double-fire.
+    ("same_hook_both_scopes", "PreToolUse", "~/.claude/hooks/block-rm.sh",
+     "PreToolUse", "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-rm.sh", True),
+    # Distinct scripts on the same event → fine.
+    ("distinct_hooks", "PreToolUse", "~/.claude/hooks/block-rm.sh",
+     "PreToolUse", "${CLAUDE_PROJECT_DIR}/.claude/hooks/repo-only.sh", False),
+    # Same script but different events → no double-fire.
+    ("same_script_diff_event", "PreToolUse", "~/.claude/hooks/x.sh",
+     "PostToolUse", "${CLAUDE_PROJECT_DIR}/.claude/hooks/x.sh", False),
+]
+
+
+@pytest.mark.parametrize(
+    "label,g_event,g_cmd,p_event,p_cmd,is_dup",
+    _DUP_CASES,
+    ids=[c[0] for c in _DUP_CASES],
+)
+def test_dup_guard(dotconfigs_root, tmp_path, label, g_event, g_cmd, p_event, p_cmd, is_dup):
+    """The cross-scope duplicate guard flags only genuine same-event/same-script dups."""
     g = tmp_path / "global.json"
     p = tmp_path / "project.json"
-    # Different path prefixes, same script basename = the real double-fire case.
-    _settings_with_hook(g, "PreToolUse", "~/.claude/hooks/block-rm.sh")
-    _settings_with_hook(p, "PreToolUse", "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-rm.sh")
+    _settings_with_hook(g, g_event, g_cmd)
+    _settings_with_hook(p, p_event, p_cmd)
 
     res = _dup_check(dotconfigs_root, g, p)
-    assert "RC=1" in res.stdout, res.stdout
-    assert "WARN=1" in res.stdout
-    assert "block-rm.sh" in res.stderr
-    assert "fire twice" in res.stderr
-
-
-def test_dup_guard_quiet_when_distinct(dotconfigs_root, tmp_path: Path):
-    """Different hooks per scope, or different events, are not flagged."""
-    g = tmp_path / "global.json"
-    p = tmp_path / "project.json"
-    _settings_with_hook(g, "PreToolUse", "~/.claude/hooks/block-rm.sh")
-    _settings_with_hook(p, "PreToolUse", "${CLAUDE_PROJECT_DIR}/.claude/hooks/repo-only.sh")
-
-    res = _dup_check(dotconfigs_root, g, p)
-    assert "RC=0" in res.stdout, res.stdout
-    assert "WARN=0" in res.stdout
-
-
-def test_dup_guard_same_script_different_event_ok(dotconfigs_root, tmp_path: Path):
-    """Same script on different events does not double-fire — not flagged."""
-    g = tmp_path / "global.json"
-    p = tmp_path / "project.json"
-    _settings_with_hook(g, "PreToolUse", "~/.claude/hooks/x.sh")
-    _settings_with_hook(p, "PostToolUse", "${CLAUDE_PROJECT_DIR}/.claude/hooks/x.sh")
-
-    res = _dup_check(dotconfigs_root, g, p)
-    assert "RC=0" in res.stdout, res.stdout
+    if is_dup:
+        assert "RC=1" in res.stdout and "WARN=1" in res.stdout, res.stdout
+        assert "fire twice" in res.stderr
+    else:
+        assert "RC=0" in res.stdout and "WARN=0" in res.stdout, res.stdout
 
 
 # ---------------------------------------------------------------------------

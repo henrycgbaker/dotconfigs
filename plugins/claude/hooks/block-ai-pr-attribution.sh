@@ -18,8 +18,10 @@ hook_load_conf
 hook_require_cmd jq
 
 stdin_data=$(cat)
-hook_event=$(echo "$stdin_data" | jq -r '.hook_event_name // ""')
-tool_name=$(echo "$stdin_data" | jq -r '.tool_name // ""')
+# One jq pass for the two always-needed fields (neither contains newlines).
+{ IFS= read -r hook_event; IFS= read -r tool_name; } < <(
+    echo "$stdin_data" | jq -r '.hook_event_name // "", .tool_name // ""'
+)
 
 [[ "$hook_event" == "PreToolUse" ]] || exit 0
 

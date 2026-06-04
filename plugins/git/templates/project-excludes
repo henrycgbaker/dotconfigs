@@ -36,11 +36,13 @@ CLAUDE.local.md
 .ripgreprc
 .zprofile
 .zshrc
-# Git-internal placeholders
-HEAD
-config
-hooks
-objects
-refs
+# Git-internal placeholders. Root-anchored (leading /) so they only match the
+# sandbox copies at the repo root - bare names would also ignore any nested
+# dir/file of the same name (e.g. plugins/*/hooks/, a config/ subdir).
+/HEAD
+/config
+/hooks
+/objects
+/refs
 # Other sandbox copies
 .mcp.json
