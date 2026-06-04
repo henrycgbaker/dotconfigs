@@ -46,12 +46,8 @@ fi
 # ---------------------------------------------------------------------------
 author_name="$(git config --global user.name 2>/dev/null || true)"
 author_email="$(git config --global user.email 2>/dev/null || true)"
-if [[ -z "$author_name" ]]; then
-    author_name="Henry Baker"
-fi
-if [[ -z "$author_email" ]]; then
-    author_email="henry.c.g.baker@gmail.com"
-fi
+author_name="${author_name:-Henry Baker}"
+author_email="${author_email:-henry.c.g.baker@gmail.com}"
 
 # ---------------------------------------------------------------------------
 # Clean + recreate the generated tree (idempotent).
