@@ -148,6 +148,28 @@ def validate_module(
                         f"Append target missing source lines: {target} "
                         f"({len(missing)} missing, first: {missing[0]!r})"
                     )
+        elif method == "managed":
+            # Managed-deployed files are regular files carrying a sentinel-
+            # delimited block with every non-empty source line.
+            if target.is_symlink():
+                failures.append(
+                    f"Managed target is a symlink (must be a regular file): {target}"
+                )
+            else:
+                target_text = target.read_text()
+                if "# >>> dotconfigs:" not in target_text:
+                    failures.append(
+                        f"Managed target missing sentinel markers: {target}"
+                    )
+                source_lines = [
+                    ln for ln in source.read_text().splitlines() if ln.strip()
+                ]
+                missing = [ln for ln in source_lines if ln not in target_text]
+                if missing:
+                    failures.append(
+                        f"Managed target missing source lines: {target} "
+                        f"({len(missing)} missing, first: {missing[0]!r})"
+                    )
 
     return failures
 

@@ -42,6 +42,110 @@ _source_already_appended() {
     return 0
 }
 
+# --- managed-block method --------------------------------------------------
+# A "managed" target is a line-oriented file dotconfigs co-owns with the user,
+# but unlike `append` the managed region is delimited by sentinel markers so it
+# can be UPDATED in place on re-deploy and REMOVED on undeploy. Used for
+# untracked, dotconfigs-owned files like `.git/info/exclude` whose source block
+# evolves over time. (Tracked, team-owned files like `.gitignore` stay on
+# `append`: seed-once, never rewrite a committed file.)
+#
+# Markers are keyed by the module's relative source path so multiple managed
+# blocks coexist in one target. Marker lines are `#` comments, inert in every
+# file `managed` targets (git config / exclude / ignore syntax).
+
+# Set caller-scoped `_mb_begin` / `_mb_end` to the marker pair for block_id.
+# Caller must declare both `local` first. (Assign-by-dynamic-scope keeps the
+# three managed case arms from repeating the marker strings or a split.)
+# Args: block_id (stable unique key, e.g. relative source path)
+_managed_markers() {
+    _mb_begin="# >>> dotconfigs:$1 >>>"
+    _mb_end="# <<< dotconfigs:$1 <<<"
+}
+
+# True if `target` contains a block opened by the exact line `begin`.
+# Args: begin, target
+_has_managed_block() {
+    [[ -f "$2" ]] && grep -qFx -- "$1" "$2"
+}
+
+# Emit `target` to stdout with the managed block removed, robustly against a
+# hand-broken file (markers are `#` comments the user can edit). The rule that
+# never loses user content and always re-converges to a single clean block:
+#   * a well-formed begin..end pair → dropped (content + both markers);
+#   * an UNTERMINATED begin (end missing/altered) → only the begin marker line
+#     is dropped; the lines under it are flushed back out, NOT swallowed;
+#   * a stray end marker line (no open block) → dropped.
+# So marker *lines* are always removed, real content is always kept, and after
+# the caller appends one fresh block the file holds exactly one block again.
+# Args: target, begin, end
+_strip_managed_block() {
+    awk -v b="$2" -v e="$3" '
+        $0 == b           { if (inblk) printf "%s", buf; inblk = 1; buf = ""; next }
+        inblk && $0 == e  { inblk = 0; buf = ""; next }
+        inblk             { buf = buf $0 ORS;          next }
+        $0 == e           { next }
+                          { print }
+        END { if (inblk) printf "%s", buf }
+    ' "$1"
+}
+
+# Render the would-be target for a managed deploy to stdout: target with any
+# existing same-keyed block stripped, then a fresh block appended. Guarantees
+# exactly one newline before the end marker even if source lacks a trailing one.
+# Args: source, target, begin, end
+_managed_block_render() {
+    local source="$1" target="$2" begin="$3" end="$4"
+    [[ -f "$target" ]] && _strip_managed_block "$target" "$begin" "$end"
+    printf '%s\n' "$begin"
+    cat "$source"
+    [[ -n "$(tail -c1 "$source" 2>/dev/null)" ]] && printf '\n'
+    printf '%s\n' "$end"
+}
+
+# True (0) if a managed deploy would be a no-op (target already current).
+# Args: source, target, begin, end
+_managed_block_in_sync() {
+    local source="$1" target="$2" begin="$3" end="$4"
+    [[ -f "$target" ]] || return 1
+    local tmp="${target}.managed.$$" rc=0
+    _managed_block_render "$source" "$target" "$begin" "$end" > "$tmp" 2>/dev/null \
+        || { rm -f "$tmp"; return 1; }
+    cmp -s "$tmp" "$target" || rc=1
+    rm -f "$tmp"
+    return $rc
+}
+
+# Sync a managed block into target (atomic tmp+mv). Idempotent.
+# Args: source, target, begin, end
+# Returns: 0 if target changed, 2 if identical (no-op), 1 on failure.
+_managed_block_sync() {
+    local source="$1" target="$2" begin="$3" end="$4"
+    mkdir -p "$(dirname "$target")"
+    local tmp="${target}.managed.$$"
+    _managed_block_render "$source" "$target" "$begin" "$end" > "$tmp" 2>/dev/null \
+        || { rm -f "$tmp"; return 1; }
+    if [[ -f "$target" ]] && cmp -s "$tmp" "$target"; then
+        rm -f "$tmp"
+        return 2
+    fi
+    mv "$tmp" "$target"
+    return 0
+}
+
+# Remove a managed block from target (atomic tmp+mv).
+# Args: target, begin, end
+# Returns: 0 if removed, 2 if no block present, 1 on failure.
+_managed_block_remove() {
+    local target="$1" begin="$2" end="$3"
+    _has_managed_block "$begin" "$target" || return 2
+    local tmp="${target}.managed.$$"
+    _strip_managed_block "$target" "$begin" "$end" > "$tmp" 2>/dev/null \
+        || { rm -f "$tmp"; return 1; }
+    mv "$tmp" "$target"
+    return 0
+}
+
 # Parse modules from JSON config recursively
 # Args: config_file [, group_key]
 # If group_key is empty/unset, walks entire config; otherwise filters to .[$group] first.
@@ -471,12 +575,23 @@ deploy_module() {
                 else
                     local existed="false"
                     [[ -e "$abs_target" ]] && existed="true"
-                    cp -p "$abs_source" "$abs_target"
-                    echo "  ✓ Copied $rel_src -> $abs_target"
-                    if [[ "$existed" == "true" ]]; then
-                        eval "updated=\$(( \$updated + 1 ))"
+                    # Atomic: write a sibling temp then rename, so an
+                    # interrupted copy can't leave a half-written file that
+                    # drifts foreign (stuck needing --force). Only rename on a
+                    # clean cp; on failure clean up the temp and leave the
+                    # existing target untouched rather than report a false success.
+                    local _ctmp="${abs_target}.copy.$$"
+                    if cp -p "$abs_source" "$_ctmp" && mv "$_ctmp" "$abs_target"; then
+                        echo "  ✓ Copied $rel_src -> $abs_target"
+                        if [[ "$existed" == "true" ]]; then
+                            eval "updated=\$(( \$updated + 1 ))"
+                        else
+                            eval "created=\$(( \$created + 1 ))"
+                        fi
                     else
-                        eval "created=\$(( \$created + 1 ))"
+                        rm -f "$_ctmp"
+                        echo "  ! Copy failed for $abs_target; left unchanged" >&2
+                        eval "skipped=\$(( \$skipped + 1 ))"
                     fi
                 fi
             fi
@@ -553,6 +668,49 @@ deploy_module() {
                     echo "  ✓ Appended $rel_src -> $abs_target"
                     eval "updated=\$(( \$updated + 1 ))"
                 fi
+            fi
+            ;;
+        managed)
+            # Sentinel-delimited managed region: updatable in place, reversible.
+            # See _managed_block_sync. Marker key is the relative source path so
+            # multiple managed blocks can coexist in one target.
+            local _mb_begin _mb_end
+            _managed_markers "$rel_src"
+            if [[ "$dry_run" == "true" ]]; then
+                if _managed_block_in_sync "$abs_source" "$abs_target" "$_mb_begin" "$_mb_end"; then
+                    echo "  Unchanged: $rel_src -> $abs_target (managed block current)"
+                    eval "unchanged=\$(( \$unchanged + 1 ))"
+                elif _has_managed_block "$_mb_begin" "$abs_target"; then
+                    echo "  Would update managed block: $rel_src -> $abs_target"
+                    eval "updated=\$(( \$updated + 1 ))"
+                else
+                    echo "  Would write managed block: $rel_src -> $abs_target"
+                    eval "created=\$(( \$created + 1 ))"
+                fi
+            else
+                local _had_block=false
+                _has_managed_block "$_mb_begin" "$abs_target" && _had_block=true
+                local _rc=0
+                _managed_block_sync "$abs_source" "$abs_target" "$_mb_begin" "$_mb_end" || _rc=$?
+                case $_rc in
+                    0)
+                        if [[ "$_had_block" == "true" ]]; then
+                            echo "  ✓ Updated managed block $rel_src -> $abs_target"
+                            eval "updated=\$(( \$updated + 1 ))"
+                        else
+                            echo "  ✓ Wrote managed block $rel_src -> $abs_target"
+                            eval "created=\$(( \$created + 1 ))"
+                        fi
+                        ;;
+                    2)
+                        echo "  Unchanged: $rel_src -> $abs_target (managed block current)"
+                        eval "unchanged=\$(( \$unchanged + 1 ))"
+                        ;;
+                    *)
+                        echo "  ! Managed sync failed for $abs_target; left unchanged" >&2
+                        eval "skipped=\$(( \$skipped + 1 ))"
+                        ;;
+                esac
             fi
             ;;
         *)
@@ -642,6 +800,17 @@ check_module_state() {
                 printf "%s\t%s\n" "not-deployed" "$rel_src"
             fi
             ;;
+        managed)
+            # Deployed iff the managed block is present and current (a stale
+            # block reads as not-deployed since `deploy` can auto-update it).
+            local _mb_begin _mb_end
+            _managed_markers "$rel_src"
+            if _managed_block_in_sync "$abs_source" "$abs_target" "$_mb_begin" "$_mb_end"; then
+                printf "%s\t%s\n" "deployed" "$rel_src"
+            else
+                printf "%s\t%s\n" "not-deployed" "$rel_src"
+            fi
+            ;;
         copy)
             if [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target" 2>/dev/null; then
                 printf "%s\t%s\n" "deployed" "$rel_src"
@@ -704,6 +873,7 @@ _tally_states() {
 # Removes dotconfigs-owned artefacts; preserves anything we can't safely reverse.
 # - symlink:  remove dotconfigs-owned symlinks (file or directory module)
 # - copy:     remove iff target byte-matches source (untouched copy); else warn+skip
+# - managed:  remove just our sentinel-delimited block (reversible); else unchanged
 # - merge:    not safely reversible (target may carry local additions); warn+skip
 # - append:   not safely reversible (appended lines may interleave); warn+skip
 # Counters used: removed, skipped, unchanged
@@ -766,6 +936,24 @@ undeploy_module() {
                 eval "removed=\$(( \$removed + 1 ))"
             else
                 echo "  - Skipped (modified): $abs_target"
+                eval "skipped=\$(( \$skipped + 1 ))"
+            fi
+            ;;
+        managed)
+            # Reversible (unlike merge/append): strip just our sentinel block,
+            # leaving any user lines in the file intact.
+            local _mb_begin _mb_end
+            _managed_markers "$rel_src"
+            if [[ ! -e "$abs_target" ]] || ! _has_managed_block "$_mb_begin" "$abs_target"; then
+                eval "unchanged=\$(( \$unchanged + 1 ))"
+            elif [[ "$dry_run" == "true" ]]; then
+                echo "  Would remove managed block: $abs_target"
+                eval "removed=\$(( \$removed + 1 ))"
+            elif _managed_block_remove "$abs_target" "$_mb_begin" "$_mb_end"; then
+                echo "  ✓ Removed managed block: $abs_target"
+                eval "removed=\$(( \$removed + 1 ))"
+            else
+                echo "  - Skipped (managed removal failed): $abs_target"
                 eval "skipped=\$(( \$skipped + 1 ))"
             fi
             ;;

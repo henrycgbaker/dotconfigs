@@ -43,8 +43,9 @@ A module is listed under `global`, `project`, or both. The `project` section is 
 `method` picks how a source reaches its target, based on who owns the target file. Full rationale and decision guide: **[Deploy methods](deploy-methods.md)**.
 
 - `symlink` - link target → source (default; live edits, dotconfigs-owned files).
-- `append` - idempotently add managed lines, preserving user content (`.gitignore`, `.git/info/exclude`).
-- `copy` - standalone overwrite for files that can't be symlinked.
+- `append` - seed-once: idempotently add managed lines to a tracked/team file, never rewriting it (`.gitignore`, `~/.gitconfig` `[include]` stub).
+- `managed` - own a sentinel-delimited block in an untracked file; updatable in place and reversible on undeploy (`.git/info/exclude`).
+- `copy` - standalone atomic overwrite for files that can't be symlinked.
 - `merge` - deep-merge a managed base into a co-owned file, preserving local state (`~/.claude/settings.json`).
 
 ## Hook configuration

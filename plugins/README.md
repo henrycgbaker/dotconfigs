@@ -4,7 +4,7 @@ Plugins live in `plugins/<name>/`. A plugin is any directory containing a `manif
 
 ## Required
 
-- **`manifest.json`** -- SSOT for all deployable modules. Declares `"global"` and/or `"project"` sections, each containing modules with `source`, `target`, `method` (`symlink` | `copy` | `merge` | `append`), and optional `include`/`exclude` lists.
+- **`manifest.json`** -- SSOT for all deployable modules. Declares `"global"` and/or `"project"` sections, each containing modules with `source`, `target`, `method` (`symlink` | `copy` | `merge` | `append` | `managed`), and optional `include`/`exclude` lists.
 
 The CLI walks manifests directly: `global-init` assembles `.dotconfigs/global.json` from the `.global` sections, `deploy` walks that file, and `status` checks each module's on-disk state against its source.
 

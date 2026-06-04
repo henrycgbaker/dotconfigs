@@ -1,11 +1,11 @@
 ## Project: dotconfigs
 
-Generic config deployer with plugin architecture. Manages Claude Code, Git, VS Code, and shell configs via JSON manifests and symlinks.
+Generic config deployer with plugin architecture. Manages Claude Code, Git, and shell configs via JSON manifests and symlinks.
 
 ## Architecture
 
 - Entry point: `dotconfigs` (no extension)
-- Plugins: `plugins/{claude,git,shell,vscode}/` with `manifest.json` each
+- Plugins: `plugins/{claude,git,shell}/` with `manifest.json` each
 - Shared libs: `lib/` (sourced, not executed -- no shebangs)
 
 ### SSOT Dataflow

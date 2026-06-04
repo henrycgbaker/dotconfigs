@@ -33,7 +33,7 @@
     "project-excludes": {
       "source": "plugins/git/templates/project-excludes",
       "target": ".git/info/exclude",
-      "method": "append"
+      "method": "managed"
     },
     "gitignore": {
       "source": "plugins/git/templates/gitignore-default",
