@@ -27,7 +27,7 @@ Claude hooks run during Claude Code operations for code quality and safety.
 
 | Hook | Description | Configuration Keys |
 |------|-------------|-------------------|
-| block-ai-pr-attribution | PreToolUse hook to block AI attribution in PR titles and descriptions | CLAUDE_HOOK_PR_ATTRIBUTION_GUARD |
+| block-ai-pr-attribution | PreToolUse hook to block AI attribution in PR titles/bodies and GitHub MCP writes (PRs, commits, merges) | CLAUDE_HOOK_PR_ATTRIBUTION_GUARD |
 | block-chmod-777 | PreToolUse hook blocking chmod -R 777 (creates security vulnerability) | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
 | block-drop-table | PreToolUse hook blocking DROP TABLE / DROP DATABASE SQL statements (case-insensitive) | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
 | block-force-push | PreToolUse hook blocking git push --force without --force-with-lease | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
@@ -70,4 +70,4 @@ To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deployi
 
 ---
 
-*Generated: 2026-06-04 10:26:43 UTC*
+*Generated: 2026-06-04 20:31:32 UTC*

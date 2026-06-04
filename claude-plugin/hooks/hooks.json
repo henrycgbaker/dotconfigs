@@ -71,6 +71,11 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-gh-comment.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-ai-pr-attribution.sh",
+            "timeout": 10
           }
         ]
       }

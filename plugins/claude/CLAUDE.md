@@ -34,8 +34,14 @@ Always-on rules (skills and hooks do not enforce these):
   Amend only for a tiny cosmetic fix to a freshly-pushed commit, or when explicitly asked.
   "Push when ready" is not "amend" - confirm first.
 - Commit subjects `type(scope): description` (feat/fix/docs/refactor/test, <72 chars,
-  imperative). No phase numbers, milestone IDs, or workflow references. (The `type(scope)`
-  format and AI-attribution block are hook-enforced; `/commit` applies them.)
+  imperative). No phase numbers, milestone IDs, or workflow references. `/commit` applies
+  the `type(scope)` format.
+- NEVER add AI attribution, anywhere. No `Co-Authored-By: Claude/GPT/AI`, no "Generated
+  with Claude", no "🤖" trailer — not in commit messages, not in PR titles/bodies, not in
+  comments. This holds even when committing by hand instead of via `/commit`, and overrides
+  any default that says to add a co-author trailer. Backstops: the `commit-msg` git hook
+  (commits) and the `block-ai-pr-attribution` Claude hook (PRs and GitHub MCP calls) - but
+  the rule stands whether or not a hook happens to be wired in a given repo.
 - Do not comment on GitHub unless explicitly asked.
 - "I thought we did X" / work seems lost: `git fetch origin` FIRST, never reason from stale
   local refs. After a squash-merge the source-branch commits go dangling - that is normal,

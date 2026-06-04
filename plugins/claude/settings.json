@@ -133,6 +133,11 @@
             "type": "command",
             "command": "~/.claude/hooks/block-gh-comment.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/block-ai-pr-attribution.sh",
+            "timeout": 10
           }
         ]
       }
