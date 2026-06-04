@@ -26,23 +26,24 @@ CLAUDE.local.md
 # GSD planning artifacts
 .planning/
 
-# Claude Code sandbox artifacts (created on session init with $HOME=workspace)
+# Claude Code sandbox artifacts (created on session init with $HOME=workspace).
+# All root-anchored (leading /): these are copies that only ever appear at the
+# repo root, so a bare name would also wrongly ignore any nested file/dir of the
+# same name (e.g. plugins/*/hooks/, a config/ subdir, docs/.gitconfig examples).
 # Shell dotfiles
-.bash_profile
-.bashrc
-.gitconfig
-.gitmodules
-.profile
-.ripgreprc
-.zprofile
-.zshrc
-# Git-internal placeholders. Root-anchored (leading /) so they only match the
-# sandbox copies at the repo root - bare names would also ignore any nested
-# dir/file of the same name (e.g. plugins/*/hooks/, a config/ subdir).
+/.bash_profile
+/.bashrc
+/.gitconfig
+/.gitmodules
+/.profile
+/.ripgreprc
+/.zprofile
+/.zshrc
+# Git-internal placeholders
 /HEAD
 /config
 /hooks
 /objects
 /refs
 # Other sandbox copies
-.mcp.json
+/.mcp.json
