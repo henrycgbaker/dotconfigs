@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/block-hard-reset.sh

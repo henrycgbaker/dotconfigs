@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/facade-check.sh

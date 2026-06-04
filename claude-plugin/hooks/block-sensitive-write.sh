@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/block-sensitive-write.sh

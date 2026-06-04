@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/block-ai-pr-attribution.sh

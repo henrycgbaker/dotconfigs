@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/inject-context.sh

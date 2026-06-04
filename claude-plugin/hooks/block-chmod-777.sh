@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/block-chmod-777.sh

@@ -1,0 +1,1 @@
+../../plugins/claude/hooks/pre-compact-snapshot.sh

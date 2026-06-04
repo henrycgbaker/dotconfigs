@@ -1,0 +1,74 @@
+{
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1"
+  },
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(ruff:*)",
+      "Bash(pytest:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(pnpm:*)",
+      "Bash(git:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)"
+    ],
+    "deny": [
+      "Read(*.pem)",
+      "Read(*credentials*)",
+      "Read(*secret*)"
+    ],
+    "ask": [
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  },
+  "autoMode": {
+    "environment": [],
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git rev-parse*)",
+      "Bash(ls*)",
+      "Bash(cat*)",
+      "Bash(grep*)",
+      "Bash(find*)",
+      "Bash(rg*)",
+      "Bash(ruff check*)",
+      "Bash(ruff format*)",
+      "Bash(pytest*)"
+    ],
+    "soft_deny": [
+      "$defaults"
+    ],
+    "_hard_deny_note": "Intentionally mirrors patterns the destructive-block hooks (block-rm-rf-root.sh, block-hard-reset.sh, block-chmod-777.sh) catch. Belt-and-braces: if a hook is toggled off via claude-hooks.conf, autoMode still enforces these here. Keep the two lists in sync when adding new destructive guards.",
+    "hard_deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(git reset --hard*)",
+      "Bash(chmod -R 777*)"
+    ]
+  },
+  "outputStyle": "concise-execution",
+  "preferredNotifChannel": "terminal_bell",
+  "attribution": {
+    "name": "Henry Baker",
+    "email": "henry.c.g.baker@gmail.com"
+  },
+  "sandbox": {
+    "enabled": true,
+    "excludedCommands": [
+      "git",
+      "docker"
+    ]
+  },
+  "skipDangerousModePermissionPrompt": true
+}
