@@ -14,6 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
 PLUGINS_DIR="$SCRIPT_DIR/plugins"
 GLOBAL_CONFIG="$SCRIPT_DIR/.dotconfigs/global.json"
+# Registry of repos that have had `project-deploy` run, so `status` can audit
+# their git hooks for drift (missing/dangling) after the fact. Override for tests.
+PROJECT_REGISTRY="${DOTCONFIGS_PROJECT_REGISTRY:-$HOME/.dotconfigs/projects.list}"
 
 # Source shared libraries eagerly (small files)
 source "$SCRIPT_DIR/lib/symlinks.sh"
@@ -734,6 +737,61 @@ cmd_status() {
 
         echo ""
     done < <(discover_plugins "$PLUGINS_DIR")
+
+    # Project git-hook drift audit: git hooks live per-repo in .git/hooks and are
+    # easily lost (re-clone, .git wipe). Walk the registry of project-deployed
+    # repos and flag any whose dotconfigs git hooks are missing or dangling.
+    if [[ -z "$plugin_filter" || "$plugin_filter" == "git" ]]; then
+        _audit_project_hooks
+    fi
+}
+
+# Audit every registered repo's git hooks against the git plugin's project
+# include list. Prints a per-repo OK/missing/dangling summary. Repos that no
+# longer exist are reported as gone (registry left intact — the user prunes).
+_audit_project_hooks() {
+    [[ -f "$PROJECT_REGISTRY" ]] || return 0
+
+    local expected
+    expected=$(jq -r '.project.hooks.include[]?' "$PLUGINS_DIR/git/manifest.json" 2>/dev/null)
+    [[ -z "$expected" ]] && return 0
+
+    printf "%b\n" "$(colour_cyan 'project git-hook audit')"
+
+    local repo hookdir name target problems
+    while IFS= read -r repo; do
+        [[ -z "$repo" ]] && continue
+        if [[ ! -d "$repo/.git" ]]; then
+            printf "  %b %s %s\n" "$(colour_yellow "$SYMBOL_DRIFT")" "$repo" "(gone — no .git)"
+            continue
+        fi
+        hookdir="$repo/.git/hooks"
+        problems=""
+        while IFS= read -r name; do
+            [[ -z "$name" ]] && continue
+            target="$hookdir/$name"
+            if [[ ! -e "$target" ]]; then
+                # -e follows symlinks: a dangling symlink is also caught here.
+                if [[ -L "$target" ]]; then
+                    problems="$problems dangling:$name"
+                else
+                    problems="$problems missing:$name"
+                fi
+            fi
+        done <<< "$expected"
+
+        if [[ -z "$problems" ]]; then
+            printf "  %b %s\n" "$(colour_green "$SYMBOL_OK")" "$repo"
+        else
+            printf "  %b %s%b\n" "$(colour_red "$SYMBOL_MISSING")" "$repo" ""
+            local p
+            for p in $problems; do
+                printf "      %b %s\n" "$(colour_red "${p%%:*}")" "${p#*:}"
+            done
+            printf "      %bfix: dotconfigs project-deploy %s%b\n" "${COLOUR_YELLOW:-}" "$repo" "${COLOUR_RESET:-}"
+        fi
+    done < "$PROJECT_REGISTRY"
+    echo ""
 }
 
 cmd_list() {
@@ -844,6 +902,15 @@ cmd_validate() {
         _refcheck_merge_targets "$(parse_modules "$GLOBAL_CONFIG" "")"
     fi
 
+    # Defensive: flag claude hooks wired in BOTH the global and the current
+    # project's settings.json (additive merge → double-fire). Only fires when a
+    # project .claude/settings.json exists in the CWD.
+    if declare -f refcheck_hook_duplication >/dev/null 2>&1; then
+        refcheck_hook_duplication \
+            "$HOME/.claude/settings.json" \
+            "$PWD/.claude/settings.json" || true
+    fi
+
     echo ""
     if [[ "$errors" -gt 0 ]]; then
         printf "%b✗ validate: %s error(s), %s warning(s)%b\n" "${COLOUR_RED:-}" "$errors" "$warnings" "${COLOUR_RESET:-}" >&2
@@ -941,6 +1008,28 @@ cmd_project() {
             echo ""
             echo "Added .dotconfigs/ to .git/info/exclude"
         fi
+
+        # Defensive: if this project wires claude hooks in its own settings.json,
+        # warn about any that also fire globally (additive merge → double-fire).
+        if declare -f refcheck_hook_duplication >/dev/null 2>&1; then
+            refcheck_hook_duplication \
+                "$HOME/.claude/settings.json" \
+                "$project_path/.claude/settings.json" || true
+        fi
+
+        # Register this repo so `dotconfigs status` can later audit its git hooks
+        # for drift (a project's hooks live in .git/hooks and are easy to lose to
+        # a re-clone or a `.git` reset). Idempotent — one absolute path per line.
+        _register_project "$project_path"
+    fi
+}
+
+# Append a repo path to the project registry (deduplicated). Args: abs_path
+_register_project() {
+    local path="$1"
+    mkdir -p "$(dirname "$PROJECT_REGISTRY")"
+    if ! grep -qxF "$path" "$PROJECT_REGISTRY" 2>/dev/null; then
+        echo "$path" >> "$PROJECT_REGISTRY"
     fi
 }
 

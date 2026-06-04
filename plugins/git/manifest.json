@@ -2,7 +2,7 @@
   "global": {
     "hooks": {
       "source": "plugins/git/hooks",
-      "target": "~/.dotconfigs/git-hooks",
+      "target": "~/.dotconfigs/git-template/hooks",
       "method": "symlink",
       "include": ["check-facade-consumers.py", "commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "pre-rebase", "prepare-commit-msg"]
     },

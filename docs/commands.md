@@ -94,13 +94,15 @@ dotconfigs status claude
 ```
 Shows per-file state: **✓ deployed** (symlink correct), **△ drifted** (broken/foreign/wrong target), **✗ not deployed**. Merge-managed files like `settings.json` are reported by deploy, not here.
 
+Also runs a **project git-hook audit**: every repo that has been `project-deploy`ed is recorded in `~/.dotconfigs/projects.list`, and `status` (or `status git`) walks that list and flags any whose git hooks have gone missing or dangling - the per-repo failure mode that lets AI attribution slip through a `commit-msg` hook that isn't actually installed. The fix it suggests is `dotconfigs project-deploy <repo>`.
+
 ## validate `[--strict]`
 
 ```bash
 dotconfigs validate            # lint manifests + scan deployed config
 dotconfigs validate --strict   # treat warnings as failures too
 ```
-Lints every plugin manifest (valid JSON, known `method`, whitelisted keys, source exists) and scans deployed merge-managed JSON (e.g. `~/.claude/settings.json`) for dangling command references - a `statusLine.command` or hook `command` pointing at a script that isn't actually deployed. Exits non-zero on any error; `--strict` also fails on warnings. Runs without deploying.
+Lints every plugin manifest (valid JSON, known `method`, whitelisted keys, source exists) and scans deployed merge-managed JSON (e.g. `~/.claude/settings.json`) for dangling command references - a `statusLine.command` or hook `command` pointing at a script that isn't actually deployed. It also flags **cross-scope hook duplication**: a claude hook wired in both `~/.claude/settings.json` and the current repo's `.claude/settings.json` fires twice (Claude merges hooks additively). Exits non-zero on any error; `--strict` also fails on warnings (including duplicates). Runs without deploying.
 
 ## list
 
