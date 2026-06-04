@@ -841,13 +841,7 @@ cmd_validate() {
 
     # Scan deployed merge-method JSON targets for dangling command references.
     if [[ -f "$GLOBAL_CONFIG" ]]; then
-        local source target method include_csv rc_target
-        while IFS=$'\t' read -r source target method include_csv; do
-            [[ "$method" == "merge" ]] || continue
-            rc_target=$(expand_tilde "$target")
-            [[ -f "$rc_target" ]] || continue
-            refcheck_settings_json "$rc_target" "$(dirname "$rc_target")" || true
-        done <<< "$(parse_modules "$GLOBAL_CONFIG" "")"
+        _refcheck_merge_targets "$(parse_modules "$GLOBAL_CONFIG" "")"
     fi
 
     echo ""

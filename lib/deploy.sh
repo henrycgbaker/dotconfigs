@@ -880,6 +880,23 @@ undeploy_from_json() {
     echo "  Skipped:      $skipped"
 }
 
+# Scan merge-method targets for dangling command references (the statusLine /
+# hook-command class of bug). Shared by deploy_from_json (post-deploy) and
+# `dotconfigs validate`; takes the already-parsed module rows so neither caller
+# re-parses. No-op if refcheck.sh isn't sourced — deploy.sh only soft-depends
+# on it, so standalone-sourced callers (and tests) still work.
+# Args: modules_data (TSV rows: source<TAB>target<TAB>method<TAB>include_csv)
+_refcheck_merge_targets() {
+    local modules_data="$1"
+    declare -f refcheck_settings_json >/dev/null 2>&1 || return 0
+    local source target method include_csv rc_target
+    while IFS=$'\t' read -r source target method include_csv; do
+        [[ "$method" == "merge" ]] || continue
+        rc_target=$(expand_tilde "$target")
+        refcheck_settings_json "$rc_target" "$(dirname "$rc_target")" || true
+    done <<< "$modules_data"
+}
+
 # Main deployment entry point
 # Args: config_file, dotconfigs_root, [group_key], [dry_run], [force], [project_root]
 deploy_from_json() {
@@ -962,13 +979,8 @@ deploy_from_json() {
     # references (the statusLine/hook-command class of bug). Warnings only —
     # never blocks a deploy — but tallies into `warnings`. Skipped on dry-run
     # since nothing was actually written.
-    if [[ "$dry_run" != "true" ]] && declare -f refcheck_settings_json >/dev/null 2>&1; then
-        while IFS=$'\t' read -r source target method include_csv; do
-            [[ "$method" == "merge" ]] || continue
-            local _rc_target
-            _rc_target=$(expand_tilde "$target")
-            refcheck_settings_json "$_rc_target" "$(dirname "$_rc_target")" || true
-        done <<< "$modules_data"
+    if [[ "$dry_run" != "true" ]]; then
+        _refcheck_merge_targets "$modules_data"
     fi
 
     # Print summary
