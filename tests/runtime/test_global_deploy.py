@@ -1,7 +1,7 @@
-"""Runtime tests: global deploy produces correct filesystem state.
+"""Runtime tests: machine deploy produces correct filesystem state.
 
-Expectations are derived from plugin manifests (SSOT). Adding a new
-plugin or module automatically extends these tests.
+Parametrized over every machine-scope catalogue item (manifest.json is the SSOT),
+so adding a plugin or item automatically extends coverage.
 """
 
 from __future__ import annotations
@@ -10,121 +10,78 @@ import json
 
 import pytest
 
-from tests.runtime.conftest import (
-    REPO_ROOT,
-    read_all_manifests,
-    resolve_target,
-    validate_module,
-)
+from tests.runtime.conftest import REPO_ROOT, catalogue_items, validate_item
+
+pytestmark = pytest.mark.e2e
+
+MACHINE_ITEMS = catalogue_items(REPO_ROOT, "machine")
 
 
-# ---------------------------------------------------------------------------
-# Parametrize helpers (run at collection time)
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("item", MACHINE_ITEMS, ids=[i["label"] for i in MACHINE_ITEMS])
+def test_machine_item_deployed(item, deployed_machine, dotconfigs_root):
+    failures = validate_item(item, dotconfigs_root, deployed_machine, "machine")
+    assert not failures, "\n".join(failures)
 
 
-def _global_module_ids() -> list[str]:
-    """Return plugin/module IDs for all global modules across all plugins."""
-    ids = []
-    for mf in sorted(REPO_ROOT.glob("plugins/*/manifest.json")):
-        data = json.loads(mf.read_text())
-        plugin = mf.parent.name
-        for mod_name in data.get("global", {}):
-            ids.append(f"{plugin}/{mod_name}")
-    return ids
+def test_settings_hooks_synthesised(deployed_machine):
+    settings = json.loads((deployed_machine / ".claude" / "settings.json").read_text())
+    assert "hooks" in settings, "synthesised hooks block missing"
+    commands = [
+        h["command"]
+        for arr in settings["hooks"].values()
+        for block in arr
+        for h in block["hooks"]
+    ]
+    # A selected, wired guard is present...
+    assert any("block-rm-rf-root.sh" in c for c in commands)
+    # ...and non-hook keys from the merge source survive.
+    assert "permissions" in settings and "sandbox" in settings
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+def _env(home):
+    return {
+        "HOME": str(home),
+        "DOTCONFIGS_DEPLOY_CONFIG": str(home / ".dotconfigs" / "deploy.json"),
+    }
 
 
-@pytest.mark.runtime
-class TestGlobalDeploy:
-    """Validate that `dotconfigs deploy` creates correct targets for all global modules."""
+def test_settings_idempotent_from_first_deploy(tmp_path, run_dotconfigs):
+    """settings.json (merge) must be byte-stable across re-deploys, including the
+    very first one — regression for the cp-then-merge non-idempotency."""
+    home = tmp_path / "home"
+    home.mkdir()
+    env = _env(home)
+    assert run_dotconfigs(["init", "--force"], env=env).returncode == 0
+    assert run_dotconfigs(["deploy", "--force"], env=env).returncode == 0
+    settings = home / ".claude" / "settings.json"
+    first = settings.read_text()
+    assert run_dotconfigs(["deploy", "--force"], env=env).returncode == 0
+    assert settings.read_text() == first, (
+        "settings.json must be stable across re-deploys"
+    )
 
-    @pytest.mark.parametrize("module_path", _global_module_ids())
-    def test_module_deployed(self, module_path, deployed_global, dotconfigs_root):
-        """Each global module's files exist at correct targets with correct type."""
-        home, config = deployed_global
-        plugin, mod_name = module_path.split("/")
-        mod_config = config[plugin][mod_name]
 
-        failures = validate_module(mod_config, dotconfigs_root, home, scope="global")
-        assert not failures, "\n".join(failures)
+def test_deselecting_all_hooks_clears_settings_block(tmp_path, run_dotconfigs):
+    """Toggling every Claude hook off must clear the synthesised hooks block (the
+    merge owns .hooks wholesale) while preserving non-hook keys — regression for
+    stale wiring surviving a deselect."""
+    home = tmp_path / "home"
+    home.mkdir()
+    dj = home / ".dotconfigs" / "deploy.json"
+    env = _env(home)
+    assert run_dotconfigs(["init", "--force"], env=env).returncode == 0
+    assert run_dotconfigs(["deploy", "--force"], env=env).returncode == 0
+    settings = home / ".claude" / "settings.json"
+    assert json.loads(settings.read_text())["hooks"], "expected a populated block first"
 
-    def test_all_plugins_represented(self, deployed_global):
-        """Every plugin with a .global manifest section has deployed modules."""
-        _, config = deployed_global
-        manifests = read_all_manifests(REPO_ROOT, "global")
-        assert set(config.keys()) == set(manifests.keys()), (
-            f"Plugin mismatch: deployed={set(config.keys())}, "
-            f"manifests={set(manifests.keys())}"
-        )
+    sel = json.loads(dj.read_text())
+    sel["claude"]["hooks"] = {k: False for k in sel["claude"]["hooks"]}
+    dj.write_text(json.dumps(sel))
+    assert run_dotconfigs(["deploy", "--force"], env=env).returncode == 0
 
-    def test_global_json_matches_manifests(self, dotconfigs_root):
-        """global.json accurately reflects manifest .global sections (SSOT check)."""
-        global_json_path = dotconfigs_root / ".dotconfigs" / "global.json"
-        if not global_json_path.exists():
-            pytest.skip("global.json not present (run global-init)")
-
-        global_config = json.loads(global_json_path.read_text())
-        manifest_config = read_all_manifests(dotconfigs_root, "global")
-
-        # Compare plugin sets
-        assert set(global_config.keys()) == set(manifest_config.keys()), (
-            f"Plugin mismatch: global.json={set(global_config.keys())}, "
-            f"manifests={set(manifest_config.keys())}"
-        )
-
-        # Compare module sets per plugin
-        for plugin in manifest_config:
-            global_modules = set(global_config[plugin].keys())
-            manifest_modules = set(manifest_config[plugin].keys())
-            assert global_modules == manifest_modules, (
-                f"{plugin}: module mismatch: "
-                f"global.json={global_modules}, manifest={manifest_modules}"
-            )
-
-            # Compare include lists per module
-            for mod_name in manifest_config[plugin]:
-                gm = global_config[plugin][mod_name]
-                mm = manifest_config[plugin][mod_name]
-                g_include = sorted(gm.get("include", []))
-                m_include = sorted(mm.get("include", []))
-                assert g_include == m_include, (
-                    f"{plugin}/{mod_name}: include mismatch: "
-                    f"global.json={g_include}, manifest={m_include}"
-                )
-
-    def test_symlinks_point_to_repo(self, deployed_global, dotconfigs_root):
-        """All symlinks resolve to files within the dotconfigs repo."""
-        home, config = deployed_global
-        for plugin, modules in config.items():
-            for mod_name, mod_config in modules.items():
-                if mod_config["method"] != "symlink":
-                    continue
-
-                source = dotconfigs_root / mod_config["source"]
-                target = resolve_target(mod_config["target"], home, "global")
-
-                if source.is_dir():
-                    include = mod_config.get("include", [])
-                    files = (
-                        include
-                        if include
-                        else [f.name for f in source.iterdir() if f.is_file()]
-                    )
-                    for f in files:
-                        ft = target / f
-                        if ft.is_symlink():
-                            resolved = ft.resolve()
-                            assert str(resolved).startswith(str(dotconfigs_root)), (
-                                f"{ft} -> {resolved} (outside repo)"
-                            )
-                else:
-                    if target.is_symlink():
-                        resolved = target.resolve()
-                        assert str(resolved).startswith(str(dotconfigs_root)), (
-                            f"{target} -> {resolved} (outside repo)"
-                        )
+    data = json.loads(settings.read_text())
+    wired = [
+        h for arr in data.get("hooks", {}).values() for blk in arr for h in blk["hooks"]
+    ]
+    assert wired == [], "deselecting all hooks must clear the settings hooks block"
+    assert "permissions" in data  # non-hook keys preserved

@@ -7,11 +7,6 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
-# ---------------------------------------------------------------------------
-# Routing basics
-# ---------------------------------------------------------------------------
-
-
 def test_no_args_shows_usage(run_dotconfigs):
     result = run_dotconfigs([])
     assert result.returncode == 0
@@ -30,20 +25,16 @@ def test_unknown_command_errors(run_dotconfigs):
     assert "Unknown command" in result.stderr
 
 
-# ---------------------------------------------------------------------------
-# help <command>
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     "cmd,expected_fragment",
     [
-        ("deploy", "Deploy global configuration"),
-        ("project", "Deploy per-project"),
-        ("project-init", "Scaffold per-project"),
-        ("status", "deployment status"),
         ("setup", "One-time initialisation"),
-        ("global-init", "Scaffold global.json"),
+        ("init", "Seed a selection"),
+        ("deploy", "Deploy a selection"),
+        ("undeploy", "Remove deployed artefacts"),
+        ("cleanup", "stale and broken symlinks"),
+        ("status", "deployment status"),
+        ("validate", "Lint catalogues"),
     ],
 )
 def test_help_subcommand(run_dotconfigs, cmd, expected_fragment):
@@ -58,26 +49,23 @@ def test_help_unknown_command(run_dotconfigs):
     assert "Unknown command" in result.stderr
 
 
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
-
-
 def test_deploy_unknown_option(run_dotconfigs):
     result = run_dotconfigs(["deploy", "--bogus"])
     assert result.returncode != 0
     assert "Unknown option" in result.stderr
 
 
-def test_project_unknown_option(run_dotconfigs, project_dir):
-    result = run_dotconfigs(["project", str(project_dir), "--bogus"])
+def test_deploy_project_on_non_git_dir(run_dotconfigs, tmp_path):
+    plain = tmp_path / "no_git"
+    plain.mkdir()
+    result = run_dotconfigs(["deploy", str(plain)])
     assert result.returncode != 0
-    assert "Unknown option" in result.stderr
+    assert "git" in result.stderr.lower()
 
 
-def test_project_on_non_git_dir(run_dotconfigs, tmp_path):
-    plain_dir = tmp_path / "no_git"
-    plain_dir.mkdir()
-    result = run_dotconfigs(["project", str(plain_dir)])
+def test_init_project_on_non_git_dir(run_dotconfigs, tmp_path):
+    plain = tmp_path / "no_git2"
+    plain.mkdir()
+    result = run_dotconfigs(["init", str(plain)])
     assert result.returncode != 0
     assert "git" in result.stderr.lower()

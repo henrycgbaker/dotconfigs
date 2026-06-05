@@ -25,6 +25,24 @@ expand_tilde() {
     echo "${1/#\~/$HOME}"
 }
 
+# Resolve a manifest source (repo-relative or already absolute) to an absolute
+# path against the repo root. Args: source, dotconfigs_root
+_abs_source() {
+    case "$1" in
+        /*) printf '%s' "$1" ;;
+        *)  printf '%s/%s' "$2" "$1" ;;
+    esac
+}
+
+# Resolve a manifest target to its final absolute path: expand a leading ~, then
+# prefix with project_root when the target is project-scoped (relative). Machine
+# targets (already ~/absolute) pass through unprefixed. Args: target, project_root
+resolve_target() {
+    local t; t=$(expand_tilde "$1")
+    [[ -n "$2" && "$t" != /* ]] && t="$2/$t"
+    printf '%s' "$t"
+}
+
 # Idempotency check for the append method: every non-blank line in source must
 # already appear (exact match) somewhere in target. `grep -qFf` is the obvious
 # tool here but it has "any match" semantics and treats blank lines as wildcards,
@@ -146,21 +164,98 @@ _managed_block_remove() {
     return 0
 }
 
-# Parse modules from JSON config recursively
-# Args: config_file [, group_key]
-# If group_key is empty/unset, walks entire config; otherwise filters to .[$group] first.
-# Returns: tab-separated lines: source\ttarget\tmethod\tinclude_csv
-parse_modules() {
-    local config_file="$1"
-    local group_key="${2:-}"
+# Build a single merged catalogue from every plugin's manifest.json:
+#   { "<plugin>": { "<category>": { "<name>": { source, method, target, ... } } } }
+# Args: plugins_dir
+_merged_manifest() {
+    local plugins_dir="$1" merged="{}" d name
+    for d in "$plugins_dir"/*/; do
+        [[ -f "${d}manifest.json" ]] || continue
+        name=$(basename "$d")
+        merged=$(jq --arg n "$name" --slurpfile mf "${d}manifest.json" '.[$n] = $mf[0]' <<<"$merged") || return 1
+    done
+    printf '%s' "$merged"
+}
 
-    if [[ -z "$group_key" ]]; then
-        # Recursive descent over the whole config
-        jq -r '.. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (if has("include") then ((.include // []) - (.exclude // []) | if length == 0 then "__NONE__" else join(",") end) else "" end)] | @tsv' "$config_file" 2>/dev/null || true
-    else
-        # Filter to specific group first, then recursive descent
-        jq -r --arg group "$group_key" '.[$group] | .. | select(type == "object") | select(has("source") and has("target")) | [.source, .target, .method, (if has("include") then ((.include // []) - (.exclude // []) | if length == 0 then "__NONE__" else join(",") end) else "" end)] | @tsv' "$config_file" 2>/dev/null || true
-    fi
+# Resolve the deployment plan for a scope: join the merged catalogue with the
+# selection (deploy.json) and emit one TSV row per (item, scope-matching target):
+#   enabled<TAB>source<TAB>target<TAB>method<TAB>label
+# label is "<plugin>/<category>/<name>". Scope is "machine" (~/absolute targets)
+# or "project" (relative targets). enabled is the deploy.json bool (false when
+# the item is absent from the selection).
+# Args: plugins_dir, deploy_json, scope
+resolve_plan() {
+    local plugins_dir="$1" deploy_json="$2" scope="$3"
+    local merged sel
+    merged=$(_merged_manifest "$plugins_dir") || return 1
+    sel="{}"; [[ -f "$deploy_json" ]] && sel=$(cat "$deploy_json")
+    jq -rn --argjson m "$merged" --argjson sel "$sel" --arg scope "$scope" '
+        $m | to_entries[] as $p
+        | $p.value | to_entries[] as $c
+        | $c.value | to_entries[] as $i
+        | $i.value as $e
+        | ($e.target | if type=="array" then . else [.] end)[] as $t
+        | (if ($t | test("^[~/]")) then "machine" else "project" end) as $ts
+        | select($ts == $scope)
+        | (($sel[$p.key][$c.key][$i.key]) // false) as $en
+        | [$en, $e.source, $t, $e.method, "\($p.key)/\($c.key)/\($i.key)"] | @tsv
+    ' 2>/dev/null || true
+}
+
+# Synthesise the Claude settings `hooks` block from the enabled, wired Claude
+# hooks. Inverse of the old static block: each selected hook contributes its
+# `wiring` (one object or an array of them); entries are grouped by event then
+# matcher, exactly the shape ~/.claude/settings.json expects. The command is the
+# hook's own machine target. Echoes the hooks object ({} if none).
+# True if this item's deployed source is synthesised at deploy time: the Claude
+# settings.json, whose `hooks` block we generate from the selected hooks. Deploy
+# injects that block; undeploy strips it — both gate on this one predicate so the
+# two sides can never drift. Args: label (plugin/category/name)
+_is_synthesised_settings() {
+    [[ "$1" == "claude/config/settings" ]]
+}
+
+# Args: plugins_dir, deploy_json
+synthesise_claude_hooks() {
+    local plugins_dir="$1" deploy_json="$2"
+    local cm="$plugins_dir/claude/manifest.json" sel="{}"
+    [[ -f "$cm" ]] || { printf '{}'; return; }
+    [[ -f "$deploy_json" ]] && sel=$(cat "$deploy_json")
+    jq -n --slurpfile mf "$cm" --argjson sel "$sel" '
+        ($sel.claude.hooks // {}) as $hsel
+        | [ $mf[0].hooks | to_entries[]
+            | .key as $name | .value as $e
+            | select($e.wiring != null and ($hsel[$name] == true))
+            | ($e.wiring | if type=="array" then . else [.] end)[]
+            | . + { command: $e.target } ]
+        | group_by(.event)
+        | map({ key: .[0].event,
+                value: ( group_by(.matcher | tostring)
+                         | map( (.[0].matcher) as $m
+                                | { hooks: map( { type: "command" }
+                                              + (if .if != null then { if: .if } else {} end)
+                                              + { command: .command }
+                                              + (if .timeout != null then { timeout: .timeout } else {} end) ) }
+                                  + (if $m != null then { matcher: $m } else {} end) ) ) })
+        | from_entries
+    '
+}
+
+# Write a temp copy of the Claude settings source with the synthesised `hooks`
+# block injected. Echoes the temp path (caller removes it). If no hooks are
+# selected, the source is copied through unchanged.
+# Args: plugins_dir, deploy_json, settings_src (abs path)
+_synthesise_settings_source() {
+    local plugins_dir="$1" deploy_json="$2" settings_src="$3"
+    local hooks tmp
+    hooks=$(synthesise_claude_hooks "$plugins_dir" "$deploy_json")
+    [[ -z "$hooks" ]] && hooks='{}'
+    tmp=$(mktemp "${TMPDIR:-/tmp}/dotconfigs-settings.XXXXXX")
+    # Always set .hooks (even to {}) so the merge OVERWRITES any previously
+    # deployed wiring: deselecting every hook must clear the block, not leave a
+    # stale one behind (the merge keeps target keys the source omits).
+    jq --argjson h "$hooks" '.hooks = $h' "$settings_src" > "$tmp"
+    printf '%s' "$tmp"
 }
 
 # Remove stale symlinks from a target directory after deploy
@@ -238,6 +333,29 @@ cleanup_stale_in_directory() {
     done
 }
 
+# Sweep every symlink target dir in a plan for dotconfigs-owned stale/broken
+# symlinks (catalogue-deleted orphans and broken-into-repo links), preserving
+# foreign files/symlinks and any still-catalogued item. Shared by `deploy` (so a
+# deploy is a full reconcile, like `stow -R` / `chezmoi apply`) and `cleanup`.
+# Args: plan, project_root, dotconfigs_root, dry_run. Accumulates into `removed`.
+_sweep_stale_symlinks() {
+    local plan="$1" project_root="$2" dotconfigs_root="$3" dry_run="$4"
+    local rows enabled source target method label t dir csv
+    rows=$(
+        while IFS=$'\t' read -r enabled source target method label; do
+            [[ "$method" == "symlink" ]] || continue
+            t=$(resolve_target "$target" "$project_root")
+            printf '%s\t%s\n' "$(dirname "$t")" "$(basename "$t")"
+        done <<< "$plan"
+    )
+    [[ -z "$rows" ]] && return 0
+    while IFS= read -r dir; do
+        [[ -z "$dir" ]] && continue
+        csv=$(awk -F'\t' -v d="$dir" '$1==d{printf "%s%s",sep,$2; sep=","}' <<< "$rows")
+        cleanup_stale_in_directory "$dir" "$csv" "$dotconfigs_root" "$dry_run"
+    done < <(cut -f1 <<< "$rows" | sort -u)
+}
+
 # Symlink-deploy a single file or directory, state-aware.
 # Reports Unchanged / Would link / Would update / conflict and tallies the
 # correct counter (created/updated/unchanged/skipped) via eval into the caller.
@@ -280,7 +398,7 @@ link_one() {
     fi
 
     # Real run: act, then count by the prior state.
-    backup_and_link "$src" "$tgt" "$name" "$mode"
+    backup_and_link "$src" "$tgt" "$name" "$mode" "$root"
     local rc=$?
     if [[ $rc -eq 0 ]]; then
         if [[ "$state" == "not-deployed" ]]; then
@@ -292,81 +410,6 @@ link_one() {
         eval "unchanged=\$(( \$unchanged + 1 ))"
     else
         eval "skipped=\$(( \$skipped + 1 ))"
-    fi
-}
-
-# Deploy files from a directory source
-# Args: source_dir, target_dir, include_csv, dotconfigs_root, dry_run, interactive_mode
-# Returns: Status counts via global counters
-deploy_directory_files() {
-    local source_dir="$1"
-    local target_dir="$2"
-    local include_csv="$3"
-    local dotconfigs_root="$4"
-    local dry_run="$5"
-    local interactive_mode="$6"
-    local file
-    local file_name
-    local target_file
-    local status
-
-    # All items excluded — deploy nothing, but still clean up stale entries
-    if [[ "$include_csv" == "__NONE__" ]]; then
-        cleanup_stale_in_directory "$target_dir" "" "$dotconfigs_root" "$dry_run"
-        return
-    fi
-
-    # Create target directory unless dry-run
-    if [[ "$dry_run" != "true" ]]; then
-        # If target path exists but isn't a directory (e.g. dangling symlink, file), remove it
-        # Note: -d follows symlinks, so symlinks to valid directories are preserved
-        if [[ ! -d "$target_dir" && ( -L "$target_dir" || -e "$target_dir" ) ]]; then
-            rm -f "$target_dir"
-        fi
-        mkdir -p "$target_dir"
-    fi
-
-    # Parse include list if provided
-    if [[ -n "$include_csv" ]]; then
-        # Split CSV into array (bash 3.2 compatible - no readarray)
-        local include_files=()
-        local IFS=','
-        for file_name in $include_csv; do
-            include_files+=("$file_name")
-        done
-        unset IFS
-
-        # Deploy only included files
-        for file_name in "${include_files[@]}"; do
-            file="$source_dir/$file_name"
-            target_file="$target_dir/$file_name"
-
-            if [[ ! -e "$file" ]]; then
-                echo "  ! Warning: included file not found: $file_name"
-                eval "skipped=\$(( \$skipped + 1 ))"
-                continue
-            fi
-
-            link_one "$file" "$target_file" "$file_name" "$dotconfigs_root" "$dry_run" "$interactive_mode"
-        done
-
-        # Clean up stale entries (include-list branch)
-        cleanup_stale_in_directory "$target_dir" "$include_csv" "$dotconfigs_root" "$dry_run"
-    else
-        # Deploy all files in directory, building the deployed CSV as we go.
-        local all_csv=""
-        for file in "$source_dir"/*; do
-            [[ ! -e "$file" ]] && continue
-            [[ -d "$file" ]] && continue  # Skip subdirectories
-
-            file_name=$(basename "$file")
-            target_file="$target_dir/$file_name"
-
-            link_one "$file" "$target_file" "$file_name" "$dotconfigs_root" "$dry_run" "$interactive_mode"
-            all_csv="${all_csv:+$all_csv,}$file_name"
-        done
-
-        cleanup_stale_in_directory "$target_dir" "$all_csv" "$dotconfigs_root" "$dry_run"
     fi
 }
 
@@ -382,6 +425,7 @@ _merge_to_tmp() {
         | .permissions.allow = ((($live.permissions.allow // []) + ($base.permissions.allow // [])) | unique)
         | .permissions.deny  = ((($live.permissions.deny  // []) + ($base.permissions.deny  // [])) | unique)
         | .permissions.ask   = ((($live.permissions.ask   // []) + ($base.permissions.ask   // [])) | unique)
+        | (if ($base | has("hooks")) then .hooks = $base.hooks else . end)
     ' "$target" "$source" > "$tmp" 2>/dev/null; then
         echo "$tmp"
         return 0
@@ -437,8 +481,10 @@ _substitute_placeholders() {
         return 0
     fi
     local name email used_fallback=false
-    name=$(git config --global user.name 2>/dev/null)
-    email=$(git config --global user.email 2>/dev/null)
+    # --includes so an identity set in an included file (e.g. our gitconfig-base)
+    # is honoured; plain --global misses includes and would force the fallback.
+    name=$(git config --global --includes user.name 2>/dev/null)
+    email=$(git config --global --includes user.email 2>/dev/null)
     if [[ -z "$name" ]]; then
         name="Henry Baker"
         used_fallback=true
@@ -482,13 +528,14 @@ merge_json_settings() {
     local source="$1"
     local target="$2"
 
-    # First deploy, or a stale symlink target (nothing local to preserve):
-    # place the base as a fresh regular file.
+    # First deploy, or a stale symlink target (nothing local to preserve): start
+    # from an empty object and fall through to the merge, so the first deploy
+    # yields the same canonical (jq-normalised, permission-unioned) form a
+    # re-deploy would -- deploy is then idempotent from run one.
     if [[ ! -e "$target" || -L "$target" ]]; then
         rm -f "$target"
         mkdir -p "$(dirname "$target")"
-        cp "$source" "$target"
-        return 0
+        printf '{}\n' > "$target"
     fi
 
     local tmp
@@ -503,16 +550,15 @@ merge_json_settings() {
 }
 
 # Deploy a single module (source -> target)
-# Args: source, target, method, include_csv, dotconfigs_root, dry_run, interactive_mode
+# Args: source, target, method, dotconfigs_root, dry_run, interactive_mode
 # Returns: status string via global counters
 deploy_module() {
     local source="$1"
     local target="$2"
     local method="$3"
-    local include_csv="$4"
-    local dotconfigs_root="$5"
-    local dry_run="$6"
-    local interactive_mode="$7"
+    local dotconfigs_root="$4"
+    local dry_run="$5"
+    local interactive_mode="$6"
     local abs_source
     local abs_target
     local rel_src
@@ -520,13 +566,7 @@ deploy_module() {
     # Expand tilde in target
     abs_target=$(expand_tilde "$target")
 
-    # Make source absolute if not already
-    if [[ "$source" != /* ]]; then
-        abs_source="$dotconfigs_root/$source"
-    else
-        abs_source="$source"
-    fi
-
+    abs_source=$(_abs_source "$source" "$dotconfigs_root")
     # Compute relative source for display
     rel_src="${abs_source#$dotconfigs_root/}"
 
@@ -543,58 +583,9 @@ deploy_module() {
     # Switch on method
     case "$method" in
         symlink)
-            if [[ -d "$abs_source" ]]; then
-                # Directory source: deploy files individually
-                deploy_directory_files "$abs_source" "$abs_target" "$include_csv" "$dotconfigs_root" "$dry_run" "$interactive_mode"
-            else
-                # File source: single symlink
-                link_one "$abs_source" "$abs_target" "$(basename "$abs_target")" "$dotconfigs_root" "$dry_run" "$interactive_mode"
-            fi
-            ;;
-        copy)
-            if [[ "$dry_run" == "true" ]]; then
-                if [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target"; then
-                    echo "  Unchanged: $rel_src -> $abs_target"
-                    eval "unchanged=\$(( \$unchanged + 1 ))"
-                elif [[ -e "$abs_target" ]]; then
-                    echo "  Would copy (overwrite): $rel_src -> $abs_target"
-                    eval "updated=\$(( \$updated + 1 ))"
-                else
-                    echo "  Would copy: $rel_src -> $abs_target"
-                    eval "created=\$(( \$created + 1 ))"
-                fi
-            else
-                local target_dir
-                target_dir=$(dirname "$abs_target")
-                mkdir -p "$target_dir"
-
-                # Check if target already matches source
-                if [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target"; then
-                    echo "  Unchanged: $rel_src -> $abs_target"
-                    eval "unchanged=\$(( \$unchanged + 1 ))"
-                else
-                    local existed="false"
-                    [[ -e "$abs_target" ]] && existed="true"
-                    # Atomic: write a sibling temp then rename, so an
-                    # interrupted copy can't leave a half-written file that
-                    # drifts foreign (stuck needing --force). Only rename on a
-                    # clean cp; on failure clean up the temp and leave the
-                    # existing target untouched rather than report a false success.
-                    local _ctmp="${abs_target}.copy.$$"
-                    if cp -p "$abs_source" "$_ctmp" && mv "$_ctmp" "$abs_target"; then
-                        echo "  ✓ Copied $rel_src -> $abs_target"
-                        if [[ "$existed" == "true" ]]; then
-                            eval "updated=\$(( \$updated + 1 ))"
-                        else
-                            eval "created=\$(( \$created + 1 ))"
-                        fi
-                    else
-                        rm -f "$_ctmp"
-                        echo "  ! Copy failed for $abs_target; left unchanged" >&2
-                        eval "skipped=\$(( \$skipped + 1 ))"
-                    fi
-                fi
-            fi
+            # Each item is a single source -> target; link_one handles a file or
+            # a directory source identically (one symlink either way).
+            link_one "$abs_source" "$abs_target" "$(basename "$abs_target")" "$dotconfigs_root" "$dry_run" "$interactive_mode"
             ;;
         merge)
             # JSON deep-merge for co-owned files (preserves local entries; never
@@ -728,20 +719,15 @@ deploy_module() {
 # States: deployed, drifted-broken, drifted-foreign, drifted-wrong-target,
 #         not-deployed.
 #
-# Args: source, target, method, include_csv, dotconfigs_root
+# Args: source, target, method, dotconfigs_root
 check_module_state() {
     local source="$1"
     local target="$2"
     local method="$3"
-    local include_csv="$4"
-    local dotconfigs_root="$5"
+    local dotconfigs_root="$4"
     local abs_source abs_target rel_src
 
-    if [[ "$source" != /* ]]; then
-        abs_source="$dotconfigs_root/$source"
-    else
-        abs_source="$source"
-    fi
+    abs_source=$(_abs_source "$source" "$dotconfigs_root")
     abs_target=$(expand_tilde "$target")
     rel_src="${abs_source#"$dotconfigs_root/"}"
 
@@ -752,34 +738,9 @@ check_module_state() {
 
     case "$method" in
         symlink)
-            if [[ -d "$abs_source" ]]; then
-                [[ "$include_csv" == "__NONE__" ]] && return 0
-                local files=() target_base="${abs_target##*/}"
-                if [[ -n "$include_csv" ]]; then
-                    # IFS=',' for CSV split; set -f disables glob expansion so
-                    # an entry like "foo.*" is a literal filename.
-                    local IFS=','
-                    set -f
-                    for f in $include_csv; do files+=("$f"); done
-                    set +f
-                else
-                    local f
-                    for f in "$abs_source"/*; do
-                        [[ ! -e "$f" ]] && continue
-                        [[ -d "$f" ]] && continue
-                        files+=("${f##*/}")
-                    done
-                fi
-                local name state
-                for name in "${files[@]}"; do
-                    state=$(check_file_state "$abs_target/$name" "$abs_source/$name" "$dotconfigs_root")
-                    printf "%s\t%s/%s\n" "$state" "$target_base" "$name"
-                done
-            else
-                local state
-                state=$(check_file_state "$abs_target" "$abs_source" "$dotconfigs_root")
-                printf "%s\t%s\n" "$state" "$rel_src"
-            fi
+            local state
+            state=$(check_file_state "$abs_target" "$abs_source" "$dotconfigs_root")
+            printf "%s\t%s\n" "$state" "$rel_src"
             ;;
         merge)
             # Target is intentionally a superset of source (Claude appends
@@ -811,15 +772,6 @@ check_module_state() {
                 printf "%s\t%s\n" "not-deployed" "$rel_src"
             fi
             ;;
-        copy)
-            if [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target" 2>/dev/null; then
-                printf "%s\t%s\n" "deployed" "$rel_src"
-            elif [[ -e "$abs_target" ]]; then
-                printf "%s\t%s\n" "drifted-foreign" "$rel_src"
-            else
-                printf "%s\t%s\n" "not-deployed" "$rel_src"
-            fi
-            ;;
         *)
             echo "Warning: unknown method '$method' for $rel_src" >&2
             printf "%s\t%s\n" "not-deployed" "$rel_src (unknown method: $method)"
@@ -827,22 +779,25 @@ check_module_state() {
     esac
 }
 
-# Print a global-config error and return 1 if .dotconfigs/global.json is missing.
-# Relies on the caller-scoped $GLOBAL_CONFIG (set in the entry point).
-_require_global_config() {
-    if [[ ! -f "$GLOBAL_CONFIG" ]]; then
-        echo "Error: $GLOBAL_CONFIG not found. Run 'dotconfigs global-init' first." >&2
+# Print an error and return 1 if the machine selection file is missing.
+# Relies on the caller-scoped $DEPLOY_CONFIG (set in the entry point).
+_require_deploy_config() {
+    if [[ ! -f "$DEPLOY_CONFIG" ]]; then
+        echo "Error: $DEPLOY_CONFIG not found. Run 'dotconfigs init' first." >&2
         return 1
     fi
 }
 
-# Emit per-file "<state>\t<name>" lines for every module in a plugin's group.
-# Args: plugin
+# Emit per-file "<state>\t<name>" lines for a plugin's enabled machine items.
+# Takes a pre-resolved machine plan so the caller resolves it once for all plugins.
+# Args: plugin, plan (resolve_plan output)
 _collect_plugin_states() {
-    local plugin="$1"
-    parse_modules "$GLOBAL_CONFIG" "$plugin" \
-        | while IFS=$'\t' read -r source target method include_csv; do
-            check_module_state "$source" "$target" "$method" "$include_csv" "$SCRIPT_DIR"
+    local plugin="$1" plan="$2"
+    printf '%s\n' "$plan" \
+        | while IFS=$'\t' read -r enabled source target method label; do
+            [[ "$enabled" == "true" ]] || continue
+            [[ "$label" == "$plugin/"* ]] || continue
+            check_module_state "$source" "$target" "$method" "$REPO_ROOT"
           done
 }
 
@@ -871,73 +826,27 @@ _tally_states() {
 
 # Undeploy a single module (inverse of deploy_module).
 # Removes dotconfigs-owned artefacts; preserves anything we can't safely reverse.
-# - symlink:  remove dotconfigs-owned symlinks (file or directory module)
-# - copy:     remove iff target byte-matches source (untouched copy); else warn+skip
+# - symlink:  remove the dotconfigs-owned symlink (foreign files preserved)
 # - managed:  remove just our sentinel-delimited block (reversible); else unchanged
 # - merge:    not safely reversible (target may carry local additions); warn+skip
 # - append:   not safely reversible (appended lines may interleave); warn+skip
 # Counters used: removed, skipped, unchanged
-# Args: source, target, method, include_csv, dotconfigs_root, dry_run
+# Args: source, target, method, dotconfigs_root, dry_run
 undeploy_module() {
     local source="$1"
     local target="$2"
     local method="$3"
-    local include_csv="$4"
-    local dotconfigs_root="$5"
-    local dry_run="$6"
+    local dotconfigs_root="$4"
+    local dry_run="$5"
     local abs_source abs_target rel_src
 
     abs_target=$(expand_tilde "$target")
-    if [[ "$source" != /* ]]; then
-        abs_source="$dotconfigs_root/$source"
-    else
-        abs_source="$source"
-    fi
+    abs_source=$(_abs_source "$source" "$dotconfigs_root")
     rel_src="${abs_source#$dotconfigs_root/}"
 
     case "$method" in
         symlink)
-            if [[ -d "$abs_source" ]]; then
-                # Directory module: walk expected files
-                if [[ "$include_csv" == "__NONE__" ]]; then
-                    return
-                fi
-                local files=() name
-                if [[ -n "$include_csv" ]]; then
-                    local IFS=','
-                    set -f
-                    for name in $include_csv; do files+=("$name"); done
-                    set +f
-                else
-                    local f
-                    for f in "$abs_source"/*; do
-                        [[ ! -e "$f" ]] && continue
-                        [[ -d "$f" ]] && continue
-                        files+=("${f##*/}")
-                    done
-                fi
-                for name in "${files[@]}"; do
-                    _undeploy_symlink "$abs_target/$name" "$dotconfigs_root" "$dry_run" "$rel_src/$name"
-                done
-            else
-                _undeploy_symlink "$abs_target" "$dotconfigs_root" "$dry_run" "$rel_src"
-            fi
-            ;;
-        copy)
-            if [[ ! -e "$abs_target" ]]; then
-                eval "unchanged=\$(( \$unchanged + 1 ))"
-            elif [[ -f "$abs_target" ]] && cmp -s "$abs_source" "$abs_target" 2>/dev/null; then
-                if [[ "$dry_run" == "true" ]]; then
-                    echo "  Would remove copy: $abs_target"
-                else
-                    rm -f "$abs_target"
-                    echo "  ✓ Removed copy: $abs_target"
-                fi
-                eval "removed=\$(( \$removed + 1 ))"
-            else
-                echo "  - Skipped (modified): $abs_target"
-                eval "skipped=\$(( \$skipped + 1 ))"
-            fi
+            _undeploy_symlink "$abs_target" "$dotconfigs_root" "$dry_run" "$rel_src"
             ;;
         managed)
             # Reversible (unlike merge/append): strip just our sentinel block,
@@ -1010,21 +919,47 @@ _undeploy_symlink() {
     eval "skipped=\$(( \$skipped + 1 ))"
 }
 
+# Strip the dotconfigs-synthesised `hooks` block from a deployed Claude
+# settings.json on undeploy. That block is generated entirely by us (hooks are
+# authoritative at deploy time), so removing it is safe and reversible, while the
+# rest of the file — the user's own settings — is left untouched. This is why the
+# settings item is handled here instead of falling through to the merge-skip path.
+# Args: abs_target, dry_run
+_undeploy_synthesised_hooks() {
+    local tgt="$1" dry="$2"
+    if [[ ! -f "$tgt" ]] || ! jq -e '(.hooks // {}) | length > 0' "$tgt" >/dev/null 2>&1; then
+        eval "unchanged=\$(( \$unchanged + 1 ))"
+        return
+    fi
+    if [[ "$dry" == "true" ]]; then
+        echo "  Would clear synthesised hooks block: $tgt"
+        eval "removed=\$(( \$removed + 1 ))"
+        return
+    fi
+    local tmp; tmp=$(mktemp -t "dotconfigs.undeploy.XXXXXX")
+    if jq 'del(.hooks)' "$tgt" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$tgt"
+        echo "  ✓ Cleared synthesised hooks block: $tgt"
+        eval "removed=\$(( \$removed + 1 ))"
+    else
+        rm -f "$tmp"
+        echo "  - Skipped (could not edit settings): $tgt"
+        eval "skipped=\$(( \$skipped + 1 ))"
+    fi
+}
+
 # Walk a config and undeploy every module. Mirror of deploy_from_json.
-# Args: config_file, dotconfigs_root, [group_key], [dry_run], [project_root]
+# Args: plugins_dir, deploy_json, scope, dotconfigs_root, [dry_run], [project_root]
 undeploy_from_json() {
-    local config_file="$1"
-    local dotconfigs_root="$2"
-    local group_key="${3:-}"
-    local dry_run="${4:-true}"
-    local project_root="${5:-}"
-    local modules_data source target method include_csv
+    local plugins_dir="$1"
+    local deploy_json="$2"
+    local scope="$3"
+    local dotconfigs_root="$4"
+    local dry_run="${5:-true}"
+    local project_root="${6:-}"
+    local plan enabled source target method label rtarget
 
     if ! check_jq; then
-        return 1
-    fi
-    if [[ ! -f "$config_file" ]]; then
-        echo "Error: config file not found: $config_file"
         return 1
     fi
 
@@ -1032,10 +967,11 @@ undeploy_from_json() {
     skipped=0
     unchanged=0
 
-    modules_data=$(parse_modules "$config_file" "$group_key")
-    if [[ -z "$modules_data" ]]; then
-        echo "No modules found in $config_file"
-        [[ -n "$group_key" ]] && echo "(group: $group_key)"
+    # Undeploy removes every catalogued artefact in scope, regardless of whether
+    # it is currently selected, so it works even if deploy.json is gone.
+    plan=$(resolve_plan "$plugins_dir" "$deploy_json" "$scope")
+    if [[ -z "$plan" ]]; then
+        echo "No items found for scope '$scope'"
         return 0
     fi
 
@@ -1043,19 +979,21 @@ undeploy_from_json() {
         echo "Dry-run mode: no changes will be made"
         echo ""
     fi
-    if [[ -n "$group_key" ]]; then
-        echo "Undeploying group: $group_key"
-    else
-        echo "Undeploying all modules"
-    fi
+    echo "Undeploying ($scope)"
     echo ""
 
-    while IFS=$'\t' read -r source target method include_csv; do
-        if [[ -n "$project_root" && "$target" != /* && "$target" != ~* ]]; then
-            target="$project_root/$target"
+    while IFS=$'\t' read -r enabled source target method label; do
+        [[ -z "$source" ]] && continue
+        rtarget=$(resolve_target "$target" "$project_root")
+        # The Claude settings.json carries a synthesised `hooks` block; strip just
+        # that on undeploy (keep the user's other settings) rather than skipping it
+        # as an unreversible merge, which would leave hooks wired to removed files.
+        if _is_synthesised_settings "$label"; then
+            _undeploy_synthesised_hooks "$(expand_tilde "$rtarget")" "$dry_run"
+            continue
         fi
-        undeploy_module "$source" "$target" "$method" "$include_csv" "$dotconfigs_root" "$dry_run"
-    done <<< "$modules_data"
+        undeploy_module "$source" "$rtarget" "$method" "$dotconfigs_root" "$dry_run"
+    done <<< "$plan"
 
     echo ""
     echo "Undeploy summary:"
@@ -1073,105 +1011,92 @@ undeploy_from_json() {
 # `dotconfigs validate`; takes the already-parsed module rows so neither caller
 # re-parses. No-op if refcheck.sh isn't sourced — deploy.sh only soft-depends
 # on it, so standalone-sourced callers (and tests) still work.
-# Args: modules_data (TSV rows: source<TAB>target<TAB>method<TAB>include_csv)
+# Args: plan (TSV rows: enabled<TAB>source<TAB>target<TAB>method<TAB>label), [project_root]
 _refcheck_merge_targets() {
-    local modules_data="$1"
+    local plan="$1" project_root="${2:-}"
     declare -f refcheck_settings_json >/dev/null 2>&1 || return 0
-    local source target method include_csv rc_target
-    while IFS=$'\t' read -r source target method include_csv; do
-        [[ "$method" == "merge" ]] || continue
-        rc_target=$(expand_tilde "$target")
+    local enabled source target method label rc_target
+    while IFS=$'\t' read -r enabled source target method label; do
+        [[ "$enabled" == "true" && "$method" == "merge" ]] || continue
+        rc_target=$(resolve_target "$target" "$project_root")
         refcheck_settings_json "$rc_target" "$(dirname "$rc_target")" || true
-    done <<< "$modules_data"
+    done <<< "$plan"
 }
 
 # Main deployment entry point
-# Args: config_file, dotconfigs_root, [group_key], [dry_run], [force], [project_root]
+# Args: plugins_dir, deploy_json, scope, dotconfigs_root, [dry_run], [force], [project_root]
 deploy_from_json() {
-    local config_file="$1"
-    local dotconfigs_root="$2"
-    local group_key="${3:-}"
-    local dry_run="${4:-false}"
-    local force="${5:-false}"
-    local project_root="${6:-}"
-    local interactive_mode
-    local modules_data
-    local line
-    local source
-    local target
-    local method
-    local include_csv
+    local plugins_dir="$1"
+    local deploy_json="$2"
+    local scope="$3"
+    local dotconfigs_root="$4"
+    local dry_run="${5:-false}"
+    local force="${6:-false}"
+    local project_root="${7:-}"
+    local interactive_mode plan enabled source target method label rtarget
 
-    # Check jq dependency
     if ! check_jq; then
         return 1
     fi
-
-    # Validate config file exists
-    if [[ ! -f "$config_file" ]]; then
-        echo "Error: config file not found: $config_file"
+    if [[ ! -f "$deploy_json" ]]; then
+        echo "Error: selection file not found: $deploy_json" >&2
+        echo "Run 'dotconfigs init${project_root:+ $project_root}' first." >&2
         return 1
     fi
 
-    # Determine interactive mode from force flag
     if [[ "$force" == "true" ]]; then
         interactive_mode="force"
     else
         interactive_mode="true"
     fi
 
-    # Initialize counters (bash 3.2 compatible - no local -i)
-    created=0
-    updated=0
-    unchanged=0
-    skipped=0
-    removed=0
-    errors=0
-    warnings=0
+    created=0; updated=0; unchanged=0; skipped=0; removed=0; errors=0; warnings=0
 
-    # Parse modules
-    modules_data=$(parse_modules "$config_file" "$group_key")
-
-    # Check if any modules found
-    if [[ -z "$modules_data" ]]; then
-        echo "No modules found in $config_file"
-        if [[ -n "$group_key" ]]; then
-            echo "(group: $group_key)"
-        fi
+    plan=$(resolve_plan "$plugins_dir" "$deploy_json" "$scope")
+    if [[ -z "$plan" ]]; then
+        echo "No items found for scope '$scope' in $deploy_json"
         return 0
     fi
 
-    # Print header
     if [[ "$dry_run" == "true" ]]; then
         echo "Dry-run mode: no changes will be made"
         echo ""
     fi
-
-    if [[ -n "$group_key" ]]; then
-        echo "Deploying group: $group_key"
-    else
-        echo "Deploying all modules"
-    fi
+    echo "Deploying ($scope) from $deploy_json"
     echo ""
 
-    # Deploy each module
-    while IFS=$'\t' read -r source target method include_csv; do
-        # If project_root is set, resolve relative targets against it
-        if [[ -n "$project_root" && "$target" != /* && "$target" != ~* ]]; then
-            target="$project_root/$target"
+    # Enabled items are deployed; disabled items are torn down in the same pass
+    # so toggling an item off in deploy.json removes its artefact next deploy.
+    while IFS=$'\t' read -r enabled source target method label; do
+        [[ -z "$source" ]] && continue
+        rtarget=$(resolve_target "$target" "$project_root")
+        if [[ "$enabled" == "true" ]]; then
+            if _is_synthesised_settings "$label"; then
+                # The Claude settings fragment carries a hooks block synthesised
+                # from the selected, wired hooks (no hand-maintained wiring).
+                local _ssrc
+                _ssrc=$(_synthesise_settings_source "$plugins_dir" "$deploy_json" "$dotconfigs_root/$source")
+                deploy_module "$_ssrc" "$rtarget" "$method" "$dotconfigs_root" "$dry_run" "$interactive_mode"
+                rm -f "$_ssrc"
+            else
+                deploy_module "$source" "$rtarget" "$method" "$dotconfigs_root" "$dry_run" "$interactive_mode"
+            fi
+        else
+            undeploy_module "$source" "$rtarget" "$method" "$dotconfigs_root" "$dry_run"
         fi
-        deploy_module "$source" "$target" "$method" "$include_csv" "$dotconfigs_root" "$dry_run" "$interactive_mode"
-    done <<< "$modules_data"
+    done <<< "$plan"
+
+    # Reconcile: sweep dotconfigs-owned symlinks orphaned by items removed from
+    # the catalogue entirely (deselected items were already torn down above), so
+    # a deploy converges the target to the catalogue rather than leaking orphans.
+    _sweep_stale_symlinks "$plan" "$project_root" "$dotconfigs_root" "$dry_run"
 
     # Post-deploy: scan deployed JSON settings targets for dangling command
-    # references (the statusLine/hook-command class of bug). Warnings only —
-    # never blocks a deploy — but tallies into `warnings`. Skipped on dry-run
-    # since nothing was actually written.
+    # references. Warnings only — never blocks a deploy. Skipped on dry-run.
     if [[ "$dry_run" != "true" ]]; then
-        _refcheck_merge_targets "$modules_data"
+        _refcheck_merge_targets "$plan" "$project_root"
     fi
 
-    # Print summary
     echo ""
     echo "Deployment summary:"
     echo "  Created:   $created"

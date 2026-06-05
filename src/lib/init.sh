@@ -1,30 +1,33 @@
-# lib/init.sh — Shared init logic for global-init and project-init
+# lib/init.sh — Shared init logic for `init` (machine and project).
 # Sourced by dotconfigs entry point.
-# Depends on: PLUGINS_DIR (set by entry point)
+# Depends on: PLUGINS_DIR (set by entry point), _merged_manifest (lib/deploy.sh)
 
-# Assemble a config JSON from plugin manifests
-# Args: scope ("global" or "project")
+# Seed a deploy.json selection (the toggle board) for a scope from the plugin
+# catalogues. Lists every catalogued item that has a target in this scope, keyed
+# plugin -> category -> name, with its `default` as the on/off value. The user
+# edits this file to toggle what gets deployed on this instance.
+# Args: scope ("machine" or "project")
 # Output: JSON to stdout
-assemble_from_manifests() {
+seed_deploy_json() {
     local scope="$1"
-    local merged="{}"
-    local plugin_dir plugin_name manifest section
-
-    for plugin_dir in "$PLUGINS_DIR"/*/; do
-        [[ -d "$plugin_dir" ]] || continue
-        manifest="$plugin_dir/manifest.json"
-        [[ -f "$manifest" ]] || continue
-
-        plugin_name=$(basename "$plugin_dir")
-
-        # Extract the scope section (.global or .project)
-        section=$(jq -r --arg s "$scope" '.[$s] // empty' "$manifest")
-        [[ -z "$section" ]] && continue
-
-        merged=$(echo "$merged" | jq --arg name "$plugin_name" --argjson modules "$section" '.[$name] = $modules')
-    done
-
-    echo "$merged" | jq '.'
+    jq -n --argjson m "$(_merged_manifest "$PLUGINS_DIR")" --arg scope "$scope" '
+        $m | to_entries
+        | map({ key: .key, value: (
+            .value | to_entries
+            | map({ key: .key, value: (
+                .value | to_entries
+                | map( .key as $n | .value as $e
+                       | (($e.target | if type=="array" then . else [.] end)
+                          | map(if test("^[~/]") then "machine" else "project" end)
+                          | index($scope)) as $has
+                       | select($has != null)
+                       | { key: $n, value: ($e.default // false) } )
+                | from_entries ) })
+            | map(select(.value | length > 0))
+            | from_entries ) })
+        | map(select(.value | length > 0))
+        | from_entries
+    '
 }
 
 # Write JSON content with overwrite protection
@@ -68,23 +71,4 @@ write_with_overwrite_protection() {
         echo "Created $display_name"
     fi
     return 0
-}
-
-# Prompt to deploy after init (TTY-aware)
-# Args: deploy_command [extra_args...]
-# Returns: 0 if deployed, 1 if skipped/non-TTY
-prompt_deploy() {
-    if [[ -t 0 ]] || [[ -t 1 ]]; then
-        echo ""
-        read -r -p "Deploy now? [Y/n] " deploy_answer </dev/tty
-        case "$deploy_answer" in
-            [nN]) return 1 ;;
-            *)
-                echo ""
-                "$@"
-                return 0
-                ;;
-        esac
-    fi
-    return 1
 }

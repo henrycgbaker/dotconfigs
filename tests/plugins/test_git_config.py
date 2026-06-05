@@ -21,16 +21,14 @@ def get_git_config_files(dotconfigs_root: Path) -> dict[str, Path]:
 
     manifest = json.loads(manifest_path.read_text())
     config_files = {}
-
-    # Collect all non-hook modules
-    for section in ["global", "project"]:
-        if section in manifest:
-            for mod_name, mod_config in manifest[section].items():
-                if mod_name != "hooks":  # Skip hooks module
-                    source = dotconfigs_root / mod_config["source"]
-                    if source.exists():
-                        config_files[f"{section}/{mod_name}"] = source
-
+    # All non-hook items (the config + excludes categories).
+    for category, entries in manifest.items():
+        if category == "hooks":
+            continue
+        for name, e in entries.items():
+            source = dotconfigs_root / e["source"]
+            if source.exists():
+                config_files[f"{category}/{name}"] = source
     return config_files
 
 
@@ -41,14 +39,7 @@ def get_available_hooks(dotconfigs_root: Path) -> set[str]:
         return set()
 
     manifest = json.loads(manifest_path.read_text())
-    hooks = set()
-
-    for section in ["global", "project"]:
-        if section in manifest and "hooks" in manifest[section]:
-            include = manifest[section]["hooks"].get("include", [])
-            hooks.update(include)
-
-    return hooks
+    return {Path(e["source"]).name for e in manifest.get("hooks", {}).values()}
 
 
 @pytest.fixture(scope="session")
@@ -74,7 +65,9 @@ class TestGitConfigFiles:
         for module_name, file_path in git_config_files.items():
             assert file_path.exists(), f"{module_name} not found: {file_path}"
 
-    def test_gitconfig_valid_syntax(self, dotconfigs_root: Path, git_config_files, tmp_path):
+    def test_gitconfig_valid_syntax(
+        self, dotconfigs_root: Path, git_config_files, tmp_path
+    ):
         """gitconfig has valid git config syntax."""
         gitconfig_path = None
 
@@ -100,7 +93,8 @@ class TestGitConfigFiles:
     def test_excludes_files_valid_format(self, git_config_files):
         """Exclude files have valid gitignore format."""
         exclude_files = [
-            path for name, path in git_config_files.items()
+            path
+            for name, path in git_config_files.items()
             if "exclude" in name.lower() or "gitignore" in name.lower()
         ]
 
@@ -140,6 +134,4 @@ class TestGitHooksMetadata:
             content = hook_file.read_text()
 
             # Should have METADATA section
-            assert "=== METADATA ===" in content, (
-                f"Missing metadata in {hook_name}"
-            )
+            assert "=== METADATA ===" in content, f"Missing metadata in {hook_name}"

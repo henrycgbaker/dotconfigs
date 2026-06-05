@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 
 
 def _source(root: Path, *libs: str) -> str:
-    return "\n".join(f'source "{root}/lib/{lib}"' for lib in libs)
+    return "\n".join(f'source "{root}/src/lib/{lib}"' for lib in libs)
 
 
 # ---------------------------------------------------------------------------
@@ -169,28 +169,16 @@ def test_merge_collision_excludes_permissions(dotconfigs_root, tmp_path):
 
 
 def test_deploy_source_missing_errors_nonzero(dotconfigs_root, tmp_path):
-    cfg = tmp_path / "cfg.json"
-    cfg.write_text(
-        json.dumps(
-            {
-                "x": {
-                    "missing": {
-                        "source": str(tmp_path / "NOPE"),
-                        "target": str(tmp_path / "out"),
-                        "method": "symlink",
-                    }
-                }
-            }
-        )
-    )
+    # A catalogue item whose source doesn't exist is a hard error (errors tally).
     script = f"""
-{_source(dotconfigs_root, "symlinks.sh", "colours.sh", "deploy.sh", "refcheck.sh")}
-deploy_from_json "{cfg}" "{tmp_path}" "" false false
+{_source(dotconfigs_root, "symlinks.sh", "colours.sh", "deploy.sh")}
+created=0; updated=0; unchanged=0; skipped=0; removed=0; errors=0; warnings=0
+deploy_module "{tmp_path}/NOPE" "{tmp_path}/out" "symlink" "{tmp_path}" "false" "force"
+echo "errors=$errors"
 """
     result = run_bash(script)
-    assert result.returncode == 1
     assert "Error: source not found" in result.stderr
-    assert "Errors:    1" in result.stdout
+    assert "errors=1" in result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -200,20 +188,16 @@ deploy_from_json "{cfg}" "{tmp_path}" "" false false
 
 @pytest.fixture()
 def repo_copy(dotconfigs_root: Path, tmp_path: Path) -> Path:
-    """A minimal runnable copy of the repo (entry point + lib + plugins)."""
+    """A minimal runnable copy of the repo (src engine + plugins)."""
     dst = tmp_path / "repo"
     dst.mkdir()
-    for item in ("dotconfigs", "lib", "plugins"):
-        src = dotconfigs_root / item
-        if src.is_dir():
-            shutil.copytree(src, dst / item)
-        else:
-            shutil.copy2(src, dst / item)
+    for item in ("src", "plugins"):
+        shutil.copytree(dotconfigs_root / item, dst / item)
     return dst
 
 
 def test_validate_clean_manifests_pass(repo_copy):
-    result = run_bash(f'"{repo_copy}/dotconfigs" validate', cwd=repo_copy)
+    result = run_bash(f'"{repo_copy}/src/dotconfigs" validate', cwd=repo_copy)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "manifest OK" in result.stdout
 
@@ -221,15 +205,15 @@ def test_validate_clean_manifests_pass(repo_copy):
 def test_validate_detects_broken_manifest(repo_copy):
     manifest = repo_copy / "plugins" / "claude" / "manifest.json"
     data = json.loads(manifest.read_text())
-    data["global"]["broken"] = {
+    data["config"]["broken"] = {
         "source": "plugins/claude/DOES_NOT_EXIST",
         "target": "~/x",
         "method": "frobnicate",
         "bogus": 1,
     }
     manifest.write_text(json.dumps(data))
-    result = run_bash(f'"{repo_copy}/dotconfigs" validate', cwd=repo_copy)
+    result = run_bash(f'"{repo_copy}/src/dotconfigs" validate', cwd=repo_copy)
     assert result.returncode == 1
     assert "invalid method 'frobnicate'" in result.stdout
-    assert "unknown manifest key(s): bogus" in result.stdout
+    assert "unknown key(s): bogus" in result.stdout
     assert "source not found" in result.stdout

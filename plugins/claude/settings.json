@@ -46,8 +46,10 @@
       "Bash(ruff format*)",
       "Bash(pytest*)"
     ],
-    "soft_deny": ["$defaults"],
-    "_hard_deny_note": "Intentionally mirrors patterns the destructive-block hooks (block-rm-rf-root.sh, block-hard-reset.sh, block-chmod-777.sh) catch. Belt-and-braces: if a hook is toggled off via claude-hooks.conf, autoMode still enforces these here. Keep the two lists in sync when adding new destructive guards.",
+    "soft_deny": [
+      "$defaults"
+    ],
+    "_hard_deny_note": "Intentionally mirrors patterns the destructive-block hooks (block-rm-rf-root.sh, block-hard-reset.sh, block-chmod-777.sh) catch. Belt-and-braces: if a hook is deselected in deploy.json it is neither symlinked nor wired, but autoMode still enforces these here. Keep the two lists in sync when adding new destructive guards.",
     "hard_deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf ~)",
@@ -61,152 +63,8 @@
     "name": "{{AUTHOR_NAME}}",
     "email": "{{AUTHOR_EMAIL}}"
   },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "if": "Bash(rm *)",
-            "command": "~/.claude/hooks/block-rm-rf-root.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Bash(git push*)",
-            "command": "~/.claude/hooks/block-force-push.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Bash(git reset*)",
-            "command": "~/.claude/hooks/block-hard-reset.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Bash(git clean*)",
-            "command": "~/.claude/hooks/block-git-clean.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Bash(*DROP*)",
-            "command": "~/.claude/hooks/block-drop-table.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Bash(chmod *)",
-            "command": "~/.claude/hooks/block-chmod-777.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Bash(gh pr*)",
-            "command": "~/.claude/hooks/block-ai-pr-attribution.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Bash(gh *)",
-            "command": "~/.claude/hooks/block-gh-comment.sh",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/block-sensitive-write.sh",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__github__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/block-gh-comment.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/facade-check.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/inject-context.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/session-start-env.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/session-end-log.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/pre-compact-snapshot.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/notify.sh",
-            "timeout": 15
-          }
-        ]
-      }
-    ]
-  },
   "sandbox": {
-    "enabled": true,
+    "enabled": false,
     "excludedCommands": [
       "git",
       "docker"

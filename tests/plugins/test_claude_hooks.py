@@ -22,15 +22,8 @@ def get_available_claude_hooks(dotconfigs_root: Path) -> set[str]:
         return set()
 
     manifest = json.loads(manifest_path.read_text())
-    hooks = set()
-
-    # Check global and project hooks
-    for section in ["global", "project"]:
-        if section in manifest and "hooks" in manifest[section]:
-            include = manifest[section]["hooks"].get("include", [])
-            hooks.update(include)
-
-    return hooks
+    # Hook source basenames (e.g. "block-gh-comment.sh") from the hooks category.
+    return {Path(e["source"]).name for e in manifest.get("hooks", {}).values()}
 
 
 @pytest.fixture(scope="session")
@@ -315,7 +308,9 @@ class TestBlockGhComment:
 
     def test_ignores_unrelated_non_bash(self, gh_hook):
         returncode, output = run_hook(
-            gh_hook, "Write", {"file_path": "/tmp/x", "content": "gh pr comment 1 --body x"}
+            gh_hook,
+            "Write",
+            {"file_path": "/tmp/x", "content": "gh pr comment 1 --body x"},
         )
         assert returncode == 0
         assert parse_hook_output(output) is None

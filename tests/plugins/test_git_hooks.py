@@ -22,15 +22,8 @@ def get_available_hooks(dotconfigs_root: Path) -> set[str]:
         return set()
 
     manifest = json.loads(manifest_path.read_text())
-    hooks = set()
-
-    # Check global and project hooks
-    for section in ["global", "project"]:
-        if section in manifest and "hooks" in manifest[section]:
-            include = manifest[section]["hooks"].get("include", [])
-            hooks.update(include)
-
-    return hooks
+    # Hook source basenames (e.g. "pre-commit", "check-facade-consumers.py").
+    return {Path(e["source"]).name for e in manifest.get("hooks", {}).values()}
 
 
 @pytest.fixture
@@ -322,9 +315,9 @@ class TestAllHooks:
 
         for hook_name in available_hooks:
             hook_file = hooks_dir / hook_name
-            assert (
-                hook_file.exists()
-            ), f"Hook {hook_name} in manifest but not found at {hook_file}"
+            assert hook_file.exists(), (
+                f"Hook {hook_name} in manifest but not found at {hook_file}"
+            )
             assert hook_file.is_file()
 
     def test_all_hooks_executable(self, dotconfigs_root: Path, available_hooks):
@@ -336,6 +329,6 @@ class TestAllHooks:
             if hook_file.exists():
                 # Check has shebang (executable script)
                 content = hook_file.read_text()
-                assert content.startswith("#!") or content.startswith(
-                    "#!/"
-                ), f"Hook {hook_name} should start with shebang"
+                assert content.startswith("#!") or content.startswith("#!/"), (
+                    f"Hook {hook_name} should start with shebang"
+                )

@@ -1,0 +1,845 @@
+#!/bin/bash
+# dotconfigs — Unified configuration management CLI entry point
+
+set -e
+
+# Resolve symlinks to find real script location (bash 3.2 compatible)
+_source="${BASH_SOURCE[0]}"
+while [[ -L "$_source" ]]; do
+    _dir="$(cd "$(dirname "$_source")" && pwd)"
+    _source="$(readlink "$_source")"
+    [[ "$_source" != /* ]] && _source="$_dir/$_source"
+done
+SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
+unset _source _dir
+# Repo root: the base against which manifest `source` paths resolve. The engine
+# (entry + lib/) lives under src/, so the repo root is the parent of SCRIPT_DIR.
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+PLUGINS_DIR="$REPO_ROOT/plugins"
+# Machine-wide selection (the toggle board). Lives outside the repo so it is
+# instance-specific. Override for tests (DOTCONFIGS_DEPLOY_CONFIG).
+DEPLOY_CONFIG="${DOTCONFIGS_DEPLOY_CONFIG:-$HOME/.dotconfigs/deploy.json}"
+# Registry of repos that have had a project deploy run, so `status` can audit
+# their git hooks for drift (missing/dangling) after the fact. Override for tests.
+PROJECT_REGISTRY="${DOTCONFIGS_PROJECT_REGISTRY:-$HOME/.dotconfigs/projects.list}"
+
+# Source shared libraries eagerly (small files)
+source "$SCRIPT_DIR/lib/symlinks.sh"
+source "$SCRIPT_DIR/lib/discovery.sh"
+source "$SCRIPT_DIR/lib/validation.sh"
+source "$SCRIPT_DIR/lib/colours.sh"
+source "$SCRIPT_DIR/lib/deploy.sh"
+source "$SCRIPT_DIR/lib/refcheck.sh"
+source "$SCRIPT_DIR/lib/init.sh"
+
+show_usage() {
+    cat <<EOF
+dotconfigs — Unified configuration management
+
+Usage:
+  dotconfigs setup                One-time init (PATH symlinks)
+  dotconfigs init [path]          Seed a selection (machine, or a project repo)
+  dotconfigs deploy [path]        Deploy the selection (machine, or a project repo)
+  dotconfigs undeploy [path]      Remove deployed artefacts (inverse of deploy)
+  dotconfigs cleanup [path]       Remove stale/broken symlinks
+  dotconfigs status [plugin]      Show deployment status
+  dotconfigs validate [--strict]  Lint catalogues + scan for dangling refs
+  dotconfigs list                 List available plugins
+  dotconfigs help [command]       Show help for a command
+
+Model:
+  manifest.json (per plugin)  the catalogue: every item, how/where it deploys,
+                              and its default on/off state. Version-controlled.
+  deploy.json (per instance)  the toggle board: ~/.dotconfigs/deploy.json for the
+                              machine, <repo>/.dotconfigs/deploy.json per project.
+                              Flip an item true/false, then re-run deploy.
+
+  No path => machine scope (~/... targets).  A path => that repo (relative targets).
+
+Examples:
+  dotconfigs setup                One-time PATH setup
+  dotconfigs init                 Seed ~/.dotconfigs/deploy.json
+  dotconfigs deploy               Deploy the machine selection
+  dotconfigs init .               Seed a per-project selection
+  dotconfigs deploy . --dry-run   Preview a project deploy
+
+Available plugins:
+EOF
+    while IFS= read -r plugin; do
+        echo "  - $plugin"
+    done < <(discover_plugins "$PLUGINS_DIR")
+}
+
+show_command_help() {
+    local command="$1"
+
+    case "$command" in
+        setup)
+            cat <<EOF
+dotconfigs setup — One-time initialisation
+
+  Creates PATH symlinks for dotconfigs (and the 'dots' alias).
+  Run once after cloning, then 'dotconfigs init' and 'dotconfigs deploy'.
+EOF
+            ;;
+        init)
+            cat <<EOF
+dotconfigs init [path] — Seed a selection (toggle board)
+
+  No path:   writes the machine selection to ~/.dotconfigs/deploy.json.
+  With path: writes <repo>/.dotconfigs/deploy.json (requires a git repo) and
+             adds .dotconfigs/ to .git/info/exclude.
+
+  Every catalogued item with a target in that scope is listed with its default
+  on/off value. Edit the file to toggle, then run 'dotconfigs deploy [path]'.
+
+  Options: --force (overwrite an existing selection without prompting)
+EOF
+            ;;
+        deploy)
+            cat <<EOF
+dotconfigs deploy [path] — Deploy a selection
+
+  No path:   deploys the machine selection (~/... targets) and reconciles the
+             git init.templateDir plus PATH symlinks.
+  With path: deploys the project selection into <repo> (relative targets).
+
+  Enabled items are deployed; items toggled off are torn down in the same pass.
+  Options: --force (overwrite conflicts), --dry-run (preview)
+EOF
+            ;;
+        undeploy)
+            cat <<EOF
+dotconfigs undeploy [path] — Remove deployed artefacts
+
+  Inverse of deploy. Removes dotconfigs-owned symlinks and managed blocks;
+  merge/append targets are left alone (not safely reversible).
+  Default is dry-run. Use --apply to actually remove.
+EOF
+            ;;
+        cleanup)
+            cat <<EOF
+dotconfigs cleanup [path] — Remove stale and broken symlinks
+
+  Removes dotconfigs-owned symlinks no longer in the selection and
+  broken-into-repo symlinks. Foreign files and foreign symlinks are preserved.
+  Default is dry-run. Use --apply to actually remove.
+EOF
+            ;;
+        status)
+            cat <<EOF
+dotconfigs status [plugin] — Check deployment status
+
+  Shows per-plugin deployment state for the machine selection and audits the
+  git hooks of every project-deployed repo.
+  States: ✓ deployed, △ drift, ✗ not deployed.
+EOF
+            ;;
+        validate)
+            cat <<EOF
+dotconfigs validate [--strict] — Lint catalogues + scan references
+
+  Checks each plugin manifest.json (valid JSON, known methods/keys, sources
+  exist) and scans deployed merge targets for dangling command references.
+  --strict treats dangling-reference warnings as errors.
+EOF
+            ;;
+        list)
+            cat <<EOF
+dotconfigs list — List available plugins with deployment status.
+EOF
+            ;;
+        *)
+            echo "Error: Unknown command '$command'" >&2
+            echo "" >&2
+            echo "Available commands: setup, init, deploy, undeploy, cleanup, status, validate, list, help" >&2
+            return 1
+            ;;
+    esac
+}
+
+cmd_help() {
+    if [[ $# -eq 0 ]]; then
+        show_usage
+    else
+        show_command_help "$1"
+    fi
+}
+
+cmd_setup() {
+    init_colours
+
+    echo ""
+    echo "========================================================="
+    echo "  dotconfigs - First Time Setup"
+    echo "========================================================="
+    echo ""
+
+    # Create PATH symlinks (dotconfigs + dots)
+    echo "Setting up PATH availability..."
+    _create_path_symlink "false" "false"
+
+    echo ""
+    echo "Setup complete."
+    echo ""
+    echo "Next steps:"
+    echo "  1. dotconfigs init                 Seed the machine selection (deploy.json)"
+    echo "  2. (optional) Edit ~/.dotconfigs/deploy.json to toggle items"
+    echo "  3. dotconfigs deploy               Deploy the selected config"
+    echo "  4. dotconfigs init <repo>          Seed a per-project selection"
+    echo "  5. dotconfigs deploy <repo>        Deploy project config"
+    echo ""
+}
+
+# Capture a single positional path arg into the named variable; error and exit
+# on a second positional. Shared by the init/deploy/undeploy/cleanup parse loops
+# (their flag sets differ, but the path arm is identical). Args: varname, arg
+_capture_path() {
+    if [[ -z "${!1}" ]]; then
+        eval "$1=\$2"
+    else
+        echo "Error: Multiple paths specified" >&2
+        exit 1
+    fi
+}
+
+# Seed a selection (toggle board). No path: the machine selection at
+# ~/.dotconfigs/deploy.json. With a path: a per-project selection at
+# <repo>/.dotconfigs/deploy.json (requires a git repo).
+cmd_init() {
+    if ! check_jq; then exit 1; fi
+
+    local force="false" path=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force) force="true"; shift ;;
+            -*) echo "Error: Unknown option '$1'" >&2; exit 1 ;;
+            *) _capture_path path "$1"; shift ;;
+        esac
+    done
+
+    if [[ -z "$path" ]]; then
+        local json; json=$(seed_deploy_json "machine")
+        if write_with_overwrite_protection "$DEPLOY_CONFIG" "$json" "$force"; then
+            echo ""
+            echo "Next: edit $DEPLOY_CONFIG to toggle items, then run 'dotconfigs deploy'."
+        fi
+        return 0
+    fi
+
+    path=$(expand_tilde "$path")
+    if [[ "$(cd "$path" 2>/dev/null && pwd -P)" == "$REPO_ROOT" ]]; then
+        echo "Error: cannot use the dotconfigs repo itself as a project target" >&2
+        echo "Run from a project directory, or pass a path." >&2
+        exit 1
+    fi
+    if ! validate_git_repo "$path"; then
+        exit 1
+    fi
+
+    local config_file="$path/.dotconfigs/deploy.json"
+    local json; json=$(seed_deploy_json "project")
+    if write_with_overwrite_protection "$config_file" "$json" "$force"; then
+        _exclude_dotconfigs "$path"
+        echo ""
+        echo "Next: edit $config_file, then run 'dotconfigs deploy $path'."
+    fi
+}
+
+# Add .dotconfigs/ to a repo's .git/info/exclude (idempotent). Args: repo path
+_exclude_dotconfigs() {
+    local path="$1" exclude_file="$1/.git/info/exclude"
+    if ! grep -qxF ".dotconfigs/" "$exclude_file" 2>/dev/null; then
+        mkdir -p "$(dirname "$exclude_file")"
+        echo ".dotconfigs/" >> "$exclude_file"
+        echo "Added .dotconfigs/ to .git/info/exclude"
+    fi
+}
+
+# Ask a yes/no question with default
+# Args: prompt_text, default (y/n)
+# Returns: 0 for yes, 1 for no
+wizard_yesno() {
+    local prompt_text="$1"
+    local default="$2"
+    local user_input
+    local default_hint
+
+    if [[ "$default" == "y" ]]; then
+        default_hint="Y/n"
+    else
+        default_hint="y/N"
+    fi
+
+    read -p "$prompt_text [$default_hint]: " user_input
+    user_input="${user_input:-$default}"
+
+    user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]')
+    case "$user_input" in
+        y|yes) return 0 ;;
+        n|no) return 1 ;;
+        *)
+            echo "Invalid input. Please enter y or n." >&2
+            wizard_yesno "$prompt_text" "$default"
+            ;;
+    esac
+}
+
+_create_path_symlink() {
+    local dry_run="$1"
+    local force_mode="$2"
+
+    # Determine symlink target: prefer ~/.local/bin, fall back to /usr/local/bin
+    local target=""
+    if [[ -d "$HOME/.local/bin" ]]; then
+        target="$HOME/.local/bin/dotconfigs"
+    elif [[ -d "/usr/local/bin" ]]; then
+        target="/usr/local/bin/dotconfigs"
+    else
+        # Neither exists, try to create ~/.local/bin
+        if mkdir -p "$HOME/.local/bin" 2>/dev/null; then
+            target="$HOME/.local/bin/dotconfigs"
+        else
+            echo "Warning: Cannot create ~/.local/bin and /usr/local/bin not found" >&2
+            echo "To make dotconfigs available on PATH, add to your shell profile:" >&2
+            echo "  export PATH=\"$SCRIPT_DIR:\$PATH\"" >&2
+            return 0
+        fi
+    fi
+
+    # Dry-run mode
+    if [[ "$dry_run" == "true" ]]; then
+        if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$SCRIPT_DIR/dotconfigs" ]]; then
+            echo "CLI availability:"
+            echo "  Unchanged: $target → $SCRIPT_DIR/dotconfigs"
+            local dots_target="$(dirname "$target")/dots"
+            if [[ -L "$dots_target" ]] && [[ "$(readlink "$dots_target")" == "$SCRIPT_DIR/dotconfigs" ]]; then
+                echo "  Unchanged: $dots_target → $SCRIPT_DIR/dotconfigs"
+            else
+                echo "  Would create: $dots_target → $SCRIPT_DIR/dotconfigs"
+            fi
+        else
+            echo "CLI availability:"
+            echo "  Would create: $target → $SCRIPT_DIR/dotconfigs"
+            echo "  Would create: $(dirname "$target")/dots → $SCRIPT_DIR/dotconfigs"
+        fi
+        return 0
+    fi
+
+    # Create or verify both symlinks (dotconfigs + dots)
+    local symlinks_to_check=("$target" "$(dirname "$target")/dots")
+    local symlink_names=("dotconfigs" "dots")
+
+    for i in 0 1; do
+        local sym="${symlinks_to_check[$i]}"
+        local name="${symlink_names[$i]}"
+
+        if [[ -L "$sym" ]]; then
+            local current=$(readlink "$sym")
+            if [[ "$current" == "$SCRIPT_DIR/dotconfigs" ]]; then
+                echo "$name already on PATH (symlink correct)"
+                continue
+            else
+                # Symlink exists but points elsewhere
+                if [[ "$force_mode" != "true" ]]; then
+                    echo "Warning: $name symlink exists but points to: $current" >&2
+                    wizard_yesno "Overwrite with dotconfigs symlink?" "n" || continue
+                fi
+            fi
+        elif [[ -e "$sym" ]]; then
+            echo "Warning: File exists at $sym (not a symlink)" >&2
+            continue
+        fi
+
+        # Create symlink
+        if ln -sf "$SCRIPT_DIR/dotconfigs" "$sym" 2>/dev/null; then
+            echo "$name added to PATH: $sym"
+        else
+            echo "Warning: Failed to create $name symlink at $sym" >&2
+        fi
+    done
+}
+
+cmd_undeploy() {
+    local dry_run="true" path=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --apply)   dry_run="false"; shift ;;
+            --dry-run) dry_run="true"; shift ;;
+            -*)
+                echo "Error: Unknown option '$1'" >&2
+                echo "Usage: dotconfigs undeploy [path] [--apply] [--dry-run]" >&2
+                exit 1
+                ;;
+            *) _capture_path path "$1"; shift ;;
+        esac
+    done
+
+    if ! check_jq; then
+        return 1
+    fi
+
+    if [[ -z "$path" ]]; then
+        undeploy_from_json "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine" "$REPO_ROOT" "$dry_run"
+        # Tearing down the git hooks orphans init.templateDir (it points at the now
+        # empty template dir), so unconditionally clear our value here.
+        _reconcile_git_templatedir "$dry_run" off
+    else
+        path=$(expand_tilde "$path")
+        undeploy_from_json "$PLUGINS_DIR" "$path/.dotconfigs/deploy.json" "project" "$REPO_ROOT" "$dry_run" "$path"
+    fi
+
+    if [[ "$dry_run" == "true" && "${removed:-0}" -gt 0 ]]; then
+        echo ""
+        echo "Run 'dotconfigs undeploy --apply' to remove."
+    fi
+}
+
+cmd_cleanup() {
+    local dry_run="true" path=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --apply)   dry_run="false"; shift ;;
+            --dry-run) dry_run="true"; shift ;;
+            -*)
+                echo "Error: Unknown option '$1'" >&2
+                echo "Usage: dotconfigs cleanup [path] [--apply] [--dry-run]" >&2
+                exit 1
+                ;;
+            *) _capture_path path "$1"; shift ;;
+        esac
+    done
+
+    if ! check_jq; then
+        return 1
+    fi
+    init_colours
+
+    local scope deploy_json project_root=""
+    if [[ -z "$path" ]]; then
+        scope="machine"; deploy_json="$DEPLOY_CONFIG"
+    else
+        path=$(expand_tilde "$path")
+        scope="project"; deploy_json="$path/.dotconfigs/deploy.json"; project_root="$path"
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Cleanup dry-run (use --apply to remove):"
+    else
+        echo "Cleaning up stale symlinks:"
+    fi
+    echo ""
+
+    removed=0
+
+    # Same sweep `deploy` runs as its reconcile step: removes stale dotconfigs-
+    # owned symlinks and broken-into-repo links; preserves foreign files/symlinks.
+    local plan; plan=$(resolve_plan "$PLUGINS_DIR" "$deploy_json" "$scope")
+    _sweep_stale_symlinks "$plan" "$project_root" "$REPO_ROOT" "$dry_run"
+
+    echo ""
+    echo "Cleanup summary:"
+    echo "  Removed: $removed"
+    if [[ "$dry_run" == "true" && "$removed" -gt 0 ]]; then
+        echo ""
+        echo "Run 'dotconfigs cleanup --apply' to remove."
+    fi
+}
+
+cmd_deploy() {
+    local path="" dry_run=false force_mode=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run) dry_run=true; shift ;;
+            --force)   force_mode=true; shift ;;
+            -*)
+                echo "Error: Unknown option '$1'" >&2
+                exit 1
+                ;;
+            *) _capture_path path "$1"; shift ;;
+        esac
+    done
+
+    if [[ "$dry_run" == "true" ]]; then
+        init_colours
+        echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+        echo "$(colour_cyan "  DRY RUN - No changes will be made")"
+        echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
+        echo ""
+    fi
+
+    if [[ -z "$path" ]]; then
+        # Machine deploy
+        deploy_from_json "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine" "$REPO_ROOT" "$dry_run" "$force_mode"
+        _reconcile_git_templatedir "$dry_run"
+        echo ""
+        _create_path_symlink "$dry_run" "$force_mode"
+        return 0
+    fi
+
+    # Project deploy
+    path=$(expand_tilde "$path")
+    if ! validate_git_repo "$path"; then
+        exit 1
+    fi
+    local config_file="$path/.dotconfigs/deploy.json"
+    if [[ ! -f "$config_file" ]]; then
+        echo "Error: No .dotconfigs/deploy.json found at $path" >&2
+        echo "Run: dotconfigs init $path" >&2
+        exit 1
+    fi
+    deploy_from_json "$PLUGINS_DIR" "$config_file" "project" "$REPO_ROOT" "$dry_run" "$force_mode" "$path"
+    # Flag Claude items selected both machine-wide and here (loaded twice).
+    refcheck_claude_duplication "$DEPLOY_CONFIG" "$config_file" "$path"
+    if [[ "$dry_run" != "true" ]]; then
+        _exclude_dotconfigs "$path"
+        _register_project "$path"
+    fi
+}
+
+# Couple init.templateDir to the git hooks so new repos seed hooks iff any git
+# hook is selected in the machine deploy.json. Set it in ~/.gitconfig when at
+# least one git hook is on, unset it (only if it is still our value) when none
+# are — so disabling git seeding is just toggling the hooks off, no orphan config.
+_reconcile_git_templatedir() {
+    local dry_run="${1:-false}"
+    local desired="${2:-auto}"   # auto: derive from selection. off: force unset (undeploy).
+    command -v git >/dev/null 2>&1 || return 0
+
+    local ours="~/.dotconfigs/git-template"
+    local ours_abs; ours_abs=$(expand_tilde "$ours")
+    local hooks_selected="false"
+    if [[ "$desired" != "off" ]]; then
+        [[ -f "$DEPLOY_CONFIG" ]] || return 0
+        if jq -e '(.git.hooks // {}) | to_entries | map(select(.value)) | length > 0' "$DEPLOY_CONFIG" >/dev/null 2>&1; then
+            hooks_selected="true"
+        fi
+    fi
+    # `|| true`: git config --get exits 1 when unset, which would trip `set -e`.
+    local current; current=$(git config --global --get init.templateDir 2>/dev/null || true)
+
+    if [[ "$hooks_selected" == "true" ]]; then
+        [[ "$current" == "$ours" || "$current" == "$ours_abs" ]] && return 0
+        if [[ "$dry_run" == "true" ]]; then
+            echo "  Would set init.templateDir → $ours (git hook seeding)"
+        else
+            git config --global init.templateDir "$ours"
+            echo "  Set init.templateDir → $ours (git hook seeding enabled)"
+        fi
+    else
+        # Only clear OUR value; never clobber a templateDir the user set themselves.
+        [[ "$current" == "$ours" || "$current" == "$ours_abs" ]] || return 0
+        if [[ "$dry_run" == "true" ]]; then
+            echo "  Would unset init.templateDir (git hooks module not selected)"
+        else
+            git config --global --unset init.templateDir || true
+            echo "  Unset init.templateDir (git hooks module not selected → no seeding)"
+        fi
+    fi
+}
+
+cmd_status() {
+    local plugin_filter="${1:-}"
+
+    init_colours
+    check_jq || return 1
+    _require_deploy_config || return 1
+
+    if [[ -n "$plugin_filter" ]] && ! plugin_exists "$plugin_filter"; then
+        echo "Error: Plugin '$plugin_filter' not found" >&2
+        list_available_plugins
+        return 1
+    fi
+
+    local plugin lines has_ok has_drift has_missing count_ok total
+    local _plan; _plan=$(resolve_plan "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine")
+    while IFS= read -r plugin; do
+        [[ -n "$plugin_filter" && "$plugin" != "$plugin_filter" ]] && continue
+
+        lines=$(_collect_plugin_states "$plugin" "$_plan")
+        if [[ -z "$lines" ]]; then
+            printf "%b %s\n\n" "$(colour_yellow "$plugin")" "no enabled items in $DEPLOY_CONFIG"
+            continue
+        fi
+
+        _tally_states "$lines" has_ok has_drift has_missing count_ok total
+
+        if [[ "$has_drift" == "true" ]]; then
+            printf "%b %b %s\n" "$(colour_yellow "$plugin")" "$(colour_yellow "$SYMBOL_DRIFT")" "deployed (drift detected)"
+        elif [[ "$has_missing" == "true" && "$has_ok" != "true" ]]; then
+            printf "%b %b %s\n" "$(colour_red "$plugin")" "$(colour_red "$SYMBOL_MISSING")" "not deployed"
+        elif [[ "$has_missing" == "true" ]]; then
+            printf "%b %b %s (%d/%d)\n" "$(colour_yellow "$plugin")" "$(colour_yellow "$SYMBOL_DRIFT")" "partially deployed" "$count_ok" "$total"
+        else
+            printf "%b %b %s\n" "$(colour_green "$plugin")" "$(colour_green "$SYMBOL_OK")" "deployed"
+        fi
+
+        local state name
+        while IFS=$'\t' read -r state name; do
+            [[ -z "$state" ]] && continue
+            _print_file_status "$name" "$state"
+        done <<< "$lines"
+
+        echo ""
+    done < <(discover_plugins "$PLUGINS_DIR")
+
+    # Project git-hook drift audit: git hooks live per-repo in .git/hooks and are
+    # easily lost (re-clone, .git wipe). Walk the registry of project-deployed
+    # repos and flag any whose dotconfigs git hooks are missing or dangling.
+    if [[ -z "$plugin_filter" || "$plugin_filter" == "git" ]]; then
+        _audit_project_hooks
+    fi
+
+    # If run inside a project, flag Claude items selected both machine-wide and
+    # in this repo (Claude reads ~/.claude everywhere, so it would load twice).
+    if [[ ( -z "$plugin_filter" || "$plugin_filter" == "claude" ) && -f "$PWD/.dotconfigs/deploy.json" ]]; then
+        refcheck_claude_duplication "$DEPLOY_CONFIG" "$PWD/.dotconfigs/deploy.json" "$PWD"
+    fi
+}
+
+# Audit every registered repo's git hooks against the git plugin's project
+# include list. Prints a per-repo OK/missing/dangling summary. Repos that no
+# longer exist are reported as gone (registry left intact — the user prunes).
+_audit_project_hooks() {
+    [[ -f "$PROJECT_REGISTRY" ]] || return 0
+
+    # Expected hook filenames are the basenames of the git hooks' .git/hooks
+    # targets (e.g. check-facade-consumers.py keeps its extension, unlike its key).
+    local expected
+    expected=$(jq -r '
+        .hooks | to_entries[]
+        | (.value.target | if type == "array" then . else [.] end)[]
+        | select(startswith(".git/hooks/")) | sub(".*/"; "")
+    ' "$PLUGINS_DIR/git/manifest.json" 2>/dev/null)
+    [[ -z "$expected" ]] && return 0
+
+    printf "%b\n" "$(colour_cyan 'project git-hook audit')"
+
+    local repo hookdir name target problems
+    while IFS= read -r repo; do
+        [[ -z "$repo" ]] && continue
+        if [[ ! -d "$repo/.git" ]]; then
+            printf "  %b %s %s\n" "$(colour_yellow "$SYMBOL_DRIFT")" "$repo" "(gone — no .git)"
+            continue
+        fi
+        hookdir="$repo/.git/hooks"
+        problems=""
+        while IFS= read -r name; do
+            [[ -z "$name" ]] && continue
+            target="$hookdir/$name"
+            if [[ ! -e "$target" ]]; then
+                # -e follows symlinks: a dangling symlink is also caught here.
+                if [[ -L "$target" ]]; then
+                    problems="$problems dangling:$name"
+                else
+                    problems="$problems missing:$name"
+                fi
+            fi
+        done <<< "$expected"
+
+        if [[ -z "$problems" ]]; then
+            printf "  %b %s\n" "$(colour_green "$SYMBOL_OK")" "$repo"
+        else
+            printf "  %b %s%b\n" "$(colour_red "$SYMBOL_MISSING")" "$repo" ""
+            local p
+            for p in $problems; do
+                printf "      %b %s\n" "$(colour_red "${p%%:*}")" "${p#*:}"
+            done
+            printf "      %bfix: dotconfigs deploy %s%b\n" "${COLOUR_YELLOW:-}" "$repo" "${COLOUR_RESET:-}"
+        fi
+    done < "$PROJECT_REGISTRY"
+    echo ""
+}
+
+cmd_list() {
+    init_colours
+    check_jq || return 1
+    _require_deploy_config || return 1
+
+    echo "Available plugins:"
+    echo ""
+
+    local plugin lines has_ok has_drift has_missing count_ok total
+    local _plan; _plan=$(resolve_plan "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine")
+    while IFS= read -r plugin; do
+        lines=$(_collect_plugin_states "$plugin" "$_plan")
+        if [[ -z "$lines" ]]; then
+            printf "  - %s (no enabled items)\n" "$plugin"
+            continue
+        fi
+
+        _tally_states "$lines" has_ok has_drift has_missing count_ok total
+
+        if [[ "$has_drift" == "true" ]]; then
+            printf "  %b %s drifted (%d/%d ok)\n" "$(colour_yellow "$SYMBOL_DRIFT")" "$plugin" "$count_ok" "$total"
+        elif [[ "$has_missing" == "true" && "$has_ok" != "true" ]]; then
+            printf "  %b %s not deployed\n" "$(colour_red "$SYMBOL_MISSING")" "$plugin"
+        elif [[ "$has_missing" == "true" ]]; then
+            printf "  %b %s partially deployed (%d/%d)\n" "$(colour_yellow "$SYMBOL_DRIFT")" "$plugin" "$count_ok" "$total"
+        else
+            printf "  %b %s deployed\n" "$(colour_green "$SYMBOL_OK")" "$plugin"
+        fi
+    done < <(discover_plugins "$PLUGINS_DIR")
+}
+
+# Lint plugin manifests and scan deployed settings for dangling references.
+# Standalone: never deploys, never mutates. Exits non-zero if any manifest is
+# malformed or points at a missing source. Dangling deployed references are
+# reported as warnings (exit stays zero) unless --strict is passed.
+cmd_validate() {
+    init_colours
+    check_jq || return 1
+
+    local strict="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --strict) strict="true"; shift ;;
+            *) echo "Error: Unknown option '$1'" >&2; exit 1 ;;
+        esac
+    done
+
+    # Allowed methods and item keys (catalogue schema whitelist).
+    local valid_methods="symlink merge append managed"
+    errors=0
+    warnings=0
+
+    local plugin_dir plugin manifest
+    for plugin_dir in "$PLUGINS_DIR"/*/; do
+        [[ -d "$plugin_dir" ]] || continue
+        plugin=$(basename "$plugin_dir")
+        manifest="$plugin_dir/manifest.json"
+
+        if [[ ! -f "$manifest" ]]; then
+            printf "  %b✗ %s: no manifest.json%b\n" "${COLOUR_RED:-}" "$plugin" "${COLOUR_RESET:-}"
+            errors=$(( errors + 1 ))
+            continue
+        fi
+        if ! jq empty "$manifest" 2>/dev/null; then
+            printf "  %b✗ %s: manifest.json is not valid JSON%b\n" "${COLOUR_RED:-}" "$plugin" "${COLOUR_RESET:-}"
+            errors=$(( errors + 1 ))
+            continue
+        fi
+
+        # Each item (category/name): validate method, key whitelist, source.
+        local module_errors=0
+        local rows
+        rows=$(jq -r '
+            to_entries[] as $c | $c.value | to_entries[] as $i |
+            [ "\($c.key)/\($i.key)",
+              ($i.value.source // ""),
+              ($i.value.method // ""),
+              (($i.value | keys) - ["description","source","method","target","wiring","default"] | join(",")) ]
+            | @tsv
+        ' "$manifest" 2>/dev/null)
+
+        local item_key src method extra_keys abs_src
+        while IFS=$'\t' read -r item_key src method extra_keys; do
+            [[ -z "$item_key" ]] && continue
+            if [[ " $valid_methods " != *" $method "* ]]; then
+                printf "  %b✗ %s/%s: invalid method '%s'%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "$method" "${COLOUR_RESET:-}"
+                errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
+            fi
+            if [[ -n "$extra_keys" ]]; then
+                printf "  %b✗ %s/%s: unknown key(s): %s%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "$extra_keys" "${COLOUR_RESET:-}"
+                errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
+            fi
+            if [[ -z "$src" ]]; then
+                printf "  %b✗ %s/%s: missing source%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "${COLOUR_RESET:-}"
+                errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
+            else
+                abs_src=$(_abs_source "$src" "$REPO_ROOT")
+                if [[ ! -e "$abs_src" ]]; then
+                    printf "  %b✗ %s/%s: source not found: %s%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "$src" "${COLOUR_RESET:-}"
+                    errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
+                fi
+            fi
+        done <<< "$rows"
+
+        if [[ "$module_errors" -eq 0 ]]; then
+            printf "  %b✓ %s: manifest OK%b\n" "${COLOUR_GREEN:-}" "$plugin" "${COLOUR_RESET:-}"
+        fi
+    done
+
+    # Scan deployed merge-method targets for dangling command references.
+    if [[ -f "$DEPLOY_CONFIG" ]]; then
+        _refcheck_merge_targets "$(resolve_plan "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine")"
+    fi
+
+    echo ""
+    if [[ "$errors" -gt 0 ]]; then
+        printf "%b✗ validate: %s error(s), %s warning(s)%b\n" "${COLOUR_RED:-}" "$errors" "$warnings" "${COLOUR_RESET:-}" >&2
+        return 1
+    fi
+    if [[ "$warnings" -gt 0 ]]; then
+        printf "%b△ validate: 0 errors, %s warning(s)%b\n" "${COLOUR_YELLOW:-}" "$warnings" "${COLOUR_RESET:-}"
+        [[ "$strict" == "true" ]] && return 1
+        return 0
+    fi
+    printf "%b✓ validate: all manifests and deployed references OK%b\n" "${COLOUR_GREEN:-}" "${COLOUR_RESET:-}"
+    return 0
+}
+
+# Append a repo path to the project registry (deduplicated). Canonicalises to an
+# absolute path so the status audit can resolve it from any cwd. Args: path
+_register_project() {
+    local path="$1"
+    # Absolutise: expand_tilde only handles ~, so a relative "." would be stored
+    # verbatim and break the audit. cd into the repo and read its real path.
+    path=$(cd "$path" 2>/dev/null && pwd -P) || return 0
+    mkdir -p "$(dirname "$PROJECT_REGISTRY")"
+    if ! grep -qxF "$path" "$PROJECT_REGISTRY" 2>/dev/null; then
+        echo "$path" >> "$PROJECT_REGISTRY"
+    fi
+}
+
+main() {
+    if [[ $# -eq 0 ]]; then
+        show_usage
+        exit 0
+    fi
+
+    case "$1" in
+        setup)
+            cmd_setup
+            ;;
+        init)
+            cmd_init "${@:2}"
+            ;;
+        deploy)
+            cmd_deploy "${@:2}"
+            ;;
+        undeploy)
+            cmd_undeploy "${@:2}"
+            ;;
+        cleanup)
+            cmd_cleanup "${@:2}"
+            ;;
+        status)
+            cmd_status "${@:2}"
+            ;;
+        validate)
+            cmd_validate "${@:2}"
+            ;;
+        list)
+            cmd_list
+            ;;
+        help)
+            cmd_help "${@:2}"
+            ;;
+        --help|-h)
+            show_usage
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown command '$1'" >&2
+            echo "" >&2
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

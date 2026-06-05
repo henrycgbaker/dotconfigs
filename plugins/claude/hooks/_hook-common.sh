@@ -4,22 +4,12 @@
 # Sourced from each hook via:
 #   source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 #
-# Centralises three patterns that otherwise repeated in every hook:
-#   - loading user-configurable toggles from claude-hooks.conf
-#     (project conf overrides global)
+# Centralises two patterns that otherwise repeated in every hook:
 #   - tool-presence checks
 #   - JSON-escaped deny/ask emission for PreToolUse decisions
-
-# Load user-configurable hook toggles. Project conf overrides global.
-hook_load_conf() {
-    if [[ -f "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf" ]]; then
-        # shellcheck source=/dev/null
-        source "$CLAUDE_PROJECT_DIR/.claude/claude-hooks.conf"
-    elif [[ -f "$HOME/.claude/claude-hooks.conf" ]]; then
-        # shellcheck source=/dev/null
-        source "$HOME/.claude/claude-hooks.conf"
-    fi
-}
+#
+# Hooks are on when deployed; to disable one, set it false in deploy.json (the
+# hook is then neither symlinked nor wired into settings.json).
 
 # Silently no-op the hook if a required command is missing.
 hook_require_cmd() {

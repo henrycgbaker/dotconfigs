@@ -12,6 +12,11 @@
 
 [init]
 	defaultBranch = main
+	# NOTE: init.templateDir (which seeds new repos with the git hooks) is NOT set
+	# here. global-deploy manages it imperatively in ~/.gitconfig, coupled to the
+	# git `hooks` module: it is set when `hooks` is selected and unset when you
+	# exclude it from .dotconfigs/global.json. That keeps "turn off git seeding"
+	# a one-line edit with no orphan config left behind.
 
 [pull]
 	rebase = true

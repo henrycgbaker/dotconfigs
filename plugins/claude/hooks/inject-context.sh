@@ -5,16 +5,11 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: UserPromptSubmit hook prepending git context (branch, dirty count, head sha + subject) to every prompt
-# CONFIG: CLAUDE_HOOK_PROMPT_CONTEXT=true  Prepend git context to user prompts
 # ================
 
 # shellcheck source=_hook-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-CLAUDE_HOOK_PROMPT_CONTEXT="${CLAUDE_HOOK_PROMPT_CONTEXT:-true}"
-hook_load_conf
-
-[[ "$CLAUDE_HOOK_PROMPT_CONTEXT" == "true" ]] || exit 0
 hook_require_cmd jq
 hook_require_cmd git
 

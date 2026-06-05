@@ -1,11 +1,2 @@
-- [ ] further research to optimise claude / git
-- [ ] runtime-verification test coverage gaps left when validate-deploy.sh was deleted: assert hooks are `-x` after deploy (`os.access(path, os.X_OK)`), assert `git config --global --get user.{name,email}` returns the expected values after deploy (reality layer, not just filesystem), and cover the `~/.local/bin/{dotconfigs,dots}` PATH symlinks created by `dotconfigs setup` (currently exercised by zero tests). Also: `tests/runtime/conftest.py::validate_module` has no branch for `method == "append"`, so the three git append modules (config-include, project-excludes, gitignore) silently pass with no validation.
-- [ ] at some point work on rewiring agents workflow back in low priority)_
-- [ ] add more plugins
-- [ ]  when to wizards: give option to delete files (hooks / extensions etc at target dir) - build in prompts for cleanup etc
-- [ ] add explore (i think this is actually supoer painful, so maybe just skip)
-- [ ] make it not my configs but a generic config manager !!!
-- [ ] add to claude plugin to make its CLI / terminal output of its scripts maximally explicit (no magic)
-
-- [ ] add a hook/async logging in gsd that somehow logs my requirements deterministically so when creating the context.md I can verify it did it (often seems to miss loads)
-- [ ]  set up dotconfig hook to auto amend all my discussion to a log file that gets backup into aw and clean and cleaned up at the end by haiku
+- [ ] properly build out + wire up the native Claude plugin / marketplace format as a first-class distribution path (potentially a cleaner long-term solution than the symlink-deploy model for the claude plugin) - deferred for now, revisit
+- [ ] claude hook to cp my discussion to a log file that gets backup into and cleaned up by haiku

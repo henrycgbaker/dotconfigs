@@ -5,8 +5,8 @@ activation, session telemetry, transcript snapshots, and notification fan-out.
 Each hook asserts its own hook_event_name and no-ops on a mismatch, so every
 hook gets: a wrong-event no-op test plus its happy/skip paths.
 
-HOME is always redirected to a temp dir so hooks neither read the real
-~/.claude/claude-hooks.conf nor write to the real ~/.claude/ telemetry files.
+HOME is always redirected to a temp dir so hooks never write to the real
+~/.claude/ telemetry files.
 """
 
 from __future__ import annotations
@@ -53,7 +53,12 @@ def run_hook(path: Path, payload: dict, *, home: Path, env: dict | None = None):
 
 def _git_repo(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
-    run = lambda *a: subprocess.run(["git", "-C", str(path), *a], check=True, capture_output=True)
+
+    def run(*a):
+        return subprocess.run(
+            ["git", "-C", str(path), *a], check=True, capture_output=True
+        )
+
     run("init", "-q")
     run("config", "user.email", "t@example.com")
     run("config", "user.name", "Test")
@@ -76,17 +81,10 @@ def home(tmp_path: Path) -> Path:
 
 
 def test_inject_context_wrong_event_noop(dotconfigs_root, home):
-    r = run_hook(_hook(dotconfigs_root, "inject-context.sh"), {"hook_event_name": "PreToolUse"}, home=home)
-    assert r.returncode == 0
-    assert r.stdout.strip() == ""
-
-
-def test_inject_context_disabled_noop(dotconfigs_root, home):
     r = run_hook(
         _hook(dotconfigs_root, "inject-context.sh"),
-        {"hook_event_name": "UserPromptSubmit"},
+        {"hook_event_name": "PreToolUse"},
         home=home,
-        env={"CLAUDE_HOOK_PROMPT_CONTEXT": "false"},
     )
     assert r.returncode == 0
     assert r.stdout.strip() == ""
@@ -178,7 +176,11 @@ def test_session_start_no_venv_noop(dotconfigs_root, home, tmp_path):
 
 
 def test_session_end_wrong_event_noop(dotconfigs_root, home):
-    r = run_hook(_hook(dotconfigs_root, "session-end-log.sh"), {"hook_event_name": "PreToolUse"}, home=home)
+    r = run_hook(
+        _hook(dotconfigs_root, "session-end-log.sh"),
+        {"hook_event_name": "PreToolUse"},
+        home=home,
+    )
     assert r.returncode == 0
     assert not (home / ".claude" / "session-log.jsonl").exists()
 
@@ -215,7 +217,11 @@ def test_precompact_wrong_event_noop(dotconfigs_root, home, tmp_path):
     transcript.write_text("line\n")
     r = run_hook(
         _hook(dotconfigs_root, "pre-compact-snapshot.sh"),
-        {"hook_event_name": "PreToolUse", "transcript_path": str(transcript), "session_id": "x"},
+        {
+            "hook_event_name": "PreToolUse",
+            "transcript_path": str(transcript),
+            "session_id": "x",
+        },
         home=home,
     )
     assert r.returncode == 0
@@ -227,7 +233,11 @@ def test_precompact_snapshots_transcript(dotconfigs_root, home, tmp_path):
     transcript.write_text('{"a":1}\n')
     r = run_hook(
         _hook(dotconfigs_root, "pre-compact-snapshot.sh"),
-        {"hook_event_name": "PreCompact", "transcript_path": str(transcript), "session_id": "abc"},
+        {
+            "hook_event_name": "PreCompact",
+            "transcript_path": str(transcript),
+            "session_id": "abc",
+        },
         home=home,
     )
     assert r.returncode == 0
@@ -239,7 +249,11 @@ def test_precompact_snapshots_transcript(dotconfigs_root, home, tmp_path):
 def test_precompact_missing_transcript_noop(dotconfigs_root, home, tmp_path):
     r = run_hook(
         _hook(dotconfigs_root, "pre-compact-snapshot.sh"),
-        {"hook_event_name": "PreCompact", "transcript_path": str(tmp_path / "gone.jsonl"), "session_id": "abc"},
+        {
+            "hook_event_name": "PreCompact",
+            "transcript_path": str(tmp_path / "gone.jsonl"),
+            "session_id": "abc",
+        },
         home=home,
     )
     assert r.returncode == 0

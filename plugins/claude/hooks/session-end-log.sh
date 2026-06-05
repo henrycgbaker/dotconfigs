@@ -5,16 +5,11 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: SessionEnd hook appending a JSONL telemetry line to ~/.claude/session-log.jsonl (timestamp, session_id, duration, model, project_dir)
-# CONFIG: CLAUDE_HOOK_SESSION_LOG=true  Append session telemetry to ~/.claude/session-log.jsonl
 # ================
 
 # shellcheck source=_hook-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-CLAUDE_HOOK_SESSION_LOG="${CLAUDE_HOOK_SESSION_LOG:-true}"
-hook_load_conf
-
-[[ "$CLAUDE_HOOK_SESSION_LOG" == "true" ]] || exit 0
 hook_require_cmd jq
 
 stdin_data=$(cat)

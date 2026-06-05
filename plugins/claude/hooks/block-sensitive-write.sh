@@ -5,16 +5,11 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: PreToolUse hook blocking Write/Edit on sensitive files (private keys, credentials, .env.production)
-# CONFIG: CLAUDE_HOOK_FILE_PROTECTION=true  Protect critical files
 # ================
 
 # shellcheck source=_hook-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-CLAUDE_HOOK_FILE_PROTECTION="${CLAUDE_HOOK_FILE_PROTECTION:-true}"
-hook_load_conf
-
-[[ "$CLAUDE_HOOK_FILE_PROTECTION" == "true" ]] || exit 0
 hook_require_cmd jq
 
 stdin_data=$(cat)

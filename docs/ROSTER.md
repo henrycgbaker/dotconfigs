@@ -2,45 +2,49 @@
 
 **Auto-generated reference** — Do not edit manually. Run `scripts/generate-roster.sh` to regenerate.
 
-This document lists all available hooks, skills, and configuration options in dotconfigs.
+This document lists the hooks and skills catalogued in dotconfigs. Toggle any item on or
+off in your `deploy.json` (`~/.dotconfigs/deploy.json` for the machine, or
+`<repo>/.dotconfigs/deploy.json` for a project).
 
 
 ## Git Hooks
 
 Git hooks run during git operations to enforce quality standards and protect workflows.
 
-| Hook | Description | Configuration Keys |
-|------|-------------|-------------------|
+| Hook | Description | Event / Matcher |
+|------|-------------|-----------------|
 | check-facade-consumers | Verify every facade __all__ entry has at least one external consumer |  |
-| commit-msg | Blocks AI attribution patterns in commit messages |  |
-| post-checkout | Post-checkout info — displays branch information on checkout | GIT_HOOK_BRANCH_INFO, GIT_HOOK_POST_CHECKOUT_ENABLED |
-| post-merge | Post-merge checks — dependency change detection and migration reminders | GIT_HOOK_DEPENDENCY_CHECK, GIT_HOOK_MIGRATION_REMINDER, GIT_HOOK_POST_MERGE_ENABLED |
-| post-rewrite | Post-rewrite checks — dependency detection for rebase workflows | GIT_HOOK_DEPENDENCY_CHECK, GIT_HOOK_MIGRATION_REMINDER, GIT_HOOK_POST_REWRITE_ENABLED |
-| pre-commit | Pre-commit — identity check, secrets scan, block main commits, Ruff format+lint on staged files |  |
-| pre-push | Force-push protection and fast lint/format check (tests + types run in CI) |  |
-| pre-rebase | Blocks rebasing main/master and warns about pushed commits |  |
-| prepare-commit-msg | Prepares commit message — extracts conventional commit prefix from branch name | GIT_HOOK_BRANCH_PREFIX, GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED |
+| commit-msg | Block AI attribution patterns in commit messages |  |
+| pre-commit | Identity check, secrets scan, block main commits, Ruff format+lint on staged files |  |
+| pre-push | Force-push protection and fast lint/format check |  |
+| pre-rebase | Block rebasing main/master and warn about pushed commits |  |
+| prepare-commit-msg | Extract conventional commit prefix from branch name |  |
+| post-checkout | Display branch information on checkout |  |
+| post-merge | Dependency change detection and migration reminders |  |
+| post-rewrite | Dependency detection for rebase workflows |  |
 
 ## Claude Hooks
 
 Claude hooks run during Claude Code operations for code quality and safety.
 
-| Hook | Description | Configuration Keys |
-|------|-------------|-------------------|
-| block-ai-pr-attribution | PreToolUse hook to block AI attribution in PR titles and descriptions | CLAUDE_HOOK_PR_ATTRIBUTION_GUARD |
-| block-chmod-777 | PreToolUse hook blocking chmod -R 777 (creates security vulnerability) | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
-| block-drop-table | PreToolUse hook blocking DROP TABLE / DROP DATABASE SQL statements (case-insensitive) | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
-| block-force-push | PreToolUse hook blocking git push --force without --force-with-lease | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
-| block-gh-comment | PreToolUse hook blocking unsolicited GitHub comment/review posts across two entrypoints - the gh CLI (Bash) and the GitHub MCP server (mcp__github__*). gh writes are denied unless prefixed GH_COMMENT_OK=1; MCP comment/review writes return "ask" for interactive approval. | CLAUDE_HOOK_GH_COMMENT_GUARD |
-| block-git-clean | PreToolUse hook blocking git clean -fd (and -fdX variants) which deletes untracked files | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
-| block-hard-reset | PreToolUse hook blocking git reset --hard (discards uncommitted work) | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
-| block-rm-rf-root | PreToolUse hook blocking rm -rf / or rm -rf ~ (full filesystem wipe) | CLAUDE_HOOK_DESTRUCTIVE_GUARD |
-| block-sensitive-write | PreToolUse hook blocking Write/Edit on sensitive files (private keys, credentials, .env.production) | CLAUDE_HOOK_FILE_PROTECTION |
-| inject-context | UserPromptSubmit hook prepending git context (branch, dirty count, head sha + subject) to every prompt | CLAUDE_HOOK_PROMPT_CONTEXT |
-| notify | Notification hook fanning notifications out to ntfy.sh (if NTFY_TOPIC set) and desktop notify-send (if a display is available). Terminal bell is handled by settings.json preferredNotifChannel. | CLAUDE_HOOK_NOTIFY_NTFY, CLAUDE_HOOK_NOTIFY_DESKTOP |
-| pre-compact-snapshot | PreCompact hook snapshotting the transcript to ~/.claude/snapshots/<session_id>-precompact.jsonl before compaction | CLAUDE_HOOK_PRECOMPACT_SNAPSHOT |
-| session-end-log | SessionEnd hook appending a JSONL telemetry line to ~/.claude/session-log.jsonl (timestamp, session_id, duration, model, project_dir) | CLAUDE_HOOK_SESSION_LOG |
-| session-start-env | SessionStart hook auto-activating a Python .venv in $CLAUDE_PROJECT_DIR by writing VIRTUAL_ENV and PATH to $CLAUDE_ENV_FILE | CLAUDE_HOOK_VENV_AUTO |
+| Hook | Description | Event / Matcher |
+|------|-------------|-----------------|
+| _hook-common | Shared hook helpers (sourced library, not an event hook) |  |
+| block-rm-rf-root | Block rm -rf / or rm -rf ~ (full filesystem wipe) | PreToolUse (Bash) |
+| block-force-push | Block git push --force without --force-with-lease | PreToolUse (Bash) |
+| block-hard-reset | Block git reset --hard (discards uncommitted work) | PreToolUse (Bash) |
+| block-git-clean | Block git clean -fd which deletes untracked files | PreToolUse (Bash) |
+| block-drop-table | Block DROP TABLE / DROP DATABASE SQL statements | PreToolUse (Bash) |
+| block-chmod-777 | Block chmod -R 777 (creates security vulnerability) | PreToolUse (Bash) |
+| block-sensitive-write | Block Write/Edit on sensitive files (private keys, credentials, .env.production) | PreToolUse (Write|Edit) |
+| block-ai-pr-attribution | Block AI attribution in PR titles/bodies and GitHub MCP writes | PreToolUse (Bash), PreToolUse (mcp__github__.*) |
+| block-gh-comment | Block unsolicited GitHub comment/review posts via gh CLI and the GitHub MCP server | PreToolUse (Bash), PreToolUse (mcp__github__.*) |
+| facade-check | Facade orphan-export check after Write/Edit | PostToolUse (Write|Edit) |
+| inject-context | Prepend git context (branch, dirty count, head) to every prompt | UserPromptSubmit |
+| session-start-env | Auto-activate a Python .venv in the project on session start | SessionStart |
+| session-end-log | Append a JSONL telemetry line to ~/.claude/session-log.jsonl on session end | SessionEnd |
+| pre-compact-snapshot | Snapshot the transcript before compaction | PreCompact |
+| notify | Fan notifications out to ntfy.sh and desktop notify-send | Notification |
 
 ## Skills
 
@@ -60,14 +64,16 @@ Custom Claude Code skills (`/name`) for common workflows.
 
 ## Customisation
 
-Hooks are opinionated by default. To add per-project behaviour, use `.local` extension scripts:
+Hooks are opinionated and on by default. To disable one, set it `false` in your
+`deploy.json` and re-run `dotconfigs deploy` — the hook is then neither symlinked
+nor wired into settings.json.
+
+For per-project additions without editing the shared hook, use `.local` scripts:
 
 - `.git/hooks/pre-commit.local` — runs at end of pre-commit
 - `.git/hooks/pre-push.local` — runs at end of pre-push
 - `.git/hooks/commit-msg.local` — runs at end of commit-msg
 
-To skip a hook entirely, exclude it in `.dotconfigs/project.json` before deploying.
-
 ---
 
-*Generated: 2026-06-04 10:26:43 UTC*
+*Generated: 2026-06-05 11:31:05 UTC*

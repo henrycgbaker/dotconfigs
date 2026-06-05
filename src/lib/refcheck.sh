@@ -20,6 +20,29 @@ refcheck_warn() {
     fi
 }
 
+# Warn when a Claude item is selected in BOTH the machine and a project
+# selection. ~/.claude is read by Claude Code in every directory, so deploying
+# the same item into <repo>/.claude as well means Claude loads it twice -- a
+# skill read twice, a hook fired twice (settings.json merges additively). Git is
+# exempt by construction: a repo has exactly one .git/hooks/<x> (it cannot run
+# twice), and the template dir only seeds *new* repos, so a git hook selected
+# machine-wide and per-project never covers the same repo twice. Tally via
+# refcheck_warn. Args: machine_deploy_json, project_deploy_json, project_label
+refcheck_claude_duplication() {
+    local machine="$1" project="$2" label="$3" dups
+    [[ -f "$machine" && -f "$project" ]] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    dups=$(jq -rn --slurpfile m "$machine" --slurpfile p "$project" '
+        ($m[0].claude // {}) as $mc | ($p[0].claude // {}) as $pc
+        | [ $mc | to_entries[] | .key as $cat | .value | to_entries[]
+            | select(.value == true and ($pc[$cat][.key] == true))
+            | "claude/\($cat)/\(.key)" ]
+        | join(", ")
+    ' 2>/dev/null) || return 0
+    [[ -z "$dups" ]] && return 0
+    refcheck_warn "duplicate: active both machine-wide (~/.claude) and in $label, so Claude loads each twice -- disable in one selection: $dups"
+}
+
 # Resolve a referenced command/path to an absolute, checkable filesystem path.
 # Expands a leading ~, substitutes ${CLAUDE_PROJECT_DIR}/$CLAUDE_PROJECT_DIR
 # (using $base_dir as the stand-in), and strips a leading "command " wrapper.
