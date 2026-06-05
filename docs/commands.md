@@ -43,6 +43,8 @@ dotconfigs deploy --force     # overwrite conflicting foreign files
 ```
 Deploys from `deploy.json` to the filesystem. **Enabled items are deployed; items toggled off are torn down in the same pass** - so flipping an item to `false` and re-running `deploy` removes its artefact. Each item is applied by its [deploy method](deploy-methods.md). A machine deploy also reconciles the git `init.templateDir` (set when any git hook is selected, unset when none are) and ensures `dotconfigs`/`dots` are on PATH. If a target exists and isn't dotconfigs-owned you're prompted to overwrite/skip (ownership is tracked per file, so dotconfigs coexists with other tools in shared dirs like `~/.claude/`); `--force` skips the prompt.
 
+**Scope is the argument, not the directory.** `deploy` with **no path** always deploys the *machine* selection (`~/.dotconfigs/deploy.json`), wherever you run it - it does **not** auto-detect a repo's local `deploy.json`, and running it inside a repo still deploys your machine config, not that repo. `deploy <path>` deploys **only** that repo's selection (`<path>/.dotconfigs/deploy.json`). Neither cascades to other repos: to refresh several project repos, run `deploy <repo>` for each. Each scope is independently idempotent. A project `deploy` also warns if a Claude item is selected **both** machine-wide and in the repo (Claude would load it twice).
+
 ## undeploy `[path]` `[--apply]` `[--dry-run]`
 
 ```bash
@@ -78,6 +80,10 @@ dotconfigs status claude
 Shows per-item state for the machine selection: **✓ deployed** (symlink correct), **△ drift** (broken/foreign/wrong target), **✗ not deployed**.
 
 Also runs a **project git-hook audit**: every repo that has been project-deployed is recorded in `~/.dotconfigs/projects.list`, and `status` (or `status git`) walks that list and flags any whose git hooks have gone missing or dangling - the per-repo failure mode that lets AI attribution slip through a `commit-msg` hook that isn't actually installed. The fix it suggests is `dotconfigs deploy <repo>`.
+
+Run inside a project, `status` also flags any **Claude item selected both machine-wide and in that repo** (Claude reads `~/.claude` everywhere, so it would load the item twice - disable it in one selection).
+
+`status` answers *what is deployed* (filesystem state); for *whether the catalogue itself is well-formed* (valid JSON, real sources, no dangling references) use [`validate`](#validate---strict) - the two are complementary.
 
 ## validate `[--strict]`
 

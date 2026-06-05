@@ -521,6 +521,8 @@ cmd_deploy() {
         exit 1
     fi
     deploy_from_json "$PLUGINS_DIR" "$config_file" "project" "$REPO_ROOT" "$dry_run" "$force_mode" "$path"
+    # Flag Claude items selected both machine-wide and here (loaded twice).
+    refcheck_claude_duplication "$DEPLOY_CONFIG" "$config_file" "$path"
     if [[ "$dry_run" != "true" ]]; then
         _exclude_dotconfigs "$path"
         _register_project "$path"
@@ -615,6 +617,12 @@ cmd_status() {
     # repos and flag any whose dotconfigs git hooks are missing or dangling.
     if [[ -z "$plugin_filter" || "$plugin_filter" == "git" ]]; then
         _audit_project_hooks
+    fi
+
+    # If run inside a project, flag Claude items selected both machine-wide and
+    # in this repo (Claude reads ~/.claude everywhere, so it would load twice).
+    if [[ ( -z "$plugin_filter" || "$plugin_filter" == "claude" ) && -f "$PWD/.dotconfigs/deploy.json" ]]; then
+        refcheck_claude_duplication "$DEPLOY_CONFIG" "$PWD/.dotconfigs/deploy.json" "$PWD"
     fi
 }
 

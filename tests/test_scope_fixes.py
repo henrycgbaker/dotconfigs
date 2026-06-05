@@ -10,6 +10,8 @@ git hooks inert:
 - init.templateDir is coupled to the git hooks selection (toggling them off
   clears it);
 - `dotconfigs status` audits registered repos for missing/dangling git hooks;
+- the cross-scope duplication detector flags claude items selected both
+  machine-wide and per-project (git is exempt);
 - the attribution guards block AI attribution across every guarded surface.
 """
 
@@ -346,3 +348,63 @@ def test_commit_msg_hook_blocks_attribution(tmp_path: Path):
     clean = tmp_path / "clean.txt"
     clean.write_text("fix: a clean conventional commit message\n")
     assert run_bash(f'"{hook}" "{clean}"').returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# Claude cross-scope duplication detector
+# ---------------------------------------------------------------------------
+
+
+def _dup_check(machine: Path, project: Path, label: str = "/some/repo"):
+    script = f"""
+source "{REPO_ROOT}/src/lib/colours.sh"
+source "{REPO_ROOT}/src/lib/refcheck.sh"
+warnings=0
+refcheck_claude_duplication "{machine}" "{project}" "{label}"
+echo "WARN=$warnings"
+"""
+    return run_bash(script)
+
+
+def test_claude_duplication_warns_on_overlap(tmp_path: Path):
+    """A claude item enabled in both the machine and project selection is flagged
+    (Claude reads ~/.claude everywhere, so it would load it twice)."""
+    machine = tmp_path / "machine.json"
+    project = tmp_path / "project.json"
+    machine.write_text(
+        json.dumps({"claude": {"skills": {"commit": True, "squash-merge": True}}})
+    )
+    project.write_text(
+        json.dumps({"claude": {"skills": {"commit": True, "squash-merge": False}}})
+    )
+    res = _dup_check(machine, project)
+    assert "WARN=1" in res.stdout
+    assert "claude/skills/commit" in res.stderr  # enabled in both -> flagged
+    assert "squash-merge" not in res.stderr  # machine-only -> not a duplicate
+
+
+def test_claude_duplication_silent_when_disjoint(tmp_path: Path):
+    machine = tmp_path / "machine.json"
+    project = tmp_path / "project.json"
+    machine.write_text(json.dumps({"claude": {"skills": {"commit": True}}}))
+    project.write_text(json.dumps({"claude": {"skills": {"commit": False}}}))
+    res = _dup_check(machine, project)
+    assert "WARN=0" in res.stdout
+    assert "duplicate" not in res.stderr
+
+
+def test_claude_duplication_ignores_git(tmp_path: Path):
+    """git hooks selected in both scopes must NOT be flagged — a repo has one
+    .git/hooks/<x> and the template dir only seeds new repos, so no double-run."""
+    both = json.dumps(
+        {
+            "git": {"hooks": {"commit-msg": True}},
+            "claude": {"skills": {"commit": False}},
+        }
+    )
+    machine = tmp_path / "machine.json"
+    machine.write_text(both)
+    project = tmp_path / "project.json"
+    project.write_text(both)
+    res = _dup_check(machine, project)
+    assert "WARN=0" in res.stdout
