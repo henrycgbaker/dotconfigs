@@ -316,6 +316,30 @@ cleanup_stale_in_directory() {
     done
 }
 
+# Sweep every symlink target dir in a plan for dotconfigs-owned stale/broken
+# symlinks (catalogue-deleted orphans and broken-into-repo links), preserving
+# foreign files/symlinks and any still-catalogued item. Shared by `deploy` (so a
+# deploy is a full reconcile, like `stow -R` / `chezmoi apply`) and `cleanup`.
+# Args: plan, project_root, dotconfigs_root, dry_run. Accumulates into `removed`.
+_sweep_stale_symlinks() {
+    local plan="$1" project_root="$2" dotconfigs_root="$3" dry_run="$4"
+    local rows enabled source target method label t dir csv
+    rows=$(
+        while IFS=$'\t' read -r enabled source target method label; do
+            [[ "$method" == "symlink" ]] || continue
+            t=$(expand_tilde "$target")
+            [[ -n "$project_root" && "$t" != /* ]] && t="$project_root/$t"
+            printf '%s\t%s\n' "$(dirname "$t")" "$(basename "$t")"
+        done <<< "$plan"
+    )
+    [[ -z "$rows" ]] && return 0
+    while IFS= read -r dir; do
+        [[ -z "$dir" ]] && continue
+        csv=$(awk -F'\t' -v d="$dir" '$1==d{printf "%s%s",sep,$2; sep=","}' <<< "$rows")
+        cleanup_stale_in_directory "$dir" "$csv" "$dotconfigs_root" "$dry_run"
+    done < <(cut -f1 <<< "$rows" | sort -u)
+}
+
 # Symlink-deploy a single file or directory, state-aware.
 # Reports Unchanged / Would link / Would update / conflict and tallies the
 # correct counter (created/updated/unchanged/skipped) via eval into the caller.
@@ -1054,6 +1078,11 @@ deploy_from_json() {
             undeploy_module "$source" "$rtarget" "$method" "$dotconfigs_root" "$dry_run"
         fi
     done <<< "$plan"
+
+    # Reconcile: sweep dotconfigs-owned symlinks orphaned by items removed from
+    # the catalogue entirely (deselected items were already torn down above), so
+    # a deploy converges the target to the catalogue rather than leaking orphans.
+    _sweep_stale_symlinks "$plan" "$project_root" "$dotconfigs_root" "$dry_run"
 
     # Post-deploy: scan deployed JSON settings targets for dangling command
     # references. Warnings only — never blocks a deploy. Skipped on dry-run.

@@ -437,30 +437,10 @@ cmd_cleanup() {
 
     removed=0
 
-    # Group every symlink target in scope by its parent directory, then run the
-    # directory cleanup once per dir: removes stale dotconfigs-owned symlinks and
-    # broken-into-repo symlinks; preserves foreign files and foreign symlinks.
-    local plan rows t
-    plan=$(resolve_plan "$PLUGINS_DIR" "$deploy_json" "$scope")
-    rows=$(
-        while IFS=$'\t' read -r enabled source target method label; do
-            [[ "$method" == "symlink" ]] || continue
-            t=$(expand_tilde "$target")
-            [[ -n "$project_root" && "$t" != /* ]] && t="$project_root/$t"
-            printf '%s\t%s\n' "$(dirname "$t")" "$(basename "$t")"
-        done <<< "$plan"
-    )
-    if [[ -z "$rows" ]]; then
-        echo "Nothing to clean."
-        return 0
-    fi
-
-    local dir csv
-    while IFS= read -r dir; do
-        [[ -z "$dir" ]] && continue
-        csv=$(awk -F'\t' -v d="$dir" '$1==d{printf "%s%s",sep,$2; sep=","}' <<< "$rows")
-        cleanup_stale_in_directory "$dir" "$csv" "$REPO_ROOT" "$dry_run"
-    done < <(cut -f1 <<< "$rows" | sort -u)
+    # Same sweep `deploy` runs as its reconcile step: removes stale dotconfigs-
+    # owned symlinks and broken-into-repo links; preserves foreign files/symlinks.
+    local plan; plan=$(resolve_plan "$PLUGINS_DIR" "$deploy_json" "$scope")
+    _sweep_stale_symlinks "$plan" "$project_root" "$REPO_ROOT" "$dry_run"
 
     echo ""
     echo "Cleanup summary:"
