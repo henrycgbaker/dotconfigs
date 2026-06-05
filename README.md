@@ -30,7 +30,7 @@ Per-project hooks/skills, from inside a repo: `dotconfigs init . && dotconfigs d
 
 **Explanation** 
 - [Architecture](docs/architecture.md) - the single-source-of-truth dataflow and symlink ownership model.
-- [Deploy methods](docs/deploy-methods.md) - symlink vs copy vs append vs managed vs merge, and **why** each is used.
+- [Deploy methods](docs/deploy-methods.md) - symlink vs append vs managed vs merge, and **why** each is used.
 
 
 ## Plugins at a glance

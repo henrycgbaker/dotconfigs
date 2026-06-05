@@ -51,7 +51,7 @@ Deploys from `deploy.json` to the filesystem. **Enabled items are deployed; item
 dotconfigs undeploy           # preview removing the machine artefacts (dry-run)
 dotconfigs undeploy . --apply # remove this repo's deployed artefacts
 ```
-Inverse of deploy. Removes dotconfigs-owned symlinks (foreign files preserved) and `managed` blocks (the sentinel-delimited region only). `merge` and `append` targets are left alone - they can't be reversed without losing local content. Default is dry-run; pass `--apply` to remove.
+Inverse of deploy. Removes dotconfigs-owned symlinks (foreign files preserved) and `managed` blocks (the sentinel-delimited region only). `append` targets and the body of `merge` targets are left alone - they can't be reversed without losing local content - **except** the synthesised Claude `hooks` block in `settings.json`, which is entirely dotconfigs' own and so is cleared (the rest of the file is preserved). A machine `undeploy` also unsets the git `init.templateDir` it had set. Default is dry-run; pass `--apply` to remove.
 
 ## cleanup `[path]` `[--apply]` `[--dry-run]`
 
