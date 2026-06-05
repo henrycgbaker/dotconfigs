@@ -5,16 +5,11 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: SessionStart hook auto-activating a Python .venv in $CLAUDE_PROJECT_DIR by writing VIRTUAL_ENV and PATH to $CLAUDE_ENV_FILE
-# CONFIG: CLAUDE_HOOK_VENV_AUTO=true  Auto-activate Python .venv on session start
 # ================
 
 # shellcheck source=_hook-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-CLAUDE_HOOK_VENV_AUTO="${CLAUDE_HOOK_VENV_AUTO:-true}"
-hook_load_conf
-
-[[ "$CLAUDE_HOOK_VENV_AUTO" == "true" ]] || exit 0
 hook_require_cmd jq
 
 stdin_data=$(cat)

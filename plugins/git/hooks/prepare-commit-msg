@@ -4,8 +4,6 @@
 # TYPE: git-hook
 # PLUGIN: git
 # DESCRIPTION: Prepares commit message — extracts conventional commit prefix from branch name
-# CONFIG: GIT_HOOK_BRANCH_PREFIX=true  Auto-prefix commit with branch name
-# CONFIG: GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED=true  Enable prepare-commit-msg hook
 # ================
 
 # ============================================================================
@@ -32,42 +30,7 @@ COMMIT_MSG_FILE=$1
 COMMIT_SOURCE=$2
 COMMIT_SHA=$3
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
-
-# --- Load configuration with hierarchy ---
-# Priority: config file > env var > hardcoded default
-# Try multiple config file locations (first found wins)
-HOOK_CONFIG=""
-for config_path in \
-    "$REPO_ROOT/.githooks/config" \
-    "$REPO_ROOT/.claude/git-hooks.conf" \
-    "$REPO_ROOT/.git/hooks/hooks.conf" \
-    "$REPO_ROOT/.claude/hooks.conf"; do
-    if [[ -f "$config_path" ]]; then
-        HOOK_CONFIG="$config_path"
-        break
-    fi
-done
-
-# Set defaults
-GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED="${GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED:-true}"
-GIT_HOOK_BRANCH_PREFIX="${GIT_HOOK_BRANCH_PREFIX:-true}"
-
-# Load config file if found (overrides env vars and defaults)
-if [[ -n "$HOOK_CONFIG" ]]; then
-    source "$HOOK_CONFIG"
-fi
-
-# Check if hook is enabled
-if [[ "$GIT_HOOK_PREPARE_COMMIT_MSG_ENABLED" != "true" ]]; then
-    exit 0
-fi
-
-# Check if branch prefix feature is enabled
-if [[ "$GIT_HOOK_BRANCH_PREFIX" != "true" ]]; then
-    exit 0
-fi
 
 # ============================================================================
 # SKIP CONDITIONS

@@ -5,7 +5,6 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: PreToolUse hook blocking unsolicited GitHub comment/review posts across two entrypoints - the gh CLI (Bash) and the GitHub MCP server (mcp__github__*). gh writes are denied unless prefixed GH_COMMENT_OK=1; MCP comment/review writes return "ask" for interactive approval.
-# CONFIG: CLAUDE_HOOK_GH_COMMENT_GUARD=true  Guard against unsolicited GitHub PR/issue comment posts
 # ================
 #
 # Why: Posting comments/reviews to GitHub PRs/issues is user-facing
@@ -20,13 +19,6 @@
 
 # shellcheck source=_hook-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
-
-CLAUDE_HOOK_GH_COMMENT_GUARD="${CLAUDE_HOOK_GH_COMMENT_GUARD:-true}"
-hook_load_conf
-
-if [[ "$CLAUDE_HOOK_GH_COMMENT_GUARD" != "true" ]]; then
-    exit 0
-fi
 
 hook_require_cmd jq
 

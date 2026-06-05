@@ -5,16 +5,11 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: PreToolUse hook blocking chmod -R 777 (creates security vulnerability)
-# CONFIG: CLAUDE_HOOK_DESTRUCTIVE_GUARD=true  Guard against destructive commands
 # ================
 
 # shellcheck source=_hook-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-CLAUDE_HOOK_DESTRUCTIVE_GUARD="${CLAUDE_HOOK_DESTRUCTIVE_GUARD:-true}"
-hook_load_conf
-
-[[ "$CLAUDE_HOOK_DESTRUCTIVE_GUARD" == "true" ]] || exit 0
 hook_require_cmd jq
 
 stdin_data=$(cat)

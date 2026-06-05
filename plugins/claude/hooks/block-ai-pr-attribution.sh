@@ -5,16 +5,11 @@
 # TYPE: claude-hook
 # PLUGIN: claude
 # DESCRIPTION: PreToolUse hook to block AI attribution in PR titles/bodies and GitHub MCP writes (PRs, commits, merges)
-# CONFIG: CLAUDE_HOOK_PR_ATTRIBUTION_GUARD=true  Guard against AI attribution in PRs
 # ================
 
 # shellcheck source=_hook-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-common.sh"
 
-CLAUDE_HOOK_PR_ATTRIBUTION_GUARD="${CLAUDE_HOOK_PR_ATTRIBUTION_GUARD:-true}"
-hook_load_conf
-
-[[ "$CLAUDE_HOOK_PR_ATTRIBUTION_GUARD" != "true" ]] && exit 0
 hook_require_cmd jq
 
 stdin_data=$(cat)
