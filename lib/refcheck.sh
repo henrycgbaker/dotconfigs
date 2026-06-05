@@ -80,3 +80,73 @@ refcheck_settings_json() {
     done <<< "$refs"
     return $rc
 }
+
+# Emit the (event \t hook-script-basename) tuples a settings.json wires, one per
+# line. The basename is the comparable identity of a hook across scopes: global
+# wires `~/.claude/hooks/foo.sh`, a project may wire
+# `${CLAUDE_PROJECT_DIR}/.claude/hooks/foo.sh` — same script `foo.sh`, so it is
+# the basename (not the path) that double-fires. Matcher is deliberately ignored:
+# Claude runs a matching hook per scope regardless, so same event + same script
+# in two scopes is a duplicate even if the matchers differ. Args: json_file.
+_refcheck_hook_identities() {
+    local json_file="$1"
+    [[ -f "$json_file" ]] || return 0
+    jq -r '
+        .hooks // {} | to_entries[]
+        | .key as $event
+        | .value[]? | .hooks[]? | .command? // ""
+        | select(. != "")
+        | ($event + "\t" + (sub(".*/"; "") | sub("[[:space:]].*"; "")))
+    ' "$json_file" 2>/dev/null | sort -u
+}
+
+# Defensive guard against accidental cross-scope hook duplication. Claude Code
+# merges hooks ADDITIVELY across user (~/.claude) and project (.claude) scopes
+# with no dedup — so the same hook script wired for the same event in both scopes
+# runs TWICE. Harmless for idempotent PreToolUse guards (wasted subprocess time)
+# but actively bad for context/lifecycle hooks (UserPromptSubmit/Notification),
+# which fire twice and waste tokens. This flags every such overlap.
+# Args: global_settings_json, project_settings_json
+# Returns: 0 if no overlap, 1 if any duplicate (one warning per dup).
+refcheck_hook_duplication() {
+    local global_json="$1" project_json="$2"
+    [[ -f "$global_json" && -f "$project_json" ]] || return 0
+
+    local global_ids project_ids dup event script
+    global_ids=$(_refcheck_hook_identities "$global_json")
+    project_ids=$(_refcheck_hook_identities "$project_json")
+    [[ -z "$global_ids" || -z "$project_ids" ]] && return 0
+
+    local rc=0
+    # Lines present in BOTH scope listings = double-firing hooks.
+    dup=$(comm -12 <(printf '%s\n' "$global_ids") <(printf '%s\n' "$project_ids"))
+    [[ -z "$dup" ]] && return 0
+    while IFS=$'\t' read -r event script; do
+        [[ -z "$event" ]] && continue
+        refcheck_warn "duplicate hook: '$script' on $event is wired in BOTH ~/.claude/settings.json and project .claude/settings.json — Claude merges hooks additively, so it will fire twice. Wire it in one scope only."
+        rc=1
+    done <<< "$dup"
+    return $rc
+}
+
+# Flag hooks for a given plugin declared in BOTH the global and project
+# dotconfigs configs (.dotconfigs/global.json, .dotconfigs/project.json).
+# Emits a single consolidated warning per plugin listing every duplicated
+# include entry, with a pointer to both config paths.
+# Args: plugin_name, global_config_json, project_config_json
+# Returns: 0 if no overlap, 1 if any.
+refcheck_hook_manifest_overlap() {
+    local plugin="$1" global_config="$2" project_config="$3"
+    [[ -f "$global_config" && -f "$project_config" ]] || return 0
+
+    local global_hooks project_hooks dup
+    global_hooks=$(jq -r --arg p "$plugin" '.[$p].hooks.include[]? // empty' "$global_config" 2>/dev/null | sort -u)
+    project_hooks=$(jq -r --arg p "$plugin" '.[$p].hooks.include[]? // empty' "$project_config" 2>/dev/null | sort -u)
+    [[ -z "$global_hooks" || -z "$project_hooks" ]] && return 0
+
+    dup=$(comm -12 <(printf '%s\n' "$global_hooks") <(printf '%s\n' "$project_hooks") | paste -sd ',' -)
+    [[ -z "$dup" ]] && return 0
+
+    refcheck_warn "$plugin: hook(s) declared in BOTH $global_config and $project_config — $dup"
+    return 1
+}

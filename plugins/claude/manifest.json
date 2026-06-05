@@ -62,30 +62,6 @@
     }
   },
   "project": {
-    "hooks": {
-      "source": "plugins/claude/hooks",
-      "target": ".claude/hooks",
-      "method": "symlink",
-      "include": [
-        "_hook-common.sh",
-        "block-rm-rf-root.sh",
-        "block-force-push.sh",
-        "block-hard-reset.sh",
-        "block-git-clean.sh",
-        "block-drop-table.sh",
-        "block-chmod-777.sh",
-        "block-sensitive-write.sh",
-        "block-ai-pr-attribution.sh",
-        "block-gh-comment.sh",
-        "facade-check.sh",
-        "inject-context.sh",
-        "session-start-env.sh",
-        "session-end-log.sh",
-        "pre-compact-snapshot.sh",
-        "notify.sh"
-      ],
-      "exclude": []
-    },
     "skills": {
       "source": "plugins/claude/skills",
       "target": ".claude/skills",

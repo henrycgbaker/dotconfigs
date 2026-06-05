@@ -4,7 +4,7 @@
 # NAME: block-ai-pr-attribution
 # TYPE: claude-hook
 # PLUGIN: claude
-# DESCRIPTION: PreToolUse hook to block AI attribution in PR titles and descriptions
+# DESCRIPTION: PreToolUse hook to block AI attribution in PR titles/bodies and GitHub MCP writes (PRs, commits, merges)
 # CONFIG: CLAUDE_HOOK_PR_ATTRIBUTION_GUARD=true  Guard against AI attribution in PRs
 # ================
 
@@ -18,19 +18,40 @@ hook_load_conf
 hook_require_cmd jq
 
 stdin_data=$(cat)
-{
-    IFS= read -r hook_event
-    IFS= read -r tool_name
-    IFS= read -r command
-} < <(echo "$stdin_data" | jq -r '.hook_event_name // "", .tool_name // "", .tool_input.command // ""')
+# One jq pass for the two always-needed fields (neither contains newlines).
+{ IFS= read -r hook_event; IFS= read -r tool_name; } < <(
+    echo "$stdin_data" | jq -r '.hook_event_name // "", .tool_name // ""'
+)
 
 [[ "$hook_event" == "PreToolUse" ]] || exit 0
-[[ "$tool_name" != "Bash" ]] && exit 0
 
-# Only check gh pr create/edit commands
-if ! echo "$command" | grep -qE 'gh\s+pr\s+(create|edit)'; then
-    exit 0
-fi
+# Build the text to scan from whichever surface this tool writes to. Covers both
+# `gh pr` Bash commands and the GitHub MCP write tools (PRs, commits, merges).
+scan_text=""
+case "$tool_name" in
+    Bash)
+        command=$(echo "$stdin_data" | jq -r '.tool_input.command // ""')
+        # Only PR create/edit commands carry a title/body worth guarding here;
+        # commit messages are guarded by the commit-msg git hook.
+        echo "$command" | grep -qE 'gh\s+pr\s+(create|edit)' || exit 0
+        scan_text="$command"
+        ;;
+    mcp__github__create_pull_request|mcp__github__update_pull_request)
+        scan_text=$(echo "$stdin_data" | jq -r '[.tool_input.title, .tool_input.body] | map(select(. != null)) | join("\n")')
+        ;;
+    mcp__github__create_or_update_file|mcp__github__push_files)
+        scan_text=$(echo "$stdin_data" | jq -r '.tool_input.message // ""')
+        ;;
+    mcp__github__merge_pull_request)
+        scan_text=$(echo "$stdin_data" | jq -r '[.tool_input.commit_title, .tool_input.commit_message] | map(select(. != null)) | join("\n")')
+        ;;
+    mcp__github__add_issue_comment|mcp__github__add_comment_to_pending_review|mcp__github__add_reply_to_pull_request_comment)
+        scan_text=$(echo "$stdin_data" | jq -r '.tool_input.body // ""')
+        ;;
+    *)
+        exit 0
+        ;;
+esac
 
 AI_PATTERNS=(
     "Co-Authored-By:.*Claude"
@@ -61,8 +82,8 @@ AI_PATTERNS=(
 )
 
 for pattern in "${AI_PATTERNS[@]}"; do
-    if echo "$command" | grep -qiE "$pattern"; then
-        hook_deny "PR contains AI attribution (matched: $pattern). Remove AI attribution from PR title/description."
+    if echo "$scan_text" | grep -qiE "$pattern"; then
+        hook_deny "AI attribution detected (matched: $pattern) in $tool_name. Remove it from the title, body, commit, or comment."
     fi
 done
 
