@@ -227,8 +227,6 @@ cmd_init() {
         exit 1
     fi
     if ! validate_git_repo "$path"; then
-        echo "Error: Not a git repository: $path" >&2
-        echo "Initialize with: git init" >&2
         exit 1
     fi
 
@@ -510,8 +508,6 @@ cmd_deploy() {
     # Project deploy
     path=$(expand_path "$path")
     if ! validate_git_repo "$path"; then
-        echo "Error: Not a git repository: $path" >&2
-        echo "Initialize with: git init" >&2
         exit 1
     fi
     local config_file="$path/.dotconfigs/deploy.json"

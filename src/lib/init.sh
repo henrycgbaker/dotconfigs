@@ -72,22 +72,3 @@ write_with_overwrite_protection() {
     fi
     return 0
 }
-
-# Prompt to deploy after init (TTY-aware)
-# Args: deploy_command [extra_args...]
-# Returns: 0 if deployed, 1 if skipped/non-TTY
-prompt_deploy() {
-    if [[ -t 0 ]] || [[ -t 1 ]]; then
-        echo ""
-        read -r -p "Deploy now? [Y/n] " deploy_answer </dev/tty
-        case "$deploy_answer" in
-            [nN]) return 1 ;;
-            *)
-                echo ""
-                "$@"
-                return 0
-                ;;
-        esac
-    fi
-    return 1
-}
