@@ -579,10 +579,11 @@ cmd_status() {
     fi
 
     local plugin lines has_ok has_drift has_missing count_ok total
+    local _plan; _plan=$(resolve_plan "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine")
     while IFS= read -r plugin; do
         [[ -n "$plugin_filter" && "$plugin" != "$plugin_filter" ]] && continue
 
-        lines=$(_collect_plugin_states "$plugin")
+        lines=$(_collect_plugin_states "$plugin" "$_plan")
         if [[ -z "$lines" ]]; then
             printf "%b %s\n\n" "$(colour_yellow "$plugin")" "no enabled items in $DEPLOY_CONFIG"
             continue
@@ -680,8 +681,9 @@ cmd_list() {
     echo ""
 
     local plugin lines has_ok has_drift has_missing count_ok total
+    local _plan; _plan=$(resolve_plan "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine")
     while IFS= read -r plugin; do
-        lines=$(_collect_plugin_states "$plugin")
+        lines=$(_collect_plugin_states "$plugin" "$_plan")
         if [[ -z "$lines" ]]; then
             printf "  - %s (no enabled items)\n" "$plugin"
             continue
@@ -766,7 +768,7 @@ cmd_validate() {
                 printf "  %b✗ %s/%s: missing source%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "${COLOUR_RESET:-}"
                 errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
             else
-                if [[ "$src" != /* ]]; then abs_src="$REPO_ROOT/$src"; else abs_src="$src"; fi
+                abs_src=$(_abs_source "$src" "$REPO_ROOT")
                 if [[ ! -e "$abs_src" ]]; then
                     printf "  %b✗ %s/%s: source not found: %s%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "$src" "${COLOUR_RESET:-}"
                     errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))

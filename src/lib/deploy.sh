@@ -25,6 +25,15 @@ expand_tilde() {
     echo "${1/#\~/$HOME}"
 }
 
+# Resolve a manifest source (repo-relative or already absolute) to an absolute
+# path against the repo root. Args: source, dotconfigs_root
+_abs_source() {
+    case "$1" in
+        /*) printf '%s' "$1" ;;
+        *)  printf '%s/%s' "$2" "$1" ;;
+    esac
+}
+
 # Idempotency check for the append method: every non-blank line in source must
 # already appear (exact match) somewhere in target. `grep -qFf` is the obvious
 # tool here but it has "any match" semantics and treats blank lines as wildcards,
@@ -515,13 +524,7 @@ deploy_module() {
     # Expand tilde in target
     abs_target=$(expand_tilde "$target")
 
-    # Make source absolute if not already
-    if [[ "$source" != /* ]]; then
-        abs_source="$dotconfigs_root/$source"
-    else
-        abs_source="$source"
-    fi
-
+    abs_source=$(_abs_source "$source" "$dotconfigs_root")
     # Compute relative source for display
     rel_src="${abs_source#$dotconfigs_root/}"
 
@@ -682,11 +685,7 @@ check_module_state() {
     local dotconfigs_root="$4"
     local abs_source abs_target rel_src
 
-    if [[ "$source" != /* ]]; then
-        abs_source="$dotconfigs_root/$source"
-    else
-        abs_source="$source"
-    fi
+    abs_source=$(_abs_source "$source" "$dotconfigs_root")
     abs_target=$(expand_tilde "$target")
     rel_src="${abs_source#"$dotconfigs_root/"}"
 
@@ -747,11 +746,12 @@ _require_deploy_config() {
     fi
 }
 
-# Emit per-file "<state>\t<name>" lines for every module in a plugin's group.
-# Args: plugin
+# Emit per-file "<state>\t<name>" lines for a plugin's enabled machine items.
+# Takes a pre-resolved machine plan so the caller resolves it once for all plugins.
+# Args: plugin, plan (resolve_plan output)
 _collect_plugin_states() {
-    local plugin="$1"
-    resolve_plan "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine" \
+    local plugin="$1" plan="$2"
+    printf '%s\n' "$plan" \
         | while IFS=$'\t' read -r enabled source target method label; do
             [[ "$enabled" == "true" ]] || continue
             [[ "$label" == "$plugin/"* ]] || continue
@@ -799,11 +799,7 @@ undeploy_module() {
     local abs_source abs_target rel_src
 
     abs_target=$(expand_tilde "$target")
-    if [[ "$source" != /* ]]; then
-        abs_source="$dotconfigs_root/$source"
-    else
-        abs_source="$source"
-    fi
+    abs_source=$(_abs_source "$source" "$dotconfigs_root")
     rel_src="${abs_source#$dotconfigs_root/}"
 
     case "$method" in
@@ -882,7 +878,7 @@ _undeploy_symlink() {
 }
 
 # Walk a config and undeploy every module. Mirror of deploy_from_json.
-# Args: config_file, dotconfigs_root, [group_key], [dry_run], [project_root]
+# Args: plugins_dir, deploy_json, scope, dotconfigs_root, [dry_run], [project_root]
 undeploy_from_json() {
     local plugins_dir="$1"
     local deploy_json="$2"
@@ -947,7 +943,7 @@ _refcheck_merge_targets() {
     local enabled source target method label rc_target
     while IFS=$'\t' read -r enabled source target method label; do
         [[ "$enabled" == "true" && "$method" == "merge" ]] || continue
-        if [[ -n "$project_root" && "$target" != /* && "$target" != ~* ]]; then
+        if [[ -n "$project_root" ]]; then
             target="$project_root/$target"
         fi
         rc_target=$(expand_tilde "$target")
@@ -956,7 +952,7 @@ _refcheck_merge_targets() {
 }
 
 # Main deployment entry point
-# Args: config_file, dotconfigs_root, [group_key], [dry_run], [force], [project_root]
+# Args: plugins_dir, deploy_json, scope, dotconfigs_root, [dry_run], [force], [project_root]
 deploy_from_json() {
     local plugins_dir="$1"
     local deploy_json="$2"
