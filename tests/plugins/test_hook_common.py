@@ -1,7 +1,7 @@
 """Tests for plugins/claude/hooks/_hook-common.sh.
 
-Exercises the shared hook helpers in isolation: config loading (project conf
-overrides global), required-command gating, and JSON-escaped deny/ask emission.
+Exercises the shared hook helpers in isolation: required-command gating and
+JSON-escaped deny/ask emission.
 """
 
 from __future__ import annotations
@@ -34,14 +34,14 @@ def _src(common: Path) -> str:
 
 
 def test_require_cmd_continues_when_present(common_sh):
-    script = f'{_src(common_sh)}\nhook_require_cmd bash\necho REACHED'
+    script = f"{_src(common_sh)}\nhook_require_cmd bash\necho REACHED"
     result = run_bash(script)
     assert result.returncode == 0
     assert "REACHED" in result.stdout
 
 
 def test_require_cmd_exits_when_missing(common_sh):
-    script = f'{_src(common_sh)}\nhook_require_cmd definitely-not-a-real-cmd-xyz\necho REACHED'
+    script = f"{_src(common_sh)}\nhook_require_cmd definitely-not-a-real-cmd-xyz\necho REACHED"
     result = run_bash(script)
     assert result.returncode == 0  # silent no-op, not an error
     assert "REACHED" not in result.stdout
@@ -54,7 +54,7 @@ def test_require_cmd_exits_when_missing(common_sh):
 
 def test_deny_emits_valid_escaped_json(common_sh):
     # A reason with quotes and a newline must survive as valid JSON.
-    script = f'{_src(common_sh)}\nhook_deny \'blocked "x"\nline2\''
+    script = f"{_src(common_sh)}\nhook_deny 'blocked \"x\"\nline2'"
     result = run_bash(script)
     assert result.returncode == 0
     data = json.loads(result.stdout)
@@ -71,33 +71,3 @@ def test_ask_emits_ask_decision(common_sh):
     data = json.loads(result.stdout)
     assert data["hookSpecificOutput"]["permissionDecision"] == "ask"
     assert data["hookSpecificOutput"]["permissionDecisionReason"] == "needs approval"
-
-
-# ---------------------------------------------------------------------------
-# hook_load_conf
-# ---------------------------------------------------------------------------
-
-
-def test_load_conf_project_overrides_global(common_sh, tmp_path):
-    home = tmp_path / "home"
-    proj = tmp_path / "proj"
-    (home / ".claude").mkdir(parents=True)
-    (proj / ".claude").mkdir(parents=True)
-    (home / ".claude" / "claude-hooks.conf").write_text("FOO=global\n")
-    (proj / ".claude" / "claude-hooks.conf").write_text("FOO=project\n")
-
-    script = f'{_src(common_sh)}\nhook_load_conf\necho "FOO=$FOO"'
-    result = run_bash(script, env={"HOME": str(home), "CLAUDE_PROJECT_DIR": str(proj)})
-    assert "FOO=project" in result.stdout
-
-
-def test_load_conf_falls_back_to_global(common_sh, tmp_path):
-    home = tmp_path / "home"
-    proj = tmp_path / "proj"  # no .claude conf here
-    (home / ".claude").mkdir(parents=True)
-    proj.mkdir()
-    (home / ".claude" / "claude-hooks.conf").write_text("FOO=global\n")
-
-    script = f'{_src(common_sh)}\nhook_load_conf\necho "FOO=$FOO"'
-    result = run_bash(script, env={"HOME": str(home), "CLAUDE_PROJECT_DIR": str(proj)})
-    assert "FOO=global" in result.stdout

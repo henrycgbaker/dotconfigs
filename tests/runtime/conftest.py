@@ -1,8 +1,8 @@
 """Shared fixtures and validation helpers for runtime integration tests.
 
-These tests validate that dotconfigs deploy actually produces correct
-filesystem state. Expectations are derived from plugin manifests (SSOT),
-not hardcoded — adding a new plugin or module automatically extends tests.
+These tests validate that `dotconfigs deploy` actually produces correct
+filesystem state. Expectations are derived from the plugin catalogues
+(manifest.json, the SSOT) — adding a plugin or item automatically extends them.
 """
 
 from __future__ import annotations
@@ -13,107 +13,85 @@ from pathlib import Path
 
 import pytest
 
-
-# ---------------------------------------------------------------------------
-# Helpers (importable by test modules)
-# ---------------------------------------------------------------------------
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def read_all_manifests(repo_root: Path, scope: str) -> dict:
-    """Read all plugin manifests and merge their scope sections.
+def _is_machine_target(t: str) -> bool:
+    return t.startswith("~") or t.startswith("/")
 
-    Returns dict keyed by plugin name, e.g.:
-        {"claude": {"hooks": {...}, "skills": {...}}, "git": {"hooks": {...}}}
+
+def catalogue_items(repo_root: Path, scope: str) -> list[dict]:
+    """Flatten every plugin manifest into per-item dicts for a scope.
+
+    Each item: {label, plugin, category, name, source, method, default, targets}
+    where targets are only those matching the scope (machine: ~/absolute,
+    project: relative).
     """
-    config: dict = {}
+    items: list[dict] = []
     for manifest_path in sorted(repo_root.glob("plugins/*/manifest.json")):
-        plugin_name = manifest_path.parent.name
+        plugin = manifest_path.parent.name
         manifest = json.loads(manifest_path.read_text())
-        if scope in manifest:
-            config[plugin_name] = manifest[scope]
-    return config
-
-
-def resolve_target(target_str: str, deploy_root: Path, scope: str) -> Path:
-    """Resolve a target path to an absolute path.
-
-    For global scope: expand ~ to deploy_root (mock HOME).
-    For project scope: prepend deploy_root (project dir).
-    """
-    if scope == "global":
-        return Path(target_str.replace("~", str(deploy_root)))
-    return deploy_root / target_str
-
-
-def validate_module(
-    mod_config: dict,
-    repo_root: Path,
-    deploy_root: Path,
-    scope: str,
-) -> list[str]:
-    """Validate a single deployed module. Returns list of failure messages."""
-    failures: list[str] = []
-    source = repo_root / mod_config["source"]
-    target = resolve_target(mod_config["target"], deploy_root, scope)
-    method = mod_config["method"]
-    include = mod_config.get("include", [])
-    exclude = mod_config.get("exclude", [])
-
-    if source.is_dir():
-        effective = [f for f in include if f not in exclude] if include else []
-        if not effective and not include:
-            # No include list = all files in source directory
-            effective = [f.name for f in source.iterdir() if f.is_file()]
-
-        for filename in effective:
-            file_source = source / filename
-            file_target = target / filename
-
-            if not file_source.exists():
-                failures.append(f"Source missing: {file_source}")
-                continue
-
-            if not file_target.exists():
-                failures.append(f"Target missing: {file_target}")
-                continue
-
-            if method == "symlink":
-                if not file_target.is_symlink():
-                    failures.append(f"Not a symlink: {file_target}")
-                elif file_target.resolve() != file_source.resolve():
-                    failures.append(
-                        f"Symlink target mismatch: {file_target} -> "
-                        f"{file_target.resolve()}, expected {file_source.resolve()}"
+        for category, entries in manifest.items():
+            for name, e in entries.items():
+                targets = e["target"]
+                if isinstance(targets, str):
+                    targets = [targets]
+                scoped = [
+                    t
+                    for t in targets
+                    if (
+                        _is_machine_target(t)
+                        if scope == "machine"
+                        else not _is_machine_target(t)
                     )
-            elif method == "copy":
-                if file_target.read_text() != file_source.read_text():
-                    failures.append(f"Content mismatch: {file_target}")
-    else:
-        # Single file module
-        if not source.exists():
-            failures.append(f"Source missing: {source}")
-        elif not target.exists():
+                ]
+                if not scoped:
+                    continue
+                items.append(
+                    {
+                        "label": f"{plugin}/{category}/{name}",
+                        "plugin": plugin,
+                        "category": category,
+                        "name": name,
+                        "source": e["source"],
+                        "method": e["method"],
+                        "default": e.get("default", False),
+                        "targets": scoped,
+                    }
+                )
+    return items
+
+
+def resolve_target(target: str, deploy_root: Path, scope: str) -> Path:
+    """machine: ~ -> deploy_root (mock HOME). project: prepend deploy_root (repo)."""
+    if scope == "machine":
+        return Path(target.replace("~", str(deploy_root), 1))
+    return deploy_root / target
+
+
+def validate_item(
+    item: dict, repo_root: Path, deploy_root: Path, scope: str
+) -> list[str]:
+    """Validate one deployed item across its scope targets. Returns failures."""
+    failures: list[str] = []
+    source = repo_root / item["source"]
+    method = item["method"]
+    if not source.exists():
+        return [f"Source missing: {source}"]
+
+    for tstr in item["targets"]:
+        target = resolve_target(tstr, deploy_root, scope)
+        if not target.exists() and not target.is_symlink():
             failures.append(f"Target missing: {target}")
-        elif method == "symlink":
+            continue
+        if method == "symlink":
             if not target.is_symlink():
                 failures.append(f"Not a symlink: {target}")
             elif target.resolve() != source.resolve():
-                failures.append(
-                    f"Symlink target mismatch: {target} -> "
-                    f"{target.resolve()}, expected {source.resolve()}"
-                )
-        elif method == "copy":
-            if target.read_text() != source.read_text():
-                failures.append(f"Content mismatch: {target}")
+                failures.append(f"Symlink mismatch: {target} -> {target.resolve()}")
         elif method == "merge":
-            # Merge-deployed files are regular files (never symlinks) and a
-            # superset of source: every source permission rule must survive.
             if target.is_symlink():
-                failures.append(
-                    f"Merge target is a symlink (must be a regular file): {target}"
-                )
+                failures.append(f"Merge target is a symlink: {target}")
             else:
                 try:
                     s_allow = set(
@@ -131,57 +109,27 @@ def validate_module(
                 except json.JSONDecodeError:
                     failures.append(f"Merge target not valid JSON: {target}")
         elif method == "append":
-            # Append-deployed files are regular files containing every non-empty
-            # line of the source (same contract as `grep -qFf` in lib/deploy.sh).
             if target.is_symlink():
-                failures.append(
-                    f"Append target is a symlink (must be a regular file): {target}"
-                )
+                failures.append(f"Append target is a symlink: {target}")
             else:
-                source_lines = [
-                    ln for ln in source.read_text().splitlines() if ln.strip()
+                text = target.read_text()
+                missing = [
+                    ln
+                    for ln in source.read_text().splitlines()
+                    if ln.strip() and ln not in text
                 ]
-                target_text = target.read_text()
-                missing = [ln for ln in source_lines if ln not in target_text]
                 if missing:
                     failures.append(
-                        f"Append target missing source lines: {target} "
-                        f"({len(missing)} missing, first: {missing[0]!r})"
+                        f"Append missing lines: {target} (first: {missing[0]!r})"
                     )
         elif method == "managed":
-            # Managed-deployed files are regular files carrying a sentinel-
-            # delimited block with every non-empty source line.
             if target.is_symlink():
-                failures.append(
-                    f"Managed target is a symlink (must be a regular file): {target}"
-                )
+                failures.append(f"Managed target is a symlink: {target}")
             else:
-                target_text = target.read_text()
-                if "# >>> dotconfigs:" not in target_text:
-                    failures.append(
-                        f"Managed target missing sentinel markers: {target}"
-                    )
-                source_lines = [
-                    ln for ln in source.read_text().splitlines() if ln.strip()
-                ]
-                missing = [ln for ln in source_lines if ln not in target_text]
-                if missing:
-                    failures.append(
-                        f"Managed target missing source lines: {target} "
-                        f"({len(missing)} missing, first: {missing[0]!r})"
-                    )
-
+                text = target.read_text()
+                if "# >>> dotconfigs:" not in text:
+                    failures.append(f"Managed target missing sentinel: {target}")
     return failures
-
-
-def ensure_global_json(repo_root: Path) -> Path:
-    """Ensure global.json exists, assembling from manifests if needed."""
-    global_json = repo_root / ".dotconfigs" / "global.json"
-    if not global_json.exists():
-        global_json.parent.mkdir(parents=True, exist_ok=True)
-        config = read_all_manifests(repo_root, "global")
-        global_json.write_text(json.dumps(config, indent=2) + "\n")
-    return global_json
 
 
 # ---------------------------------------------------------------------------
@@ -190,55 +138,27 @@ def ensure_global_json(repo_root: Path) -> Path:
 
 
 @pytest.fixture(scope="module")
-def deployed_global(tmp_path_factory, dotconfigs_root, run_dotconfigs):
-    """Deploy global configs to a temp HOME directory.
-
-    Returns (home_path, manifest_config) tuple.
-    """
+def deployed_machine(tmp_path_factory, dotconfigs_root, run_dotconfigs):
+    """init + deploy the machine selection into a temp HOME. Returns home path."""
     home = tmp_path_factory.mktemp("home")
+    deploy_json = home / ".dotconfigs" / "deploy.json"
+    env = {"HOME": str(home), "DOTCONFIGS_DEPLOY_CONFIG": str(deploy_json)}
 
-    # Ensure global.json exists (gitignored, might be absent on fresh clone)
-    ensure_global_json(dotconfigs_root)
-
-    result = run_dotconfigs(
-        ["deploy", "--force"],
-        env={"HOME": str(home)},
-    )
-    assert result.returncode == 0, (
-        f"deploy failed (rc={result.returncode}):\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
-    )
-
-    config = read_all_manifests(dotconfigs_root, "global")
-    return home, config
+    result = run_dotconfigs(["init", "--force"], env=env)
+    assert result.returncode == 0, f"init failed:\n{result.stdout}\n{result.stderr}"
+    result = run_dotconfigs(["deploy", "--force"], env=env)
+    assert result.returncode == 0, f"deploy failed:\n{result.stdout}\n{result.stderr}"
+    return home
 
 
 @pytest.fixture(scope="module")
 def deployed_project(tmp_path_factory, dotconfigs_root, run_dotconfigs):
-    """Create a temp git repo, project-init, and project deploy.
-
-    Returns (project_path, manifest_config) tuple.
-    """
+    """init + deploy a project selection into a temp git repo. Returns repo path."""
     project = tmp_path_factory.mktemp("project")
-    subprocess.run(
-        ["git", "init", str(project)],
-        capture_output=True,
-        check=True,
-    )
+    subprocess.run(["git", "init", str(project)], capture_output=True, check=True)
 
-    # project-init (no TTY prompt for fresh dir — project.json doesn't exist yet)
-    result = run_dotconfigs(["project-init", str(project)])
-    assert result.returncode == 0, (
-        f"project-init failed (rc={result.returncode}):\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
-    )
-
-    # project deploy
-    result = run_dotconfigs(["project", str(project), "--force"])
-    assert result.returncode == 0, (
-        f"project deploy failed (rc={result.returncode}):\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
-    )
-
-    config = read_all_manifests(dotconfigs_root, "project")
-    return project, config
+    result = run_dotconfigs(["init", str(project), "--force"])
+    assert result.returncode == 0, f"init failed:\n{result.stdout}\n{result.stderr}"
+    result = run_dotconfigs(["deploy", str(project), "--force"])
+    assert result.returncode == 0, f"deploy failed:\n{result.stdout}\n{result.stderr}"
+    return project

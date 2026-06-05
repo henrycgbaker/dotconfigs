@@ -77,9 +77,9 @@ def run_bash_function(
     args_str = " ".join(f'"{a}"' for a in (args or []))
     script = f"""
 set -e
-source "{dotconfigs_root}/lib/symlinks.sh"
-source "{dotconfigs_root}/lib/validation.sh"
-source "{dotconfigs_root}/lib/deploy.sh"
+source "{dotconfigs_root}/src/lib/symlinks.sh"
+source "{dotconfigs_root}/src/lib/validation.sh"
+source "{dotconfigs_root}/src/lib/deploy.sh"
 {function_name} {args_str}
 """
     return run_bash(script, cwd=dotconfigs_root, env=env)
@@ -94,7 +94,7 @@ source "{dotconfigs_root}/lib/deploy.sh"
 def dotconfigs_root() -> Path:
     """Real repo root (read-only)."""
     root = Path(__file__).resolve().parent.parent
-    assert (root / "dotconfigs").exists(), "Cannot find dotconfigs entry point"
+    assert (root / "src" / "dotconfigs").exists(), "Cannot find dotconfigs entry point"
     return root
 
 
@@ -161,7 +161,7 @@ def run_dotconfigs(dotconfigs_root: Path, tmp_path_factory):
         cwd: str | Path | None = None,
         env: dict[str, str] | None = None,
     ) -> BashResult:
-        cli = str(dotconfigs_root / "dotconfigs")
+        cli = str(dotconfigs_root / "src" / "dotconfigs")
         cmd_args = " ".join(f'"{a}"' for a in (args or []))
         merged_env = {"DOTCONFIGS_PROJECT_REGISTRY": str(default_registry)}
         if env:

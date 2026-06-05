@@ -23,14 +23,11 @@ def get_shell_modules(dotconfigs_root: Path) -> dict[str, Path]:
 
     manifest = json.loads(manifest_path.read_text())
     modules = {}
-
-    # Check global section
-    if "global" in manifest:
-        for mod_name, mod_config in manifest["global"].items():
-            source = dotconfigs_root / mod_config["source"]
+    for entries in manifest.values():
+        for name, e in entries.items():
+            source = dotconfigs_root / e["source"]
             if source.exists():
-                modules[mod_name] = source
-
+                modules[name] = source
     return modules
 
 
@@ -58,9 +55,9 @@ class TestShellFiles:
             )
 
             # Syntax check should pass
-            assert (
-                result.returncode == 0
-            ), f"Syntax error in {mod_name}: {result.stderr}"
+            assert result.returncode == 0, (
+                f"Syntax error in {mod_name}: {result.stderr}"
+            )
 
     def test_files_exist(self, shell_modules):
         """All shell files in manifest exist."""

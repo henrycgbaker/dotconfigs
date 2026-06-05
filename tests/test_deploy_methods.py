@@ -1,11 +1,10 @@
-"""End-to-end unit tests for every deploy method in lib/deploy.sh.
+"""End-to-end unit tests for every deploy method in src/lib/deploy.sh.
 
 One file that drives `deploy_module` (and `undeploy_module`) directly for each
-of the five methods, asserting the happy path, idempotency, and the property
+of the four methods, asserting the happy path, idempotency, and the property
 that makes each method distinct:
 
 - symlink : target is a live symlink into the source
-- copy    : standalone regular file, written atomically (no temp left)
 - append  : seed-once; source lines present, idempotent re-deploy
 - managed : sentinel block, updatable in place + reversible, user lines kept
 - merge   : deep-merge JSON, base wins, permission arrays unioned, never symlink
@@ -27,9 +26,9 @@ BEGIN = "# >>> dotconfigs:"
 END = "# <<< dotconfigs:"
 
 _LIBS = """
-source "{root}/lib/symlinks.sh"
-source "{root}/lib/validation.sh"
-source "{root}/lib/deploy.sh"
+source "{root}/src/lib/symlinks.sh"
+source "{root}/src/lib/validation.sh"
+source "{root}/src/lib/deploy.sh"
 """
 
 
@@ -41,7 +40,7 @@ set -e
 {_LIBS.format(root=root)}
 created=0; updated=0; unchanged=0; skipped=0; removed=0; errors=0; warnings=0
 _drc=0
-deploy_module "{source}" "{target}" "{method}" "" "{root}" "{dry}" "force" || _drc=$?
+deploy_module "{source}" "{target}" "{method}" "{root}" "{dry}" "force" || _drc=$?
 echo "C=$created U=$updated N=$unchanged S=$skipped E=$errors"
 """
     return run_bash(script)
@@ -53,7 +52,7 @@ set -e
 {_LIBS.format(root=root)}
 removed=0; skipped=0; unchanged=0
 _drc=0
-undeploy_module "{source}" "{target}" "{method}" "" "{root}" "{dry}" || _drc=$?
+undeploy_module "{source}" "{target}" "{method}" "{root}" "{dry}" || _drc=$?
 echo "R=$removed S=$skipped N=$unchanged"
 """
     return run_bash(script)
@@ -84,45 +83,6 @@ def test_symlink_idempotent(dotconfigs_root, tmp_path):
     second = _deploy(dotconfigs_root, source, target, "symlink")
     assert "C=1" in first.stdout
     assert "N=1" in second.stdout  # unchanged on re-deploy
-
-
-# ---------------------------------------------------------------------------
-# copy
-# ---------------------------------------------------------------------------
-
-
-def test_copy_standalone_regular_file(dotconfigs_root, tmp_path):
-    source = tmp_path / "src.conf"
-    source.write_text("KEY=value\n")
-    target = tmp_path / "dst.conf"
-
-    res = _deploy(dotconfigs_root, source, target, "copy")
-    assert res.returncode == 0, res.stderr
-    assert not target.is_symlink()
-    assert target.read_text() == "KEY=value\n"
-
-
-def test_copy_idempotent_then_updates(dotconfigs_root, tmp_path):
-    source = tmp_path / "src.conf"
-    source.write_text("KEY=value\n")
-    target = tmp_path / "dst.conf"
-
-    assert "C=1" in _deploy(dotconfigs_root, source, target, "copy").stdout
-    assert "N=1" in _deploy(dotconfigs_root, source, target, "copy").stdout
-    source.write_text("KEY=changed\n")
-    assert "U=1" in _deploy(dotconfigs_root, source, target, "copy").stdout
-    assert target.read_text() == "KEY=changed\n"
-
-
-def test_copy_is_atomic_no_temp_left(dotconfigs_root, tmp_path):
-    """copy writes via a sibling temp then renames; no .copy.* file should remain."""
-    source = tmp_path / "src.conf"
-    source.write_text("KEY=value\n")
-    target = tmp_path / "dst.conf"
-
-    res = _deploy(dotconfigs_root, source, target, "copy")
-    assert res.returncode == 0, res.stderr
-    assert not list(tmp_path.glob("*.copy.*"))
 
 
 # ---------------------------------------------------------------------------

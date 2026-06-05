@@ -623,8 +623,14 @@ cmd_status() {
 _audit_project_hooks() {
     [[ -f "$PROJECT_REGISTRY" ]] || return 0
 
+    # Expected hook filenames are the basenames of the git hooks' .git/hooks
+    # targets (e.g. check-facade-consumers.py keeps its extension, unlike its key).
     local expected
-    expected=$(jq -r '.hooks | keys[]' "$PLUGINS_DIR/git/manifest.json" 2>/dev/null)
+    expected=$(jq -r '
+        .hooks | to_entries[]
+        | (.value.target | if type == "array" then . else [.] end)[]
+        | select(startswith(".git/hooks/")) | sub(".*/"; "")
+    ' "$PLUGINS_DIR/git/manifest.json" 2>/dev/null)
     [[ -z "$expected" ]] && return 0
 
     printf "%b\n" "$(colour_cyan 'project git-hook audit')"

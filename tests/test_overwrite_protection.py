@@ -13,8 +13,8 @@ from tests.conftest import run_bash
 
 def _call(dotconfigs_root: Path, target: Path, content: str, force: str):
     script = (
-        f'source "{dotconfigs_root}/lib/init.sh"\n'
-        f"write_with_overwrite_protection \"{target}\" '{content}' \"{force}\"\n"
+        f'source "{dotconfigs_root}/src/lib/init.sh"\n'
+        f'write_with_overwrite_protection "{target}" \'{content}\' "{force}"\n'
     )
     return run_bash(script, cwd=dotconfigs_root)
 
