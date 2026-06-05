@@ -223,12 +223,12 @@ _synthesise_settings_source() {
     local plugins_dir="$1" deploy_json="$2" settings_src="$3"
     local hooks tmp
     hooks=$(synthesise_claude_hooks "$plugins_dir" "$deploy_json")
+    [[ -z "$hooks" ]] && hooks='{}'
     tmp=$(mktemp "${TMPDIR:-/tmp}/dotconfigs-settings.XXXXXX")
-    if [[ -z "$hooks" || "$hooks" == "{}" ]]; then
-        cp "$settings_src" "$tmp"
-    else
-        jq --argjson h "$hooks" '.hooks = $h' "$settings_src" > "$tmp"
-    fi
+    # Always set .hooks (even to {}) so the merge OVERWRITES any previously
+    # deployed wiring: deselecting every hook must clear the block, not leave a
+    # stale one behind (the merge keeps target keys the source omits).
+    jq --argjson h "$hooks" '.hooks = $h' "$settings_src" > "$tmp"
     printf '%s' "$tmp"
 }
 
@@ -376,6 +376,7 @@ _merge_to_tmp() {
         | .permissions.allow = ((($live.permissions.allow // []) + ($base.permissions.allow // [])) | unique)
         | .permissions.deny  = ((($live.permissions.deny  // []) + ($base.permissions.deny  // [])) | unique)
         | .permissions.ask   = ((($live.permissions.ask   // []) + ($base.permissions.ask   // [])) | unique)
+        | (if ($base | has("hooks")) then .hooks = $base.hooks else . end)
     ' "$target" "$source" > "$tmp" 2>/dev/null; then
         echo "$tmp"
         return 0
@@ -476,13 +477,14 @@ merge_json_settings() {
     local source="$1"
     local target="$2"
 
-    # First deploy, or a stale symlink target (nothing local to preserve):
-    # place the base as a fresh regular file.
+    # First deploy, or a stale symlink target (nothing local to preserve): start
+    # from an empty object and fall through to the merge, so the first deploy
+    # yields the same canonical (jq-normalised, permission-unioned) form a
+    # re-deploy would -- deploy is then idempotent from run one.
     if [[ ! -e "$target" || -L "$target" ]]; then
         rm -f "$target"
         mkdir -p "$(dirname "$target")"
-        cp "$source" "$target"
-        return 0
+        printf '{}\n' > "$target"
     fi
 
     local tmp
