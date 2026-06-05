@@ -7,8 +7,8 @@
 #
 # What it produces under claude-plugin/:
 #   .claude-plugin/plugin.json  — generated manifest (name/version/desc/author)
-#   hooks/hooks.json            — generated from plugins/claude/settings.json .hooks,
-#                                 with commands repointed at ${CLAUDE_PLUGIN_ROOT}
+#   hooks/hooks.json            — synthesised from the wired Claude hooks in the
+#                                 manifest, with commands repointed at ${CLAUDE_PLUGIN_ROOT}
 #   hooks/*.sh                  — relative symlinks back to plugins/claude/hooks/*.sh
 #   skills/                     — relative symlink to ../plugins/claude/skills
 #   output-styles/              — relative symlink to ../plugins/claude/output-styles
@@ -72,20 +72,27 @@ jq -n \
     }' > "$OUT/.claude-plugin/plugin.json"
 
 # ---------------------------------------------------------------------------
-# hooks/hooks.json — take .hooks from settings.json verbatim (same event ->
-# matcher -> hooks nesting as a plugin hooks.json wants) and repoint every
-# command from the dotconfigs-deploy path (~/.claude/hooks/X.sh) to the
-# installed-plugin path. Plugin hooks run in shell form, so wrap
+# hooks/hooks.json — synthesise the event -> matcher -> hooks nesting from the
+# selected, wired Claude hooks (same source the deploy engine uses), then
+# repoint every command from the dotconfigs-deploy path (~/.claude/hooks/X.sh)
+# to the installed-plugin path. Plugin hooks run in shell form, so wrap
 # ${CLAUDE_PLUGIN_ROOT} in double quotes per the hooks reference.
 # ---------------------------------------------------------------------------
-jq '
-    { hooks: .hooks }
+# shellcheck source=../lib/deploy.sh
+source "$REPO_ROOT/lib/deploy.sh"
+# Ship the default-on hook set: a selection mirroring each hook's `default`.
+sel_tmp="$(mktemp "${TMPDIR:-/tmp}/dots-plugin-sel.XXXXXX")"
+jq -n --slurpfile m "$SRC/manifest.json" \
+    '{ claude: ($m[0] | map_values(map_values(.default // false))) }' > "$sel_tmp"
+synthesise_claude_hooks "$REPO_ROOT/plugins" "$sel_tmp" | jq '
+    { hooks: . }
     | (.hooks |= walk(
         if type == "object" and has("command") then
             .command |= sub("^~/\\.claude/hooks/"; "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/")
         else . end
       ))
-' "$SETTINGS_SRC" > "$OUT/hooks/hooks.json"
+' > "$OUT/hooks/hooks.json"
+rm -f "$sel_tmp"
 
 # ---------------------------------------------------------------------------
 # settings.json — everything EXCEPT the hooks block (those move to hooks.json).

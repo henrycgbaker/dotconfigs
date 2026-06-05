@@ -1,9 +1,9 @@
 #!/bin/bash
-# Generate ROSTER.md from plugin manifests and hook METADATA
+# Generate ROSTER.md from the plugin catalogues (manifest.json).
 #
-# SSOT chain: manifests → hook files → this script → ROSTER.md
-# - Discovers hooks/commands via manifest.json (not filesystem find)
-# - Reads descriptions and config from hook METADATA blocks (# CONFIG: lines)
+# SSOT chain: plugins/*/manifest.json → this script → docs/ROSTER.md
+# - Hooks: name + description + event/matcher (from each hook's `wiring`).
+# - Skills: name (from manifest) + description (from each SKILL.md frontmatter).
 
 set -euo pipefail
 
@@ -11,36 +11,30 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_FILE="$REPO_ROOT/docs/ROSTER.md"
 
-# Ensure jq is available (manifests are JSON)
 if ! command -v jq >/dev/null 2>&1; then
     echo "ERROR: jq is required to parse manifests" >&2
     exit 1
 fi
 
-# Ensure output directory exists
 mkdir -p "$(dirname "$OUTPUT_FILE")"
 
-# Start building roster content
 cat > "$OUTPUT_FILE" << 'HEADER'
 # dotconfigs Hook & Skill Roster
 
 **Auto-generated reference** — Do not edit manually. Run `scripts/generate-roster.sh` to regenerate.
 
-This document lists all available hooks, skills, and configuration options in dotconfigs.
+This document lists the hooks and skills catalogued in dotconfigs. Toggle any item on or
+off in your `deploy.json` (`~/.dotconfigs/deploy.json` for the machine, or
+`<repo>/.dotconfigs/deploy.json` for a project).
 
 HEADER
 
-# ============================================================================
-# Hook Sections — discovered via each plugin's manifest.json
-# ============================================================================
-
-# Append a "## <heading>" table of a plugin's hooks. NAME/DESCRIPTION/CONFIG
-# are read from each hook file's METADATA block (missing fields tolerated).
+# Append a "## <heading>" table of a plugin's hooks, sourced from the `hooks`
+# category of its manifest.json (name, description, and event/matcher wiring).
 # Args: plugin, heading, intro
 emit_hook_table() {
     local plugin="$1" heading="$2" intro="$3"
     local manifest="$REPO_ROOT/plugins/$plugin/manifest.json"
-    local hook_name hook_file name desc config
 
     {
         echo ""
@@ -48,71 +42,71 @@ emit_hook_table() {
         echo ""
         echo "$intro"
         echo ""
-        echo "| Hook | Description | Configuration Keys |"
-        echo "|------|-------------|-------------------|"
+        echo "| Hook | Description | Event / Matcher |"
+        echo "|------|-------------|-----------------|"
     } >> "$OUTPUT_FILE"
 
-    while IFS= read -r hook_name; do
-        hook_file="$REPO_ROOT/plugins/$plugin/hooks/$hook_name"
-        [[ -f "$hook_file" ]] || continue
-        name=$(grep "^# NAME:" "$hook_file" | head -1 | sed 's/^# NAME: //' || true)
-        desc=$(grep "^# DESCRIPTION:" "$hook_file" | head -1 | sed 's/^# DESCRIPTION: //' || true)
-        config=$(grep "^# CONFIG:" "$hook_file" 2>/dev/null | sed 's/^# CONFIG: //' | cut -d= -f1 | paste -sd',' - | sed 's/,/, /g' || true)
-        if [[ -n "$name" ]]; then
-            echo "| $name | $desc | $config |" >> "$OUTPUT_FILE"
-        fi
-    done < <(jq -r '.global.hooks.include[]' "$manifest" | sort)
+    jq -r '
+        (.hooks // {}) | to_entries[]
+        | .key as $name | .value as $e
+        | ($e.description // "") as $desc
+        | ( ($e.wiring // [] | if type == "array" then . else [.] end)
+            | map(.event + (if .matcher then " (" + .matcher + ")" else "" end))
+            | join(", ") ) as $wiring
+        | "| \($name) | \($desc) | \($wiring) |"
+    ' "$manifest" >> "$OUTPUT_FILE"
 }
 
 emit_hook_table git "Git Hooks" "Git hooks run during git operations to enforce quality standards and protect workflows."
 emit_hook_table claude "Claude Hooks" "Claude hooks run during Claude Code operations for code quality and safety."
 
-# Reused by the Skills section below.
 CLAUDE_MANIFEST="$REPO_ROOT/plugins/claude/manifest.json"
 
 # ============================================================================
-# Commands Section — discovered via plugins/claude/manifest.json
+# Skills — names from the manifest, descriptions from each SKILL.md frontmatter
 # ============================================================================
 
-echo "" >> "$OUTPUT_FILE"
-echo "## Skills" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "Custom Claude Code skills (\`/name\`) for common workflows." >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "| Command | Description |" >> "$OUTPUT_FILE"
-echo "|---------|-------------|" >> "$OUTPUT_FILE"
+{
+    echo ""
+    echo "## Skills"
+    echo ""
+    echo "Custom Claude Code skills (\`/name\`) for common workflows."
+    echo ""
+    echo "| Command | Description |"
+    echo "|---------|-------------|"
+} >> "$OUTPUT_FILE"
 
 while IFS= read -r skill_name; do
     skill_file="$REPO_ROOT/plugins/claude/skills/$skill_name/SKILL.md"
     if [[ -f "$skill_file" ]]; then
-        # Extract description from YAML frontmatter
         desc=$(awk '/^---$/ {p=1; next} p && /^---$/ {p=0} p && /^description:/ {sub(/^description: */, ""); print; exit}' "$skill_file")
-
         if [[ -n "$desc" ]]; then
             echo "| /$skill_name | $desc |" >> "$OUTPUT_FILE"
         fi
     fi
-done < <(jq -r '.global.skills.include[]' "$CLAUDE_MANIFEST" | sort)
+done < <(jq -r '(.skills // {}) | keys[]' "$CLAUDE_MANIFEST")
 
 # ============================================================================
-# Customisation Section
+# Customisation
 # ============================================================================
 
-echo "" >> "$OUTPUT_FILE"
-echo "## Customisation" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "Hooks are opinionated by default. To add per-project behaviour, use \`.local\` extension scripts:" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "- \`.git/hooks/pre-commit.local\` — runs at end of pre-commit" >> "$OUTPUT_FILE"
-echo "- \`.git/hooks/pre-push.local\` — runs at end of pre-push" >> "$OUTPUT_FILE"
-echo "- \`.git/hooks/commit-msg.local\` — runs at end of commit-msg" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "To skip a hook entirely, exclude it in \`.dotconfigs/project.json\` before deploying." >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-# Footer
-echo "---" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "*Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")*" >> "$OUTPUT_FILE"
+{
+    echo ""
+    echo "## Customisation"
+    echo ""
+    echo "Hooks are opinionated and on by default. To disable one, set it \`false\` in your"
+    echo "\`deploy.json\` and re-run \`dotconfigs deploy\` — the hook is then neither symlinked"
+    echo "nor wired into settings.json."
+    echo ""
+    echo "For per-project additions without editing the shared hook, use \`.local\` scripts:"
+    echo ""
+    echo "- \`.git/hooks/pre-commit.local\` — runs at end of pre-commit"
+    echo "- \`.git/hooks/pre-push.local\` — runs at end of pre-push"
+    echo "- \`.git/hooks/commit-msg.local\` — runs at end of commit-msg"
+    echo ""
+    echo "---"
+    echo ""
+    echo "*Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")*"
+} >> "$OUTPUT_FILE"
 
 echo "✓ Generated: $OUTPUT_FILE"
