@@ -9,7 +9,7 @@ How dotconfigs is wired: a two-tier model (catalogue → per-instance toggle boa
 dotconfigs separates **what exists** from **what's deployed here**:
 
 - **Tier 1 - `plugins/*/manifest.json` (the catalogue).** Each plugin's manifest lists every item it offers, fully specifying how and where each deploys (`source`, `method`, `target`, optional `wiring`) and its `default` on/off state. Version-controlled, identical on every machine. See [Manifest format](manifest.md).
-- **Tier 2 - `deploy.json` (the toggle board).** A per-instance file *outside* the repo, mirroring the catalogue as a `plugin → category → item → bool` map, seeded from each item's `default`. **This is the single place to say what's deployed on this instance.** Flip an item `true`/`false` and re-run `deploy`. Machine selection lives at `~/.dotconfigs/deploy.json`; per-project at `<repo>/.dotconfigs/deploy.json`.
+- **Tier 2 - `deploy.json` (the toggle board).** A per-instance file *outside* the repo, mirroring the catalogue as a `plugin → category → item → bool` map, seeded from each item's `default`. **This is the single place to say what's deployed on this instance.** Flip an item `true`/`false` and re-run `deploy`. Machine selection lives at `~/.dotconfigs/deploy.json`; per-project at `<repo>/.dotconfigs/deploy.json`. Per-instance settings that aren't toggles - author identity, the CLI bin dir - live alongside it in `~/.dotconfigs/.env` (seeded from `.env.example`, sourced at startup).
 
 Everything else derives from these:
 

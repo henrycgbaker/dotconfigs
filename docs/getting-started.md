@@ -29,6 +29,15 @@ dotconfigs deploy             # Deploy the selection
 
 `init` writes a **selection** (the toggle board): every catalogued item with a machine target, listed with its default on/off value. `deploy` then symlinks/merges each enabled item to its target (`~/.claude/`, `~/.gitconfig`, `~/.config/git/ignore`, `~/.dotconfigs/...`). For git it also reconciles `init.templateDir`, so **every git repo you create or clone from now on auto-installs the git hooks** into its own `.git/hooks/`. For Claude the `~/.claude/settings.json` `hooks` block is synthesised from the hooks you have enabled - no manual wiring. (Claude hooks fire machine-wide; git hooks are inherently per-repo - see [Architecture](architecture.md#hook-activation-claude-vs-git).)
 
+## Per-machine settings (`.env`)
+
+A machine `init` also seeds `~/.dotconfigs/.env` from the repo's `.env.example` (only if one doesn't exist yet). It holds the few values that vary per person/machine and is sourced by the engine at startup:
+
+- `DOTCONFIGS_AUTHOR_NAME` / `DOTCONFIGS_AUTHOR_EMAIL` - baked into the `settings.json` attribution placeholders. Resolution is `git config --includes user.{name,email}` first, then these, then a built-in default - so if your git identity is set (directly or via an included config) you can leave them blank.
+- `DOTCONFIGS_BIN_DIR` - where the `dotconfigs`/`dots` symlinks go (default: `~/.local/bin` if present, else `/usr/local/bin`).
+
+It lives outside the repo, so it's never committed. Paths the host tools dictate (`~/.claude`, `~/.gitconfig`, `~/.config/git`) are deliberately **not** configurable here. Edit it, then re-run `deploy`.
+
 ## Toggle what deploys
 
 `deploy.json` is the single place to control what's on for this instance. Open `~/.dotconfigs/deploy.json`, flip any item to `false`, and re-run `deploy` - the item's artefact is torn down in the same pass (its symlink removed, and for a Claude hook, its `settings.json` wiring too). Flip it back to `true` and re-`deploy` to restore it.
