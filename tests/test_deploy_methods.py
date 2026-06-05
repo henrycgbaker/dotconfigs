@@ -32,15 +32,26 @@ source "{root}/src/lib/deploy.sh"
 """
 
 
-def _deploy(root: Path, source: Path, target: Path, method: str, dry: str = "false"):
+def _deploy(
+    root: Path,
+    source: Path,
+    target: Path,
+    method: str,
+    dry: str = "false",
+    dc_root: Path | None = None,
+):
     # `|| _drc=$?` keeps a non-zero no-op return (e.g. merge's idempotent path)
-    # from aborting under set -e before the counters are echoed.
+    # from aborting under set -e before the counters are echoed. dc_root is the
+    # ownership root passed to deploy_module (defaults to root); symlink tests
+    # pass source.parent so the deployed link resolves as dotconfigs-owned, the
+    # way a real source under the repo root does.
+    dc = dc_root if dc_root is not None else root
     script = f"""
 set -e
 {_LIBS.format(root=root)}
 created=0; updated=0; unchanged=0; skipped=0; removed=0; errors=0; warnings=0
 _drc=0
-deploy_module "{source}" "{target}" "{method}" "{root}" "{dry}" "force" || _drc=$?
+deploy_module "{source}" "{target}" "{method}" "{dc}" "{dry}" "force" || _drc=$?
 echo "C=$created U=$updated N=$unchanged S=$skipped E=$errors"
 """
     return run_bash(script)
@@ -79,10 +90,34 @@ def test_symlink_idempotent(dotconfigs_root, tmp_path):
     source.write_text("echo hi\n")
     target = tmp_path / "dst.sh"
 
-    first = _deploy(dotconfigs_root, source, target, "symlink")
-    second = _deploy(dotconfigs_root, source, target, "symlink")
+    first = _deploy(dotconfigs_root, source, target, "symlink", dc_root=source.parent)
+    second = _deploy(dotconfigs_root, source, target, "symlink", dc_root=source.parent)
     assert "C=1" in first.stdout
     assert "N=1" in second.stdout  # unchanged on re-deploy
+
+
+def test_symlink_preserves_foreign_symlink_at_target(dotconfigs_root, tmp_path):
+    """A foreign symlink at the target (pointing outside the root) is NOT treated
+    as dotconfigs-owned, so it is preserved rather than silently overwritten in
+    non-interactive mode. Guards the backup_and_link ownership-root fix."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    src = root / "src.sh"
+    src.write_text("echo hi\n")
+    foreign = tmp_path / "elsewhere.sh"
+    foreign.write_text("# foreign\n")
+    dest = tmp_path / "dest.sh"
+    dest.symlink_to(foreign)
+
+    res = run_bash(
+        f'source "{dotconfigs_root}/src/lib/symlinks.sh"\n'
+        f'backup_and_link "{src}" "{dest}" "dest.sh" "false" "{root}"\n'
+    )
+    assert dest.is_symlink()
+    assert os.path.realpath(dest) == os.path.realpath(foreign), (
+        "foreign symlink preserved"
+    )
+    assert "Skipped" in res.stdout
 
 
 # ---------------------------------------------------------------------------

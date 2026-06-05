@@ -34,6 +34,15 @@ _abs_source() {
     esac
 }
 
+# Resolve a manifest target to its final absolute path: expand a leading ~, then
+# prefix with project_root when the target is project-scoped (relative). Machine
+# targets (already ~/absolute) pass through unprefixed. Args: target, project_root
+resolve_target() {
+    local t; t=$(expand_tilde "$1")
+    [[ -n "$2" && "$t" != /* ]] && t="$2/$t"
+    printf '%s' "$t"
+}
+
 # Idempotency check for the append method: every non-blank line in source must
 # already appear (exact match) somewhere in target. `grep -qFf` is the obvious
 # tool here but it has "any match" semantics and treats blank lines as wildcards,
@@ -198,6 +207,14 @@ resolve_plan() {
 # `wiring` (one object or an array of them); entries are grouped by event then
 # matcher, exactly the shape ~/.claude/settings.json expects. The command is the
 # hook's own machine target. Echoes the hooks object ({} if none).
+# True if this item's deployed source is synthesised at deploy time: the Claude
+# settings.json, whose `hooks` block we generate from the selected hooks. Deploy
+# injects that block; undeploy strips it — both gate on this one predicate so the
+# two sides can never drift. Args: label (plugin/category/name)
+_is_synthesised_settings() {
+    [[ "$1" == "claude/config/settings" ]]
+}
+
 # Args: plugins_dir, deploy_json
 synthesise_claude_hooks() {
     local plugins_dir="$1" deploy_json="$2"
@@ -327,8 +344,7 @@ _sweep_stale_symlinks() {
     rows=$(
         while IFS=$'\t' read -r enabled source target method label; do
             [[ "$method" == "symlink" ]] || continue
-            t=$(expand_tilde "$target")
-            [[ -n "$project_root" && "$t" != /* ]] && t="$project_root/$t"
+            t=$(resolve_target "$target" "$project_root")
             printf '%s\t%s\n' "$(dirname "$t")" "$(basename "$t")"
         done <<< "$plan"
     )
@@ -382,7 +398,7 @@ link_one() {
     fi
 
     # Real run: act, then count by the prior state.
-    backup_and_link "$src" "$tgt" "$name" "$mode"
+    backup_and_link "$src" "$tgt" "$name" "$mode" "$root"
     local rc=$?
     if [[ $rc -eq 0 ]]; then
         if [[ "$state" == "not-deployed" ]]; then
@@ -968,14 +984,11 @@ undeploy_from_json() {
 
     while IFS=$'\t' read -r enabled source target method label; do
         [[ -z "$source" ]] && continue
-        rtarget="$target"
-        if [[ "$scope" == "project" && -n "$project_root" ]]; then
-            rtarget="$project_root/$target"
-        fi
+        rtarget=$(resolve_target "$target" "$project_root")
         # The Claude settings.json carries a synthesised `hooks` block; strip just
         # that on undeploy (keep the user's other settings) rather than skipping it
         # as an unreversible merge, which would leave hooks wired to removed files.
-        if [[ "$label" == "claude/config/settings" ]]; then
+        if _is_synthesised_settings "$label"; then
             _undeploy_synthesised_hooks "$(expand_tilde "$rtarget")" "$dry_run"
             continue
         fi
@@ -1005,10 +1018,7 @@ _refcheck_merge_targets() {
     local enabled source target method label rc_target
     while IFS=$'\t' read -r enabled source target method label; do
         [[ "$enabled" == "true" && "$method" == "merge" ]] || continue
-        if [[ -n "$project_root" ]]; then
-            target="$project_root/$target"
-        fi
-        rc_target=$(expand_tilde "$target")
+        rc_target=$(resolve_target "$target" "$project_root")
         refcheck_settings_json "$rc_target" "$(dirname "$rc_target")" || true
     done <<< "$plan"
 }
@@ -1059,12 +1069,9 @@ deploy_from_json() {
     # so toggling an item off in deploy.json removes its artefact next deploy.
     while IFS=$'\t' read -r enabled source target method label; do
         [[ -z "$source" ]] && continue
-        rtarget="$target"
-        if [[ "$scope" == "project" && -n "$project_root" ]]; then
-            rtarget="$project_root/$target"
-        fi
+        rtarget=$(resolve_target "$target" "$project_root")
         if [[ "$enabled" == "true" ]]; then
-            if [[ "$label" == "claude/config/settings" ]]; then
+            if _is_synthesised_settings "$label"; then
                 # The Claude settings fragment carries a hooks block synthesised
                 # from the selected, wired hooks (no hand-maintained wiring).
                 local _ssrc

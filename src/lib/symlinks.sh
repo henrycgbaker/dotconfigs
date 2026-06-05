@@ -73,14 +73,8 @@ check_file_state() {
         return 0
     fi
 
-    # Case 4: Target is a symlink but NOT owned by dotconfigs
-    if [[ -L "$target_path" ]]; then
-        echo "drifted-foreign"
-        return 0
-    fi
-
-    # Case 5: Target is a regular file (not a symlink)
-    if [[ -f "$target_path" ]]; then
+    # Case 4: Target is a foreign symlink, or a regular file (neither is ours)
+    if [[ -L "$target_path" || -f "$target_path" ]]; then
         echo "drifted-foreign"
         return 0
     fi
@@ -91,20 +85,13 @@ check_file_state() {
 }
 
 # Create a symlink with conflict handling
-# Args: src, dest, name, interactive_mode (true/false/force)
+# Args: src, dest, name, interactive_mode (true/false/force), dotconfigs_root
 backup_and_link() {
     local src="$1"
     local dest="$2"
     local name="$3"
     local interactive_mode="$4"
-    local dotconfigs_root
-
-    # Find dotconfigs root by walking up from src until we find the entry point
-    dotconfigs_root="$(dirname "$src")"
-    while [[ "$dotconfigs_root" != "/" ]]; do
-        [[ -f "$dotconfigs_root/dotconfigs" ]] && break
-        dotconfigs_root="$(dirname "$dotconfigs_root")"
-    done
+    local dotconfigs_root="$5"
 
     # Compute relative source path for display
     local rel_src="${src#$dotconfigs_root/}"

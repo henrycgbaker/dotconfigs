@@ -37,36 +37,3 @@ list_available_plugins() {
     done
 }
 
-# Find available Claude Code hooks in hooks/ directory
-# Args: plugin_dir
-# Returns: List of hook filenames (one per line)
-discover_hooks() {
-    local plugin_dir="$1"
-    local hooks_dir="$plugin_dir/hooks"
-
-    if [[ ! -d "$hooks_dir" ]]; then
-        return 0
-    fi
-
-    find "$hooks_dir" -type f -name "*.py" -o -name "*.sh" | while read -r hook_path; do
-        basename "$hook_path"
-    done | sort
-}
-
-# Find available skills in commands/ directory
-# Args: plugin_dir
-# Returns: List of skill names (one per line). Each skill is a
-#          skills/<name>/SKILL.md directory; the directory name is the name.
-discover_skills() {
-    local plugin_dir="$1"
-    local skills_dir="$plugin_dir/skills"
-
-    if [[ ! -d "$skills_dir" ]]; then
-        return 0
-    fi
-
-    find "$skills_dir" -mindepth 1 -maxdepth 1 -type d | while read -r skill_path; do
-        basename "$skill_path"
-    done | sort
-}
-

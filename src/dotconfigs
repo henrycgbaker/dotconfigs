@@ -191,6 +191,18 @@ cmd_setup() {
     echo ""
 }
 
+# Capture a single positional path arg into the named variable; error and exit
+# on a second positional. Shared by the init/deploy/undeploy/cleanup parse loops
+# (their flag sets differ, but the path arm is identical). Args: varname, arg
+_capture_path() {
+    if [[ -z "${!1}" ]]; then
+        eval "$1=\$2"
+    else
+        echo "Error: Multiple paths specified" >&2
+        exit 1
+    fi
+}
+
 # Seed a selection (toggle board). No path: the machine selection at
 # ~/.dotconfigs/deploy.json. With a path: a per-project selection at
 # <repo>/.dotconfigs/deploy.json (requires a git repo).
@@ -202,12 +214,7 @@ cmd_init() {
         case "$1" in
             --force) force="true"; shift ;;
             -*) echo "Error: Unknown option '$1'" >&2; exit 1 ;;
-            *)
-                if [[ -z "$path" ]]; then path="$1"; else
-                    echo "Error: Multiple paths specified" >&2; exit 1
-                fi
-                shift
-                ;;
+            *) _capture_path path "$1"; shift ;;
         esac
     done
 
@@ -220,7 +227,7 @@ cmd_init() {
         return 0
     fi
 
-    path=$(expand_path "$path")
+    path=$(expand_tilde "$path")
     if [[ "$(cd "$path" 2>/dev/null && pwd -P)" == "$REPO_ROOT" ]]; then
         echo "Error: cannot use the dotconfigs repo itself as a project target" >&2
         echo "Run from a project directory, or pass a path." >&2
@@ -365,12 +372,7 @@ cmd_undeploy() {
                 echo "Usage: dotconfigs undeploy [path] [--apply] [--dry-run]" >&2
                 exit 1
                 ;;
-            *)
-                if [[ -z "$path" ]]; then path="$1"; else
-                    echo "Error: Multiple paths specified" >&2; exit 1
-                fi
-                shift
-                ;;
+            *) _capture_path path "$1"; shift ;;
         esac
     done
 
@@ -384,7 +386,7 @@ cmd_undeploy() {
         # empty template dir), so unconditionally clear our value here.
         _reconcile_git_templatedir "$dry_run" off
     else
-        path=$(expand_path "$path")
+        path=$(expand_tilde "$path")
         undeploy_from_json "$PLUGINS_DIR" "$path/.dotconfigs/deploy.json" "project" "$REPO_ROOT" "$dry_run" "$path"
     fi
 
@@ -406,12 +408,7 @@ cmd_cleanup() {
                 echo "Usage: dotconfigs cleanup [path] [--apply] [--dry-run]" >&2
                 exit 1
                 ;;
-            *)
-                if [[ -z "$path" ]]; then path="$1"; else
-                    echo "Error: Multiple paths specified" >&2; exit 1
-                fi
-                shift
-                ;;
+            *) _capture_path path "$1"; shift ;;
         esac
     done
 
@@ -424,7 +421,7 @@ cmd_cleanup() {
     if [[ -z "$path" ]]; then
         scope="machine"; deploy_json="$DEPLOY_CONFIG"
     else
-        path=$(expand_path "$path")
+        path=$(expand_tilde "$path")
         scope="project"; deploy_json="$path/.dotconfigs/deploy.json"; project_root="$path"
     fi
 
@@ -462,12 +459,7 @@ cmd_deploy() {
                 echo "Error: Unknown option '$1'" >&2
                 exit 1
                 ;;
-            *)
-                if [[ -z "$path" ]]; then path="$1"; else
-                    echo "Error: Multiple paths specified" >&2; exit 1
-                fi
-                shift
-                ;;
+            *) _capture_path path "$1"; shift ;;
         esac
     done
 
@@ -489,7 +481,7 @@ cmd_deploy() {
     fi
 
     # Project deploy
-    path=$(expand_path "$path")
+    path=$(expand_tilde "$path")
     if ! validate_git_repo "$path"; then
         exit 1
     fi
@@ -794,7 +786,7 @@ cmd_validate() {
 # absolute path so the status audit can resolve it from any cwd. Args: path
 _register_project() {
     local path="$1"
-    # Absolutise: expand_path only handles ~, so a relative "." would be stored
+    # Absolutise: expand_tilde only handles ~, so a relative "." would be stored
     # verbatim and break the audit. cd into the repo and read its real path.
     path=$(cd "$path" 2>/dev/null && pwd -P) || return 0
     mkdir -p "$(dirname "$PROJECT_REGISTRY")"
