@@ -2,19 +2,19 @@
 
 My personal registry for dev configurations - **deployable across machines** and **configurable globally or per-project**.
 
-It's a small, plugin-based config manager: plugin **manifests** declare what's available, and `dotconfigs` deploys it (mostly symlinks) to the right places on any machine. `dots` is an alias for `dotconfigs`.
+It's a small, plugin-based config manager: plugin **manifests** are the catalogue of everything available, a per-instance **deploy.json** is the toggle board for what's on here, and `dotconfigs` links each selected item to its place (mostly symlinks) on any machine. `dots` is an alias for `dotconfigs`.
 
 ## 60-second start
 
 ```bash
 git clone git@github.com:henrycgbaker/dotconfigs.git ~/Repositories/dotconfigs
 cd ~/Repositories/dotconfigs
-./dotconfigs setup          # put dotconfigs + dots on PATH
-dotconfigs global-init      # scaffold .dotconfigs/global.json from the manifests
-dotconfigs global-deploy    # deploy everything (preview first with --dry-run)
+./src/dotconfigs setup      # put dotconfigs + dots on PATH
+dotconfigs init             # seed ~/.dotconfigs/deploy.json from the catalogue defaults
+dotconfigs deploy           # deploy the selection (preview first with --dry-run)
 ```
 
-Per-project hooks/skills, from inside a repo: `dotconfigs project-init . && dotconfigs project-deploy .`
+Per-project hooks/skills, from inside a repo: `dotconfigs init . && dotconfigs deploy .`
 
 **Requirements:** bash 3.2+ (macOS/Linux), [jq](https://jqlang.github.io/jq/). Full walkthrough → **[Getting started](docs/getting-started.md)**.
 
@@ -26,7 +26,7 @@ Per-project hooks/skills, from inside a repo: `dotconfigs project-init . && dotc
 - [Commands](docs/commands.md) - every command, its flags, and examples.
 - [Plugins](docs/plugins.md) - what each plugin (claude, git, shell) deploys and where.
 - [Manifest format](docs/manifest.md) - the manifest schema and the four deploy methods.
-- [ROSTER](docs/ROSTER.md) - generated index of all hooks, skills, and their config keys.
+- [ROSTER](docs/ROSTER.md) - generated index of all hooks, skills, and their event wiring.
 
 **Explanation** 
 - [Architecture](docs/architecture.md) - the single-source-of-truth dataflow and symlink ownership model.
@@ -37,7 +37,7 @@ Per-project hooks/skills, from inside a repo: `dotconfigs project-init . && dotc
 
 | Plugin | Deploys |
 |--------|---------|
-| **claude** | Claude Code hooks (per-pattern safety guards + lifecycle hooks), skills (`/commit`, `/squash-merge`, `/preflight-merge`, `/check-resolution`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback`), `settings.json`, the `concise-execution` output style, global `CLAUDE.md`, and `claude-hooks.conf` |
+| **claude** | Claude Code hooks (per-pattern safety guards + lifecycle hooks), skills (`/commit`, `/squash-merge`, `/preflight-merge`, `/check-resolution`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback`, `/diagnose-missing-work`), `settings.json` (its hooks block synthesised from the selected hooks), the `concise-execution` output style, and the global `CLAUDE.md` |
 | **git** | `~/.gitconfig` (incl. `init.templateDir` so new repos auto-seed hooks), global excludes (`~/.config/git/ignore`), 8 branch-aware hooks (pre-commit, pre-push, commit-msg, …) installed per-repo into `.git/hooks/`, and per-project `.git/info/exclude` + `.gitignore` |
 | **shell** | zsh `init.zsh` + `aliases.zsh` (source them from `.zshrc`) |
 
@@ -56,4 +56,4 @@ It ships the same hooks, skills, output style, and (hook-free) `settings.json`, 
 
 ## How it works (in one breath)
 
-Plugin **manifests** (`plugins/*/manifest.json`) are the single source of truth. `global-init`/`project-init` assemble them into `.dotconfigs/global.json` / `.dotconfigs/project.json` (your editable include/exclude lists), and `global-deploy`/`project-deploy` link each module to its target. Deploy only touches files it owns and never clobbers foreign files without asking. Full picture → [Architecture](docs/architecture.md).
+Plugin **manifests** (`plugins/*/manifest.json`) are the single source of truth: a nested `category → item` catalogue. `init` seeds a **deploy.json** toggle board from each item's `default` — the machine one at `~/.dotconfigs/deploy.json`, a project's at `<repo>/.dotconfigs/deploy.json` — and `deploy` links each enabled item to its target (and tears down anything you've switched off). Deploy only touches files it owns and never clobbers foreign files without asking. Full picture → [Architecture](docs/architecture.md).

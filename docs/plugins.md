@@ -2,87 +2,88 @@
 
 [← docs](../README.md#documentation) · Reference
 
-Each plugin is a self-contained directory under `plugins/` with a `manifest.json` declaring its modules. Generated index of every hook/skill and its config keys: [ROSTER.md](ROSTER.md).
+Each plugin is a self-contained directory under `plugins/` with a `manifest.json` cataloguing its items. Generated index of every hook/skill with its Event/Matcher wiring: [ROSTER.md](ROSTER.md).
 
 ## claude
 
-Manages Claude Code configuration.
+Manages Claude Code configuration. Catalogued under three categories - `hooks`, `skills`, `config`.
 
-| Module | Source | Target | Method |
-|--------|--------|--------|--------|
-| hooks | `plugins/claude/hooks/` | `~/.claude/hooks/` (global), `.claude/hooks/` (project) | symlink |
-| skills | `plugins/claude/skills/` | `~/.claude/skills/` (global), `.claude/skills/` (project) | symlink |
-| settings | `plugins/claude/settings.json` | `~/.claude/settings.json` | [merge](deploy-methods.md#the-settingsjson-case-why-merge-exists) |
-| output-styles | `plugins/claude/output-styles/` | `~/.claude/output-styles/` | symlink |
-| CLAUDE.md | `plugins/claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | symlink |
-| hooks-conf | `plugins/claude/templates/claude-hooks.conf` | `~/.claude/claude-hooks.conf` | copy |
+| Category | Items | Target(s) | Method |
+|----------|-------|-----------|--------|
+| hooks | `_hook-common` + 14 event hooks | `~/.claude/hooks/<name>.sh` | symlink |
+| skills | `commit`, `squash-merge`, … (9) | `~/.claude/skills/<name>` + `.claude/skills/<name>` | symlink |
+| config | `settings` | `~/.claude/settings.json` | [merge](deploy-methods.md#the-settingsjson-case-why-merge-exists) |
+| config | `claude-md` | `~/.claude/CLAUDE.md` | symlink |
+| config | `output-style` | `~/.claude/output-styles/concise-execution.md` | symlink |
 
-- **Hooks:** per-pattern Bash guards (`block-rm-rf-root`, `block-force-push`, `block-hard-reset`, `block-git-clean`, `block-drop-table`, `block-chmod-777`), a Write/Edit guard (`block-sensitive-write`), attribution/comment guards, and lifecycle hooks (`inject-context`, `session-start-env`, `session-end-log`, `pre-compact-snapshot`, `notify`). Full table with descriptions and config keys: [ROSTER](ROSTER.md).
-- **Skills:** `/commit`, `/squash-merge`, `/check-resolution`, `/preflight-merge`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback` (each a `skills/<name>/SKILL.md`).
-- **Output style:** `concise-execution` (default execution-mode style; carries the communication/language rules formerly inline in CLAUDE.md).
+- **Hooks:** per-pattern Bash guards (`block-rm-rf-root`, `block-force-push`, `block-hard-reset`, `block-git-clean`, `block-drop-table`, `block-chmod-777`), a Write/Edit guard (`block-sensitive-write`), attribution/comment guards (`block-ai-pr-attribution`, `block-gh-comment`), the facade check (`facade-check`), and lifecycle hooks (`inject-context`, `session-start-env`, `session-end-log`, `pre-compact-snapshot`, `notify`). `_hook-common` is a sourced helper library, not an event hook (no `wiring`). Full table with descriptions and Event/Matcher: [ROSTER](ROSTER.md).
+- **Skills:** `/commit`, `/squash-merge`, `/check-resolution`, `/preflight-merge`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback`, `/diagnose-missing-work` (each a `skills/<name>/SKILL.md`). Their dual target deploys them globally **and** lets them be installed per-repo.
+- **Output style:** `concise-execution` (default execution-mode style; carries the communication/language rules).
 
-`settings.json` uses `merge` (not symlink/copy) because Claude Code writes permission grants into it - see [Deploy methods](deploy-methods.md). Project scope supports exclude lists to skip specific hooks/skills per repo.
+`settings.json` uses `merge` (not symlink) because Claude Code writes permission grants into it - see [Deploy methods](deploy-methods.md). There is no `claude-hooks.conf`: a hook is on when its item is `true` in `deploy.json`; to disable one, set it `false`.
 
-### Hook activation and scope (claude)
+### Hook wiring and scope (claude)
 
-Unlike git, Claude Code **does** read a machine-wide config: hooks are *activated* by a `hooks` block in a `settings.json`, and the user-scope `~/.claude/settings.json` fires in **every** directory. A hook **script** sitting in `~/.claude/hooks/` or a repo's `.claude/hooks/` does nothing on its own — only a `settings.json` entry pointing at it makes it run.
+Unlike git, Claude Code **does** read a machine-wide config: a hook is *activated* by a `hooks` block in `~/.claude/settings.json`, which fires in **every** directory. A hook **script** in `~/.claude/hooks/` does nothing on its own - only a `settings.json` entry pointing at it makes it run.
 
-**Default: all hooks are wired at global scope only.** That gives machine-wide enforcement (the guards protect even non-repo directories) from a single source of truth.
+That entry is **not hand-maintained**. Each event hook's manifest entry carries a `wiring` field (`{ event, matcher?, if?, timeout? }`, or an array of them). On every machine `deploy`, dotconfigs synthesises the `settings.json` `hooks` block from the `wiring` of exactly the hooks selected in `deploy.json`:
 
-dotconfigs *can* also wire hooks per-repo (point a project `.claude/settings.json` at `${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.sh`), and the project hook files + `exclude` list exist so you can. **But mind the footgun:**
+> **Single toggle, no dangling refs.** Selecting a hook symlinks its script *and* wires it; deselecting it (setting the item `false` in `deploy.json`) removes both. There is no separate wiring step, no static `hooks` block in `plugins/claude/settings.json`, and no way for a wired command to point at a script that isn't deployed.
 
-> ⚠️ **Claude merges hooks additively across scopes — there is no dedup or override.** The same hook wired in *both* `~/.claude/settings.json` and a project `.claude/settings.json` for the same event runs **twice**. For idempotent PreToolUse guards that is merely wasted work; for context/lifecycle hooks (`inject-context` on `UserPromptSubmit`, `notify`) it double-injects context and **wastes tokens**. Wire a given hook in **one** scope only. `dotconfigs validate` and `project-deploy` warn when they detect a cross-scope duplicate (use `validate --strict` to make it an error).
+All Claude hooks are wired at machine scope, so the guards protect even non-repo directories from a single source of truth.
 
 ## git
 
-Manages git config, global excludes, and hooks.
+Manages git config, global excludes, and hooks. Categories - `hooks`, `config`, `excludes`.
 
-| Module | Source | Target | Scope |
-|--------|--------|--------|-------|
-| hooks | `plugins/git/hooks/` | `~/.dotconfigs/git-template/hooks/` (global, seeds new repos), `.git/hooks/` (project) | both |
-| config | `plugins/git/templates/gitconfig` | `~/.gitconfig` | global |
-| global-excludes | `plugins/git/templates/global-excludes` | `~/.config/git/ignore` | global |
-| exclude-patterns | `plugins/git/templates/project-excludes` | `.git/info/exclude` | project |
-| gitignore | `plugins/git/templates/gitignore-default` | `.gitignore` | project |
+| Category | Item(s) | Target(s) | Method |
+|----------|---------|-----------|--------|
+| hooks | 9 hooks (`pre-commit`, `commit-msg`, …) | `~/.dotconfigs/git-template/hooks/<name>` (seeds new repos) + `.git/hooks/<name>` (per-repo) | symlink |
+| config | `gitconfig-base` | `~/.dotconfigs/gitconfig-base` | symlink |
+| config | `gitconfig-include` | `~/.gitconfig` (`[include]` stanza) | append |
+| excludes | `global-excludes` | `~/.config/git/ignore` | symlink |
+| excludes | `project-excludes` | `.git/info/exclude` (managed block) | managed |
+| excludes | `gitignore` | `.gitignore` | append |
+
+`~/.gitconfig` itself is never symlinked: `gitconfig-base` is symlinked to `~/.dotconfigs/gitconfig-base`, and an `[include]` stanza is appended to `~/.gitconfig` pointing at it - so your hand-written `~/.gitconfig` lines survive.
 
 **Hooks:**
 
 | Hook | What it does |
 |------|-------------|
-| `pre-commit` | Identity check always; Ruff format on main only (branch-aware) |
-| `commit-msg` | Blocks AI attribution |
-| `pre-push` | Code-quality validation (pytest + ruff + mypy) + force-push protection |
+| `pre-commit` | Identity check, secrets scan, block main commits, Ruff format+lint on staged files |
+| `commit-msg` | Blocks AI attribution patterns |
+| `pre-push` | Force-push protection + fast lint/format check |
 | `pre-rebase` | Blocks rebasing main/master; warns about pushed commits |
 | `prepare-commit-msg` | Auto-prefix from branch name (`feature/*` → `feat:`) |
+| `post-checkout` | Branch info on checkout |
 | `post-merge` | Dependency-change detection + migration reminders |
-| `post-checkout` | Branch info on switch |
-| `post-rewrite` | Dependency detection for rebase |
+| `post-rewrite` | Dependency detection for rebase workflows |
+| `check-facade-consumers` | Verify every facade `__all__` entry has an external consumer |
 
-`prepare-commit-msg`, `post-merge`, `post-checkout`, `post-rewrite` are configurable (see [Hook configuration](manifest.md#hook-configuration)).
+Git hooks have no config file - each is self-contained. To skip one in a given repo, set its item `false` in that repo's `.dotconfigs/deploy.json`.
 
 ### How git hooks reach a repo (scope model)
 
-Git only runs hooks from a repo's own `.git/hooks/` (or a `core.hooksPath`). There is no machine-wide hook directory it consults by default — so a hook is **only** enforced in repos where it physically lives. dotconfigs therefore treats git hooks as **per-repo**, with global-deploy seeding new repos rather than enforcing anything itself:
+Git only runs hooks from a repo's own `.git/hooks/`. There is no machine-wide hook directory it consults by default - so a hook is **only** enforced in repos where it physically lives. dotconfigs therefore gives each git hook a dual target:
 
-- **`global-deploy`** installs the hooks into the git **template dir** (`~/.dotconfigs/git-template/hooks/`) and sets `init.templateDir` in `~/.gitconfig`. Every subsequent `git init` / `git clone` copies them (symlinks preserved, so they auto-update) into the new repo's `.git/hooks/`. This is the *only* job of git global-deploy — it does not enforce hooks in already-existing repos.
-- **`project-deploy`** installs/refreshes the hooks in an **existing** repo's `.git/hooks/`. Run it once per pre-existing repo (new ones are covered by the template dir).
-- **`dotconfigs status`** audits every repo that has been project-deployed (tracked in `~/.dotconfigs/projects.list`) and flags any whose hooks have gone missing or dangling — e.g. after a re-clone or a `.git` wipe.
+- **machine target** (`~/.dotconfigs/git-template/hooks/<name>`) - the git **template dir**. A machine `deploy` populates it and reconciles `init.templateDir` in `~/.gitconfig` (set while any git hook is selected, unset when none are). Every subsequent `git init` / `git clone` copies the hooks (symlinks preserved, so they auto-update) into the new repo's `.git/hooks/`. This seeds new repos; it does **not** enforce hooks in already-existing ones.
+- **project target** (`.git/hooks/<name>`) - installs/refreshes the hooks in an **existing** repo. Run `dotconfigs deploy <repo>` once per pre-existing repo (new ones are covered by the template dir).
+- **`dotconfigs status`** audits every project-deployed repo (tracked in `~/.dotconfigs/projects.list`) and flags any whose hooks have gone missing or dangling - e.g. after a re-clone or a `.git` wipe.
 
-Hooks live in `.git/hooks/`, which git never tracks, so they stay personal and uncommitted. (Other project-deployed artifacts — `CLAUDE.md`, `.claude/` — are kept untracked via managed `.git/info/exclude` entries.)
-
-> **Heads-up:** the earlier `~/.dotconfigs/git-hooks/` global target was inert — nothing pointed git at it, so those hooks never fired. Re-run `global-init && global-deploy` to migrate to the template dir, and `project-deploy` each existing repo.
+Hooks live in `.git/hooks/`, which git never tracks, so they stay personal and uncommitted. (Other project-deployed artefacts - `.claude/` skills - are kept untracked via the managed `.git/info/exclude` block.)
 
 ## shell
 
-zsh initialisation. Global scope only - source these from your `.zshrc`.
+zsh initialisation. Machine scope only - source these from your `.zshrc`.
 
-| Module | Source | Target |
-|--------|--------|--------|
-| init | `plugins/shell/init.zsh` | `~/.dotconfigs/shell/init.zsh` |
-| aliases | `plugins/shell/aliases.zsh` | `~/.dotconfigs/shell/aliases.zsh` |
+| Item | Source | Target |
+|------|--------|--------|
+| `init` | `plugins/shell/init.zsh` | `~/.dotconfigs/shell/init.zsh` |
+| `aliases` | `plugins/shell/aliases.zsh` | `~/.dotconfigs/shell/aliases.zsh` |
 
 ## Related
 
-- [Manifest format](manifest.md) - how each module above is declared.
+- [Manifest format](manifest.md) - how each item above is declared.
 - [Deploy methods](deploy-methods.md) - what `symlink` / `merge` etc. mean.
 - [ROSTER.md](ROSTER.md) - generated hook/skill/config reference.

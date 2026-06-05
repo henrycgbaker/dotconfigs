@@ -1,41 +1,47 @@
 ## Project: dotconfigs
 
-Generic config deployer with plugin architecture. Manages Claude Code, Git, and shell configs via JSON manifests and symlinks.
+Generic config deployer with a plugin architecture. Manages Claude Code, Git, and shell
+configs via JSON catalogues and (mostly) symlinks.
 
 ## Architecture
 
-- Entry point: `dotconfigs` (no extension)
-- Plugins: `plugins/{claude,git,shell}/` with `manifest.json` each
-- Shared libs: `lib/` (sourced, not executed -- no shebangs)
+- Engine: `src/dotconfigs` (entry point) + `src/lib/*.sh` (sourced libs, no shebangs)
+- Plugins (the data registry): `plugins/{claude,git,shell}/manifest.json` + their sources
+- Scripts: `scripts/` (`generate-roster.sh`, `build-claude-plugin.sh`)
 
-### SSOT Dataflow
+### Two-tier model
 
-Plugin manifests are the upstream SSOT. Everything derives downstream:
+- **manifest.json** (per plugin, in repo) -- the catalogue. Nested `category -> item`; each
+  item carries `source`, `method`, `target` (string or array), optional `wiring` (Claude
+  event hooks only), `default`, and an optional `description`. The upstream SSOT.
+- **deploy.json** (per instance, outside the repo) -- the toggle board. Nested
+  `plugin -> category -> item -> bool`, mirroring the catalogue, seeded from each item's
+  `default`. The machine selection lives at `~/.dotconfigs/deploy.json`; a project's at
+  `<repo>/.dotconfigs/deploy.json`. Flip an item true/false and re-run deploy. Scope is
+  implied by the target path (`~`/absolute => machine, relative => project).
 
-- **Manifests** (`plugins/*/manifest.json`) -- declare all available functionality
-- **`.dotconfigs/global.json`** / **`.dotconfigs/project.json`** -- assembled from manifests, control what's deployed (include/exclude)
-- **Hook METADATA** (`# CONFIG:` lines in hook files) -- SSOT for hook descriptions and config variables
-- **`generate-roster.sh`** -- reads manifests + hook METADATA -> produces `docs/ROSTER.md`
-
-Deploy flow: manifests -> `global-init` -> `.dotconfigs/global.json` -> `deploy`
-Project flow: manifests -> `project-init` -> `.dotconfigs/project.json` -> `project`
+Deploy applies enabled items and tears down disabled ones in the same pass. The Claude
+`settings.json` hooks block is synthesised at deploy time from the selected, wired hooks
+(no hand-maintained wiring, no `.conf` layer). `generate-roster.sh` reads the manifests.
 
 ## Constraints
 
 - **Bash 3.2 compat** (macOS) -- no `local -n`, `declare -n`, associative arrays, `${var,,}`
 - **jq required** for JSON parsing
 - No cross-plugin imports -- plugins self-contained
-- No shebangs in `lib/` files (sourced only)
+- No shebangs in `src/lib/` files (sourced only)
 
 ## Commands
 
+(no path => machine scope; a path => that repo)
+
 - `dotconfigs setup` -- one-time PATH setup
-- `dotconfigs global-init` -- assemble global.json from manifests
-- `dotconfigs deploy` -- deploy global config (~/.claude/, ~/.gitconfig, etc.)
-- `dotconfigs project-init [path]` -- scaffold project.json for a repo
-- `dotconfigs project [path]` -- deploy project config (.git/hooks/, .claude/, etc.)
-- `dotconfigs status` -- check deployment status
-- `dotconfigs validate [--strict]` -- lint manifests + scan deployed JSON for dangling references
+- `dotconfigs init [path]` -- seed a selection (deploy.json) from the catalogue defaults
+- `dotconfigs deploy [path]` -- deploy the selection (enabled on, disabled torn down)
+- `dotconfigs undeploy [path]` -- remove deployed artefacts
+- `dotconfigs cleanup [path]` -- remove stale/broken symlinks
+- `dotconfigs status [plugin]` -- check deployment status
+- `dotconfigs validate [--strict]` -- lint catalogues + scan deployed JSON for dangling references
 - `dotconfigs list` -- list available plugins
 
 ## Testing

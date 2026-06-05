@@ -48,7 +48,7 @@ Always-on rules (skills and hooks do not enforce these):
   not loss. Diff the dangling commit against `origin/main` before concluding anything.
 
 Setup: hooks and `.git/info/exclude` entries (CLAUDE.md, .claude/) are installed by
-`dotconfigs project .`. The live hook roster lives in docs/ROSTER.md.
+`dotconfigs deploy .`. The live hook roster lives in docs/ROSTER.md.
 
 ## Code Style
 
