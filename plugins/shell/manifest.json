@@ -1,14 +1,18 @@
 {
-  "global": {
+  "config": {
     "init": {
+      "description": "Shell tool initialisations (starship, fzf, thefuck, conda); source from .zshrc",
       "source": "plugins/shell/init.zsh",
+      "method": "symlink",
       "target": "~/.dotconfigs/shell/init.zsh",
-      "method": "symlink"
+      "default": true
     },
     "aliases": {
+      "description": "Shell aliases; source from .zshrc",
       "source": "plugins/shell/aliases.zsh",
+      "method": "symlink",
       "target": "~/.dotconfigs/shell/aliases.zsh",
-      "method": "symlink"
+      "default": true
     }
   }
 }

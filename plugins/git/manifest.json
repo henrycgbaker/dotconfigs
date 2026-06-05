@@ -1,37 +1,106 @@
 {
-  "global": {
-    "hooks": {
-      "source": "plugins/git/hooks",
-      "target": "~/.dotconfigs/git-template/hooks",
+  "hooks": {
+    "check-facade-consumers": {
+      "description": "Verify every facade __all__ entry has at least one external consumer",
+      "source": "plugins/git/hooks/check-facade-consumers.py",
       "method": "symlink",
-      "include": ["check-facade-consumers.py", "commit-msg", "post-checkout", "post-merge", "post-rewrite", "pre-commit", "pre-push", "pre-rebase", "prepare-commit-msg"]
+      "target": ["~/.dotconfigs/git-template/hooks/check-facade-consumers.py", ".git/hooks/check-facade-consumers.py"],
+      "default": true
     },
-    "config-base": {
-      "source": "plugins/git/templates/gitconfig",
-      "target": "~/.dotconfigs/gitconfig-base",
-      "method": "symlink"
+    "commit-msg": {
+      "description": "Block AI attribution patterns in commit messages",
+      "source": "plugins/git/hooks/commit-msg",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/commit-msg", ".git/hooks/commit-msg"],
+      "default": true
     },
-    "config-include": {
-      "source": "plugins/git/templates/gitconfig-include",
-      "target": "~/.gitconfig",
-      "method": "append"
+    "pre-commit": {
+      "description": "Identity check, secrets scan, block main commits, Ruff format+lint on staged files",
+      "source": "plugins/git/hooks/pre-commit",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/pre-commit", ".git/hooks/pre-commit"],
+      "default": true
     },
-    "global-excludes": {
-      "source": "plugins/git/templates/global-excludes",
-      "target": "~/.config/git/ignore",
-      "method": "symlink"
+    "pre-push": {
+      "description": "Force-push protection and fast lint/format check",
+      "source": "plugins/git/hooks/pre-push",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/pre-push", ".git/hooks/pre-push"],
+      "default": true
+    },
+    "pre-rebase": {
+      "description": "Block rebasing main/master and warn about pushed commits",
+      "source": "plugins/git/hooks/pre-rebase",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/pre-rebase", ".git/hooks/pre-rebase"],
+      "default": true
+    },
+    "prepare-commit-msg": {
+      "description": "Extract conventional commit prefix from branch name",
+      "source": "plugins/git/hooks/prepare-commit-msg",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/prepare-commit-msg", ".git/hooks/prepare-commit-msg"],
+      "default": true
+    },
+    "post-checkout": {
+      "description": "Display branch information on checkout",
+      "source": "plugins/git/hooks/post-checkout",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/post-checkout", ".git/hooks/post-checkout"],
+      "default": true
+    },
+    "post-merge": {
+      "description": "Dependency change detection and migration reminders",
+      "source": "plugins/git/hooks/post-merge",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/post-merge", ".git/hooks/post-merge"],
+      "default": true
+    },
+    "post-rewrite": {
+      "description": "Dependency detection for rebase workflows",
+      "source": "plugins/git/hooks/post-rewrite",
+      "method": "symlink",
+      "target": ["~/.dotconfigs/git-template/hooks/post-rewrite", ".git/hooks/post-rewrite"],
+      "default": true
     }
   },
-  "project": {
+  "config": {
+    "gitconfig-base": {
+      "description": "Base git config (identity, core, pull/fetch/push, aliases) included from ~/.gitconfig",
+      "source": "plugins/git/templates/gitconfig",
+      "method": "symlink",
+      "target": "~/.dotconfigs/gitconfig-base",
+      "default": true
+    },
+    "gitconfig-include": {
+      "description": "Append an [include] stanza to ~/.gitconfig pointing at gitconfig-base",
+      "source": "plugins/git/templates/gitconfig-include",
+      "method": "append",
+      "target": "~/.gitconfig",
+      "default": true
+    }
+  },
+  "excludes": {
+    "global-excludes": {
+      "description": "Global gitignore (OS, editor, language, Claude, Python patterns)",
+      "source": "plugins/git/templates/global-excludes",
+      "method": "symlink",
+      "target": "~/.config/git/ignore",
+      "default": true
+    },
     "project-excludes": {
+      "description": "Per-repo machine-local excludes in .git/info/exclude (managed block)",
       "source": "plugins/git/templates/project-excludes",
+      "method": "managed",
       "target": ".git/info/exclude",
-      "method": "managed"
+      "default": true
     },
     "gitignore": {
+      "description": "Seed default patterns into a repo's tracked .gitignore",
       "source": "plugins/git/templates/gitignore-default",
+      "method": "append",
       "target": ".gitignore",
-      "method": "append"
+      "default": true
     }
   }
 }

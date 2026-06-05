@@ -1,83 +1,216 @@
 {
-  "global": {
-    "hooks": {
-      "source": "plugins/claude/hooks",
-      "target": "~/.claude/hooks",
+  "hooks": {
+    "_hook-common": {
+      "description": "Shared hook helpers (sourced library, not an event hook)",
+      "source": "plugins/claude/hooks/_hook-common.sh",
       "method": "symlink",
-      "include": [
-        "_hook-common.sh",
-        "block-rm-rf-root.sh",
-        "block-force-push.sh",
-        "block-hard-reset.sh",
-        "block-git-clean.sh",
-        "block-drop-table.sh",
-        "block-chmod-777.sh",
-        "block-sensitive-write.sh",
-        "block-ai-pr-attribution.sh",
-        "block-gh-comment.sh",
-        "facade-check.sh",
-        "inject-context.sh",
-        "session-start-env.sh",
-        "session-end-log.sh",
-        "pre-compact-snapshot.sh",
-        "notify.sh"
-      ]
+      "target": "~/.claude/hooks/_hook-common.sh",
+      "default": true
     },
-    "settings": {
-      "source": "plugins/claude/settings.json",
-      "target": "~/.claude/settings.json",
-      "method": "merge"
-    },
-    "output-styles": {
-      "source": "plugins/claude/output-styles",
-      "target": "~/.claude/output-styles",
+    "block-rm-rf-root": {
+      "description": "Block rm -rf / or rm -rf ~ (full filesystem wipe)",
+      "source": "plugins/claude/hooks/block-rm-rf-root.sh",
       "method": "symlink",
-      "include": ["concise-execution.md"]
+      "target": "~/.claude/hooks/block-rm-rf-root.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(rm *)", "timeout": 10 },
+      "default": true
     },
-    "skills": {
-      "source": "plugins/claude/skills",
-      "target": "~/.claude/skills",
+    "block-force-push": {
+      "description": "Block git push --force without --force-with-lease",
+      "source": "plugins/claude/hooks/block-force-push.sh",
       "method": "symlink",
-      "include": [
-        "commit",
-        "squash-merge",
-        "check-resolution",
-        "preflight-merge",
-        "rebase-stacked-prs",
-        "branch-cleanup",
-        "pr-create",
-        "fix-pr-feedback",
-        "diagnose-missing-work"
-      ]
+      "target": "~/.claude/hooks/block-force-push.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(git push*)", "timeout": 10 },
+      "default": true
     },
-    "claude-md": {
-      "source": "plugins/claude/CLAUDE.md",
-      "target": "~/.claude/CLAUDE.md",
-      "method": "symlink"
+    "block-hard-reset": {
+      "description": "Block git reset --hard (discards uncommitted work)",
+      "source": "plugins/claude/hooks/block-hard-reset.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-hard-reset.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(git reset*)", "timeout": 10 },
+      "default": true
     },
-    "hooks-conf": {
-      "source": "plugins/claude/templates/claude-hooks.conf",
-      "target": "~/.claude/claude-hooks.conf",
-      "method": "copy"
+    "block-git-clean": {
+      "description": "Block git clean -fd which deletes untracked files",
+      "source": "plugins/claude/hooks/block-git-clean.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-git-clean.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(git clean*)", "timeout": 10 },
+      "default": true
+    },
+    "block-drop-table": {
+      "description": "Block DROP TABLE / DROP DATABASE SQL statements",
+      "source": "plugins/claude/hooks/block-drop-table.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-drop-table.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(*DROP*)", "timeout": 10 },
+      "default": true
+    },
+    "block-chmod-777": {
+      "description": "Block chmod -R 777 (creates security vulnerability)",
+      "source": "plugins/claude/hooks/block-chmod-777.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-chmod-777.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(chmod *)", "timeout": 10 },
+      "default": true
+    },
+    "block-sensitive-write": {
+      "description": "Block Write/Edit on sensitive files (private keys, credentials, .env.production)",
+      "source": "plugins/claude/hooks/block-sensitive-write.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-sensitive-write.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Write|Edit", "timeout": 10 },
+      "default": true
+    },
+    "block-ai-pr-attribution": {
+      "description": "Block AI attribution in PR titles/bodies and GitHub MCP writes",
+      "source": "plugins/claude/hooks/block-ai-pr-attribution.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-ai-pr-attribution.sh",
+      "wiring": [
+        { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(gh pr*)", "timeout": 10 },
+        { "event": "PreToolUse", "matcher": "mcp__github__.*", "timeout": 10 }
+      ],
+      "default": true
+    },
+    "block-gh-comment": {
+      "description": "Block unsolicited GitHub comment/review posts via gh CLI and the GitHub MCP server",
+      "source": "plugins/claude/hooks/block-gh-comment.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-gh-comment.sh",
+      "wiring": [
+        { "event": "PreToolUse", "matcher": "Bash", "if": "Bash(gh *)", "timeout": 10 },
+        { "event": "PreToolUse", "matcher": "mcp__github__.*", "timeout": 10 }
+      ],
+      "default": true
+    },
+    "facade-check": {
+      "description": "Facade orphan-export check after Write/Edit",
+      "source": "plugins/claude/hooks/facade-check.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/facade-check.sh",
+      "wiring": { "event": "PostToolUse", "matcher": "Write|Edit", "timeout": 10 },
+      "default": true
+    },
+    "inject-context": {
+      "description": "Prepend git context (branch, dirty count, head) to every prompt",
+      "source": "plugins/claude/hooks/inject-context.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/inject-context.sh",
+      "wiring": { "event": "UserPromptSubmit", "timeout": 5 },
+      "default": true
+    },
+    "session-start-env": {
+      "description": "Auto-activate a Python .venv in the project on session start",
+      "source": "plugins/claude/hooks/session-start-env.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/session-start-env.sh",
+      "wiring": { "event": "SessionStart", "timeout": 5 },
+      "default": true
+    },
+    "session-end-log": {
+      "description": "Append a JSONL telemetry line to ~/.claude/session-log.jsonl on session end",
+      "source": "plugins/claude/hooks/session-end-log.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/session-end-log.sh",
+      "wiring": { "event": "SessionEnd", "timeout": 5 },
+      "default": true
+    },
+    "pre-compact-snapshot": {
+      "description": "Snapshot the transcript before compaction",
+      "source": "plugins/claude/hooks/pre-compact-snapshot.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/pre-compact-snapshot.sh",
+      "wiring": { "event": "PreCompact", "timeout": 10 },
+      "default": true
+    },
+    "notify": {
+      "description": "Fan notifications out to ntfy.sh and desktop notify-send",
+      "source": "plugins/claude/hooks/notify.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/notify.sh",
+      "wiring": { "event": "Notification", "timeout": 15 },
+      "default": true
     }
   },
-  "project": {
-    "skills": {
-      "source": "plugins/claude/skills",
-      "target": ".claude/skills",
+  "skills": {
+    "commit": {
+      "source": "plugins/claude/skills/commit",
       "method": "symlink",
-      "include": [
-        "commit",
-        "squash-merge",
-        "check-resolution",
-        "preflight-merge",
-        "rebase-stacked-prs",
-        "branch-cleanup",
-        "pr-create",
-        "fix-pr-feedback",
-        "diagnose-missing-work"
-      ],
-      "exclude": []
+      "target": ["~/.claude/skills/commit", ".claude/skills/commit"],
+      "default": true
+    },
+    "squash-merge": {
+      "source": "plugins/claude/skills/squash-merge",
+      "method": "symlink",
+      "target": ["~/.claude/skills/squash-merge", ".claude/skills/squash-merge"],
+      "default": true
+    },
+    "check-resolution": {
+      "source": "plugins/claude/skills/check-resolution",
+      "method": "symlink",
+      "target": ["~/.claude/skills/check-resolution", ".claude/skills/check-resolution"],
+      "default": true
+    },
+    "preflight-merge": {
+      "source": "plugins/claude/skills/preflight-merge",
+      "method": "symlink",
+      "target": ["~/.claude/skills/preflight-merge", ".claude/skills/preflight-merge"],
+      "default": true
+    },
+    "rebase-stacked-prs": {
+      "source": "plugins/claude/skills/rebase-stacked-prs",
+      "method": "symlink",
+      "target": ["~/.claude/skills/rebase-stacked-prs", ".claude/skills/rebase-stacked-prs"],
+      "default": true
+    },
+    "branch-cleanup": {
+      "source": "plugins/claude/skills/branch-cleanup",
+      "method": "symlink",
+      "target": ["~/.claude/skills/branch-cleanup", ".claude/skills/branch-cleanup"],
+      "default": true
+    },
+    "pr-create": {
+      "source": "plugins/claude/skills/pr-create",
+      "method": "symlink",
+      "target": ["~/.claude/skills/pr-create", ".claude/skills/pr-create"],
+      "default": true
+    },
+    "fix-pr-feedback": {
+      "source": "plugins/claude/skills/fix-pr-feedback",
+      "method": "symlink",
+      "target": ["~/.claude/skills/fix-pr-feedback", ".claude/skills/fix-pr-feedback"],
+      "default": true
+    },
+    "diagnose-missing-work": {
+      "source": "plugins/claude/skills/diagnose-missing-work",
+      "method": "symlink",
+      "target": ["~/.claude/skills/diagnose-missing-work", ".claude/skills/diagnose-missing-work"],
+      "default": true
+    }
+  },
+  "config": {
+    "settings": {
+      "description": "Claude Code settings (env, permissions, sandbox); the hooks block is synthesised from selected hooks",
+      "source": "plugins/claude/settings.json",
+      "method": "merge",
+      "target": "~/.claude/settings.json",
+      "default": true
+    },
+    "claude-md": {
+      "description": "Global CLAUDE.md policy",
+      "source": "plugins/claude/CLAUDE.md",
+      "method": "symlink",
+      "target": "~/.claude/CLAUDE.md",
+      "default": true
+    },
+    "output-style": {
+      "description": "Concise-execution output style",
+      "source": "plugins/claude/output-styles/concise-execution.md",
+      "method": "symlink",
+      "target": "~/.claude/output-styles/concise-execution.md",
+      "default": true
     }
   }
 }

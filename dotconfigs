@@ -12,10 +12,14 @@ while [[ -L "$_source" ]]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
-PLUGINS_DIR="$SCRIPT_DIR/plugins"
-# Assembled global selection. Override for tests (DOTCONFIGS_GLOBAL_CONFIG).
-GLOBAL_CONFIG="${DOTCONFIGS_GLOBAL_CONFIG:-$SCRIPT_DIR/.dotconfigs/global.json}"
-# Registry of repos that have had `project-deploy` run, so `status` can audit
+# Repo root: the base against which manifest `source` paths resolve. Equal to
+# SCRIPT_DIR in the flat layout; the parent once the engine lives under src/.
+REPO_ROOT="$SCRIPT_DIR"
+PLUGINS_DIR="$REPO_ROOT/plugins"
+# Machine-wide selection (the toggle board). Lives outside the repo so it is
+# instance-specific. Override for tests (DOTCONFIGS_DEPLOY_CONFIG).
+DEPLOY_CONFIG="${DOTCONFIGS_DEPLOY_CONFIG:-$HOME/.dotconfigs/deploy.json}"
+# Registry of repos that have had a project deploy run, so `status` can audit
 # their git hooks for drift (missing/dangling) after the fact. Override for tests.
 PROJECT_REGISTRY="${DOTCONFIGS_PROJECT_REGISTRY:-$HOME/.dotconfigs/projects.list}"
 
@@ -33,51 +37,31 @@ show_usage() {
 dotconfigs — Unified configuration management
 
 Usage:
-  dotconfigs setup                              One-time init (PATH symlinks)
-  dotconfigs global-init                        Scaffold global.json from manifests
-  dotconfigs global-deploy [group] [options]    Deploy global config to filesystem
-  dotconfigs project-init [path]                Scaffold per-project config
-  dotconfigs project-deploy [path] [options]    Deploy per-project configuration
-  dotconfigs cleanup [options]                  Remove stale/broken symlinks
-  dotconfigs undeploy [group] [options]         Remove deployed config (inverse of deploy)
-  dotconfigs status [plugin]                    Show deployment status
-  dotconfigs validate [--strict]                Lint manifests + scan for dangling refs
-  dotconfigs list                               List available plugins
-  dotconfigs help [command]                     Show help for command
+  dotconfigs setup                One-time init (PATH symlinks)
+  dotconfigs init [path]          Seed a selection (machine, or a project repo)
+  dotconfigs deploy [path]        Deploy the selection (machine, or a project repo)
+  dotconfigs undeploy [path]      Remove deployed artefacts (inverse of deploy)
+  dotconfigs cleanup [path]       Remove stale/broken symlinks
+  dotconfigs status [plugin]      Show deployment status
+  dotconfigs validate [--strict]  Lint catalogues + scan for dangling refs
+  dotconfigs list                 List available plugins
+  dotconfigs help [command]       Show help for a command
 
-Commands:
-  setup           One-time init: add dotconfigs to PATH, then run global-init
-  global-init     Scaffold global.json from plugin manifests
-  global-deploy   Deploy configuration from global.json (symlinks)
-                  Options: --force, --dry-run
-                  Without group: deploys all groups
-                  Aliases: deploy
-  project-init    Scaffold .dotconfigs/project.json from plugin manifests
-  project-deploy  Deploy per-project config from .dotconfigs/project.json
-                  Options: --force, --dry-run
-                  Aliases: project
-  cleanup         Remove stale dotconfigs symlinks and broken symlinks
-                  Default: dry-run. Use --apply to actually remove.
-                  Options: --apply, --dry-run, --project <path>
-  undeploy        Remove deployed artefacts (inverse of deploy)
-                  Default: dry-run. Use --apply to actually remove.
-                  Options: --apply, --dry-run, --project <path>
-  status          Check deployment status
-  validate        Lint plugin manifests (JSON, methods, sources) and scan
-                  deployed settings for dangling command references.
-                  Options: --strict (treat dangling-reference warnings as errors)
-  list            List all available plugins
-  help            Show detailed help for specific command
+Model:
+  manifest.json (per plugin)  the catalogue: every item, how/where it deploys,
+                              and its default on/off state. Version-controlled.
+  deploy.json (per instance)  the toggle board: ~/.dotconfigs/deploy.json for the
+                              machine, <repo>/.dotconfigs/deploy.json per project.
+                              Flip an item true/false, then re-run deploy.
+
+  No path => machine scope (~/... targets).  A path => that repo (relative targets).
 
 Examples:
-  dotconfigs setup                      One-time init (PATH only)
-  dotconfigs global-init                Scaffold global.json
-  dotconfigs global-deploy              Deploy all global config
-  dotconfigs global-deploy claude       Deploy claude group only
-  dotconfigs global-deploy --dry-run    Preview all deployments
-  dotconfigs project-init .             Scaffold project config
-  dotconfigs project-deploy .           Deploy project configuration
-  dotconfigs project-deploy . --force   Deploy, skip conflict prompts
+  dotconfigs setup                One-time PATH setup
+  dotconfigs init                 Seed ~/.dotconfigs/deploy.json
+  dotconfigs deploy               Deploy the machine selection
+  dotconfigs init .               Seed a per-project selection
+  dotconfigs deploy . --dry-run   Preview a project deploy
 
 Available plugins:
 EOF
@@ -94,211 +78,81 @@ show_command_help() {
             cat <<EOF
 dotconfigs setup — One-time initialisation
 
-Usage:
-  dotconfigs setup
-
-Description:
-  Creates PATH symlinks for dotconfigs and dots.
-  Run once after cloning, then run 'global-init' to scaffold config.
-
-Example:
-  dotconfigs setup
+  Creates PATH symlinks for dotconfigs (and the 'dots' alias).
+  Run once after cloning, then 'dotconfigs init' and 'dotconfigs deploy'.
 EOF
             ;;
-        global-init)
+        init)
             cat <<EOF
-dotconfigs global-init — Scaffold global.json
+dotconfigs init [path] — Seed a selection (toggle board)
 
-Usage:
-  dotconfigs global-init
+  No path:   writes the machine selection to ~/.dotconfigs/deploy.json.
+  With path: writes <repo>/.dotconfigs/deploy.json (requires a git repo) and
+             adds .dotconfigs/ to .git/info/exclude.
 
-Description:
-  Assembles global.json from plugin manifests (.global sections).
-  Pre-populates modules with sources, targets, and include/exclude lists.
-  Won't overwrite an existing global.json without confirmation.
+  Every catalogued item with a target in that scope is listed with its default
+  on/off value. Edit the file to toggle, then run 'dotconfigs deploy [path]'.
 
-  After creating the config, edit it to customise, then run: dotconfigs deploy
-
-Example:
-  dotconfigs global-init
+  Options: --force (overwrite an existing selection without prompting)
 EOF
             ;;
-        project-init)
+        deploy)
             cat <<EOF
-dotconfigs project-init — Scaffold per-project configuration
+dotconfigs deploy [path] — Deploy a selection
 
-Usage:
-  dotconfigs project-init [path]
+  No path:   deploys the machine selection (~/... targets) and reconciles the
+             git init.templateDir plus PATH symlinks.
+  With path: deploys the project selection into <repo> (relative targets).
 
-Description:
-  Assembles .dotconfigs/project.json from plugin manifests (.project sections).
-  Pre-populates include lists, empty exclude lists for customisation.
-  Auto-excludes .dotconfigs/ in .git/info/exclude.
-  Defaults to current directory if no path given.
-  Requires a git repository.
-
-  After creating the config, edit exclude lists, then run: dotconfigs project-deploy <path>
-
-Examples:
-  dotconfigs project-init .              Current directory
-  dotconfigs project-init ~/myrepo       Specific project
-EOF
-            ;;
-        project-deploy|project)
-            cat <<EOF
-dotconfigs project-deploy — Deploy per-project configuration
-
-Usage:
-  dotconfigs project-deploy [path] [--dry-run] [--force]
-
-Aliases:
-  dotconfigs project [path] [options]
-
-Description:
-  Reads .dotconfigs/project.json and deploys all configured modules
-  (hooks, skills, etc.) as symlinks into the project.
-  Respects include/exclude lists per module.
-  Defaults to current directory if no path given.
-  Requires a git repository with .dotconfigs/project.json.
-
-Options:
-  --dry-run       Preview changes without deploying
-  --force         Overwrite all conflicts without prompting
-
-Examples:
-  dotconfigs project-deploy .                Deploy current project
-  dotconfigs project-deploy ~/myrepo --force Deploy, skip conflict prompts
-  dotconfigs project-deploy . --dry-run      Preview deployment
+  Enabled items are deployed; items toggled off are torn down in the same pass.
+  Options: --force (overwrite conflicts), --dry-run (preview)
 EOF
             ;;
         undeploy)
             cat <<EOF
-dotconfigs undeploy — Remove deployed configuration
+dotconfigs undeploy [path] — Remove deployed artefacts
 
-Usage:
-  dotconfigs undeploy [group] [--apply] [--dry-run] [--project <path>]
-
-Description:
-  Inverse of deploy. Walks the manifest and removes deployed artefacts:
-  - symlink modules: removes dotconfigs-owned symlinks (foreign files preserved)
-  - copy modules:    removes file only if byte-identical to source (untouched)
-  - merge/append:    skipped (not safely reversible without losing local edits)
-
-  Without a group name, undeploys all groups.
-  Default mode is dry-run. Use --apply to actually remove files.
-
-Options:
-  --apply          Actually remove files (default: dry-run)
-  --dry-run        Preview what would be removed (default)
-  --project <path> Undeploy a project config instead of global
-
-Examples:
-  dotconfigs undeploy                      Preview undeploy of all groups
-  dotconfigs undeploy --apply              Undeploy all groups
-  dotconfigs undeploy claude --apply       Undeploy claude group only
-  dotconfigs undeploy --project . --apply  Undeploy current project
+  Inverse of deploy. Removes dotconfigs-owned symlinks and managed blocks;
+  merge/append targets are left alone (not safely reversible).
+  Default is dry-run. Use --apply to actually remove.
 EOF
             ;;
         cleanup)
             cat <<EOF
-dotconfigs cleanup — Remove stale and broken symlinks
+dotconfigs cleanup [path] — Remove stale and broken symlinks
 
-Usage:
-  dotconfigs cleanup [--apply] [--dry-run] [--project <path>]
-
-Description:
-  Scans deployed target directories and removes:
-  - Dotconfigs-owned symlinks not in the current deploy set (stale)
-  - Broken/dangling symlinks (regardless of ownership)
-
-  Preserves:
-  - Foreign regular files (e.g. user-created hooks)
-  - Foreign valid symlinks (e.g. hooks from other tools)
-
-  Default mode is dry-run. Use --apply to actually remove files.
-
-Options:
-  --apply          Actually remove stale symlinks (default: dry-run)
-  --dry-run        Preview what would be removed (default)
-  --project <path> Clean project targets instead of global
-
-Examples:
-  dotconfigs cleanup                     Preview stale symlinks
-  dotconfigs cleanup --apply             Remove stale symlinks
-  dotconfigs cleanup --project .         Preview project cleanup
-  dotconfigs cleanup --project . --apply Remove stale project symlinks
-EOF
-            ;;
-        global-deploy|deploy)
-            cat <<EOF
-dotconfigs global-deploy — Deploy global configuration
-
-Usage:
-  dotconfigs global-deploy [group] [options]
-
-Aliases:
-  dotconfigs deploy [group] [options]
-
-Description:
-  Deploys configuration from global.json to the filesystem via symlinks.
-  Without a group name, deploys all groups.
-  Also ensures dotconfigs and dots are on PATH.
-
-Options:
-  --force          Overwrite all conflicts without prompting
-  --dry-run        Preview changes without deploying
-
-Conflicts (files not managed by dotconfigs) prompt for resolution:
-overwrite, skip, backup, or diff. Use --force to skip prompts.
-
-Examples:
-  dotconfigs deploy                      Deploy all groups
-  dotconfigs deploy claude               Deploy claude group only
-  dotconfigs deploy git                  Deploy git group only
-  dotconfigs deploy --force              Deploy all, overwrite conflicts
-  dotconfigs deploy --dry-run            Preview all deployments
+  Removes dotconfigs-owned symlinks no longer in the selection and
+  broken-into-repo symlinks. Foreign files and foreign symlinks are preserved.
+  Default is dry-run. Use --apply to actually remove.
 EOF
             ;;
         status)
             cat <<EOF
-dotconfigs status — Check deployment status
+dotconfigs status [plugin] — Check deployment status
 
-Usage:
-  dotconfigs status [plugin]
+  Shows per-plugin deployment state for the machine selection and audits the
+  git hooks of every project-deployed repo.
+  States: ✓ deployed, △ drift, ✗ not deployed.
+EOF
+            ;;
+        validate)
+            cat <<EOF
+dotconfigs validate [--strict] — Lint catalogues + scan references
 
-Description:
-  Shows deployment status for plugin configuration files.
-  Detects drift (broken symlinks, foreign files, wrong targets).
-  Without a plugin name, shows status for all plugins.
-
-States:
-  ✓  Deployed      Symlink correctly points to dotconfigs
-  △  Drifted       Broken symlink, foreign file, or wrong target
-  ✗  Not deployed  File doesn't exist
-
-Examples:
-  dotconfigs status           Show status of all plugins
-  dotconfigs status claude    Show Claude plugin status only
+  Checks each plugin manifest.json (valid JSON, known methods/keys, sources
+  exist) and scans deployed merge targets for dangling command references.
+  --strict treats dangling-reference warnings as errors.
 EOF
             ;;
         list)
             cat <<EOF
-dotconfigs list — List available plugins
-
-Usage:
-  dotconfigs list
-
-Description:
-  Lists all available plugins with deployment status.
-
-Example:
-  dotconfigs list
+dotconfigs list — List available plugins with deployment status.
 EOF
             ;;
         *)
             echo "Error: Unknown command '$command'" >&2
             echo "" >&2
-            echo "Available commands: setup, global-init, deploy, project-init, project, cleanup, status, list, help" >&2
+            echo "Available commands: setup, init, deploy, undeploy, cleanup, status, validate, list, help" >&2
             return 1
             ;;
     esac
@@ -329,39 +183,72 @@ cmd_setup() {
     echo "Setup complete."
     echo ""
     echo "Next steps:"
-    echo "  1. dotconfigs global-init          Scaffold global.json from manifests"
-    echo "  2. (optional) Edit .dotconfigs/global.json to customise"
-    echo "  3. dotconfigs deploy               Deploy all global config"
-    echo "  4. dotconfigs project-init .       Scaffold per-project config"
-    echo "  5. dotconfigs project .            Deploy project config"
+    echo "  1. dotconfigs init                 Seed the machine selection (deploy.json)"
+    echo "  2. (optional) Edit ~/.dotconfigs/deploy.json to toggle items"
+    echo "  3. dotconfigs deploy               Deploy the selected config"
+    echo "  4. dotconfigs init <repo>          Seed a per-project selection"
+    echo "  5. dotconfigs deploy <repo>        Deploy project config"
     echo ""
 }
 
-cmd_global_init() {
-    if ! command -v jq &>/dev/null; then
-        echo "Error: jq is required but not installed." >&2
-        exit 1
-    fi
+# Seed a selection (toggle board). No path: the machine selection at
+# ~/.dotconfigs/deploy.json. With a path: a per-project selection at
+# <repo>/.dotconfigs/deploy.json (requires a git repo).
+cmd_init() {
+    if ! check_jq; then exit 1; fi
 
-    local force="false"
+    local force="false" path=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --force) force="true"; shift ;;
-            *) echo "Error: Unknown option '$1'" >&2; exit 1 ;;
+            -*) echo "Error: Unknown option '$1'" >&2; exit 1 ;;
+            *)
+                if [[ -z "$path" ]]; then path="$1"; else
+                    echo "Error: Multiple paths specified" >&2; exit 1
+                fi
+                shift
+                ;;
         esac
     done
 
-    local json
-    json=$(assemble_from_manifests "global")
-
-    if ! write_with_overwrite_protection "$GLOBAL_CONFIG" "$json" "$force"; then
+    if [[ -z "$path" ]]; then
+        local json; json=$(seed_deploy_json "machine")
+        if write_with_overwrite_protection "$DEPLOY_CONFIG" "$json" "$force"; then
+            echo ""
+            echo "Next: edit $DEPLOY_CONFIG to toggle items, then run 'dotconfigs deploy'."
+        fi
         return 0
     fi
 
-    echo ""
-    echo "Next steps:"
-    echo "  1. (optional) Edit .dotconfigs/global.json to customise"
-    echo "  2. dotconfigs deploy              Deploy all global config"
+    path=$(expand_path "$path")
+    if [[ "$(cd "$path" 2>/dev/null && pwd -P)" == "$REPO_ROOT" ]]; then
+        echo "Error: cannot use the dotconfigs repo itself as a project target" >&2
+        echo "Run from a project directory, or pass a path." >&2
+        exit 1
+    fi
+    if ! validate_git_repo "$path"; then
+        echo "Error: Not a git repository: $path" >&2
+        echo "Initialize with: git init" >&2
+        exit 1
+    fi
+
+    local config_file="$path/.dotconfigs/deploy.json"
+    local json; json=$(seed_deploy_json "project")
+    if write_with_overwrite_protection "$config_file" "$json" "$force"; then
+        _exclude_dotconfigs "$path"
+        echo ""
+        echo "Next: edit $config_file, then run 'dotconfigs deploy $path'."
+    fi
+}
+
+# Add .dotconfigs/ to a repo's .git/info/exclude (idempotent). Args: repo path
+_exclude_dotconfigs() {
+    local path="$1" exclude_file="$1/.git/info/exclude"
+    if ! grep -qxF ".dotconfigs/" "$exclude_file" 2>/dev/null; then
+        mkdir -p "$(dirname "$exclude_file")"
+        echo ".dotconfigs/" >> "$exclude_file"
+        echo "Added .dotconfigs/ to .git/info/exclude"
+    fi
 }
 
 # Ask a yes/no question with default
@@ -469,48 +356,36 @@ _create_path_symlink() {
 }
 
 cmd_undeploy() {
-    local dry_run="true"
-    local config_file="$GLOBAL_CONFIG"
-    local project_path=""
-    local group=""
+    local dry_run="true" path=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --apply)   dry_run="false"; shift ;;
             --dry-run) dry_run="true"; shift ;;
-            --project)
-                shift
-                project_path="${1:-.}"
-                shift
-                ;;
             -*)
                 echo "Error: Unknown option '$1'" >&2
-                echo "Usage: dotconfigs undeploy [group] [--apply] [--dry-run] [--project <path>]" >&2
+                echo "Usage: dotconfigs undeploy [path] [--apply] [--dry-run]" >&2
                 exit 1
                 ;;
             *)
-                if [[ -z "$group" ]]; then
-                    group="$1"
+                if [[ -z "$path" ]]; then path="$1"; else
+                    echo "Error: Multiple paths specified" >&2; exit 1
                 fi
                 shift
                 ;;
         esac
     done
 
-    if [[ -n "$project_path" ]]; then
-        project_path=$(expand_path "$project_path")
-        config_file="$project_path/.dotconfigs/project.json"
-    fi
-
     if ! check_jq; then
         return 1
     fi
-    if [[ ! -f "$config_file" ]]; then
-        echo "Error: config file not found: $config_file" >&2
-        exit 1
-    fi
 
-    undeploy_from_json "$config_file" "$SCRIPT_DIR" "$group" "$dry_run" "$project_path"
+    if [[ -z "$path" ]]; then
+        undeploy_from_json "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine" "$REPO_ROOT" "$dry_run"
+    else
+        path=$(expand_path "$path")
+        undeploy_from_json "$PLUGINS_DIR" "$path/.dotconfigs/deploy.json" "project" "$REPO_ROOT" "$dry_run" "$path"
+    fi
 
     if [[ "$dry_run" == "true" && "${removed:-0}" -gt 0 ]]; then
         echo ""
@@ -519,53 +394,38 @@ cmd_undeploy() {
 }
 
 cmd_cleanup() {
-    local dry_run="true"
-    local config_file="$GLOBAL_CONFIG"
-    local project_path=""
+    local dry_run="true" path=""
 
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --apply)
-                dry_run="false"
-                shift
-                ;;
-            --dry-run)
-                dry_run="true"
-                shift
-                ;;
-            --project)
-                shift
-                project_path="${1:-.}"
-                shift
-                ;;
+            --apply)   dry_run="false"; shift ;;
+            --dry-run) dry_run="true"; shift ;;
             -*)
                 echo "Error: Unknown option '$1'" >&2
-                echo "Usage: dotconfigs cleanup [--apply] [--dry-run] [--project <path>]" >&2
+                echo "Usage: dotconfigs cleanup [path] [--apply] [--dry-run]" >&2
                 exit 1
                 ;;
             *)
+                if [[ -z "$path" ]]; then path="$1"; else
+                    echo "Error: Multiple paths specified" >&2; exit 1
+                fi
                 shift
                 ;;
         esac
     done
 
-    # Resolve project config if --project given
-    if [[ -n "$project_path" ]]; then
-        project_path=$(expand_path "$project_path")
-        config_file="$project_path/.dotconfigs/project.json"
-    fi
-
-    # Check jq + config exist
     if ! check_jq; then
         return 1
     fi
-    if [[ ! -f "$config_file" ]]; then
-        echo "Error: config file not found: $config_file" >&2
-        exit 1
-    fi
-
     init_colours
+
+    local scope deploy_json project_root=""
+    if [[ -z "$path" ]]; then
+        scope="machine"; deploy_json="$DEPLOY_CONFIG"
+    else
+        path=$(expand_path "$path")
+        scope="project"; deploy_json="$path/.dotconfigs/deploy.json"; project_root="$path"
+    fi
 
     if [[ "$dry_run" == "true" ]]; then
         echo "Cleanup dry-run (use --apply to remove):"
@@ -576,68 +436,30 @@ cmd_cleanup() {
 
     removed=0
 
-    # Parse all modules and run cleanup on each target directory
-    local modules_data
-    modules_data=$(parse_modules "$config_file")
-
-    if [[ -z "$modules_data" ]]; then
-        echo "No modules found."
+    # Group every symlink target in scope by its parent directory, then run the
+    # directory cleanup once per dir: removes stale dotconfigs-owned symlinks and
+    # broken-into-repo symlinks; preserves foreign files and foreign symlinks.
+    local plan rows t
+    plan=$(resolve_plan "$PLUGINS_DIR" "$deploy_json" "$scope")
+    rows=$(
+        while IFS=$'\t' read -r enabled source target method label; do
+            [[ "$method" == "symlink" ]] || continue
+            t=$(expand_tilde "$target")
+            [[ -n "$project_root" && "$t" != /* ]] && t="$project_root/$t"
+            printf '%s\t%s\n' "$(dirname "$t")" "$(basename "$t")"
+        done <<< "$plan"
+    )
+    if [[ -z "$rows" ]]; then
+        echo "Nothing to clean."
         return 0
     fi
 
-    while IFS=$'\t' read -r source target method include_csv; do
-        local abs_target
-        abs_target=$(expand_tilde "$target")
-
-        # If project, resolve relative targets
-        if [[ -n "$project_path" && "$abs_target" != /* ]]; then
-            abs_target="$project_path/$abs_target"
-        fi
-
-        local abs_source
-        if [[ "$source" != /* ]]; then
-            abs_source="$SCRIPT_DIR/$source"
-        else
-            abs_source="$source"
-        fi
-
-        case "$method" in
-            symlink)
-                if [[ -d "$abs_source" ]]; then
-                    # Directory module: build expected CSV from include list or source dir
-                    local deployed_csv=""
-                    if [[ "$include_csv" == "__NONE__" ]]; then
-                        deployed_csv=""
-                    elif [[ -n "$include_csv" ]]; then
-                        deployed_csv="$include_csv"
-                    else
-                        # No include list — all source files are expected
-                        for file in "$abs_source"/*; do
-                            [[ ! -e "$file" ]] && continue
-                            [[ -d "$file" ]] && continue
-                            if [[ -n "$deployed_csv" ]]; then
-                                deployed_csv="$deployed_csv,$(basename "$file")"
-                            else
-                                deployed_csv="$(basename "$file")"
-                            fi
-                        done
-                    fi
-                    cleanup_stale_in_directory "$abs_target" "$deployed_csv" "$SCRIPT_DIR" "$dry_run"
-                else
-                    # Single-file symlink: check if target is broken
-                    if [[ -L "$abs_target" && ! -e "$abs_target" ]]; then
-                        if [[ "$dry_run" == "true" ]]; then
-                            echo "  Would remove broken symlink: $abs_target"
-                        else
-                            rm -f "$abs_target"
-                            echo "  ✓ Removed broken symlink: $abs_target"
-                        fi
-                        removed=$(( removed + 1 ))
-                    fi
-                fi
-                ;;
-        esac
-    done <<< "$modules_data"
+    local dir csv
+    while IFS= read -r dir; do
+        [[ -z "$dir" ]] && continue
+        csv=$(awk -F'\t' -v d="$dir" '$1==d{printf "%s%s",sep,$2; sep=","}' <<< "$rows")
+        cleanup_stale_in_directory "$dir" "$csv" "$REPO_ROOT" "$dry_run"
+    done < <(cut -f1 <<< "$rows" | sort -u)
 
     echo ""
     echo "Cleanup summary:"
@@ -649,36 +471,25 @@ cmd_cleanup() {
 }
 
 cmd_deploy() {
-    local group=""
-    local dry_run=false
-    local force_mode=false
+    local path="" dry_run=false force_mode=false
 
-    # Parse arguments: extract group name and flags
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --dry-run)
-                dry_run=true
-                shift
-                ;;
-            --force)
-                force_mode=true
-                shift
-                ;;
+            --dry-run) dry_run=true; shift ;;
+            --force)   force_mode=true; shift ;;
             -*)
                 echo "Error: Unknown option '$1'" >&2
                 exit 1
                 ;;
             *)
-                # First non-flag argument is the group name
-                if [[ -z "$group" ]]; then
-                    group="$1"
+                if [[ -z "$path" ]]; then path="$1"; else
+                    echo "Error: Multiple paths specified" >&2; exit 1
                 fi
                 shift
                 ;;
         esac
     done
 
-    # Initialize colours for dry-run header
     if [[ "$dry_run" == "true" ]]; then
         init_colours
         echo "$(colour_cyan "═══════════════════════════════════════════════════════════")"
@@ -687,30 +498,48 @@ cmd_deploy() {
         echo ""
     fi
 
-    # Deploy from global.json
-    deploy_from_json "$GLOBAL_CONFIG" "$SCRIPT_DIR" "$group" "$dry_run" "$force_mode"
+    if [[ -z "$path" ]]; then
+        # Machine deploy
+        deploy_from_json "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine" "$REPO_ROOT" "$dry_run" "$force_mode"
+        _reconcile_git_templatedir "$dry_run"
+        echo ""
+        _create_path_symlink "$dry_run" "$force_mode"
+        return 0
+    fi
 
-    # Reconcile git hook seeding (init.templateDir) with the selection.
-    _reconcile_git_templatedir "$dry_run"
-
-    # Create PATH symlink (after all deploys)
-    echo ""
-    _create_path_symlink "$dry_run" "$force_mode"
+    # Project deploy
+    path=$(expand_path "$path")
+    if ! validate_git_repo "$path"; then
+        echo "Error: Not a git repository: $path" >&2
+        echo "Initialize with: git init" >&2
+        exit 1
+    fi
+    local config_file="$path/.dotconfigs/deploy.json"
+    if [[ ! -f "$config_file" ]]; then
+        echo "Error: No .dotconfigs/deploy.json found at $path" >&2
+        echo "Run: dotconfigs init $path" >&2
+        exit 1
+    fi
+    deploy_from_json "$PLUGINS_DIR" "$config_file" "project" "$REPO_ROOT" "$dry_run" "$force_mode" "$path"
+    if [[ "$dry_run" != "true" ]]; then
+        _exclude_dotconfigs "$path"
+        _register_project "$path"
+    fi
 }
 
-# Couple init.templateDir to the git `hooks` module so new repos seed hooks iff
-# that module is selected. Set it in ~/.gitconfig when `hooks` is in global.json,
-# unset it (only if it is still our value) when it is excluded — so disabling git
-# seeding is just removing `hooks` from the selection, with no orphan config.
+# Couple init.templateDir to the git hooks so new repos seed hooks iff any git
+# hook is selected in the machine deploy.json. Set it in ~/.gitconfig when at
+# least one git hook is on, unset it (only if it is still our value) when none
+# are — so disabling git seeding is just toggling the hooks off, no orphan config.
 _reconcile_git_templatedir() {
     local dry_run="${1:-false}"
     command -v git >/dev/null 2>&1 || return 0
-    [[ -f "$GLOBAL_CONFIG" ]] || return 0
+    [[ -f "$DEPLOY_CONFIG" ]] || return 0
 
     local ours="~/.dotconfigs/git-template"
     local ours_abs; ours_abs=$(expand_tilde "$ours")
     local hooks_selected="false"
-    if jq -e '.git.hooks' "$GLOBAL_CONFIG" >/dev/null 2>&1; then
+    if jq -e '(.git.hooks // {}) | to_entries | map(select(.value)) | length > 0' "$DEPLOY_CONFIG" >/dev/null 2>&1; then
         hooks_selected="true"
     fi
     # `|| true`: git config --get exits 1 when unset, which would trip `set -e`.
@@ -741,7 +570,7 @@ cmd_status() {
 
     init_colours
     check_jq || return 1
-    _require_global_config || return 1
+    _require_deploy_config || return 1
 
     if [[ -n "$plugin_filter" ]] && ! plugin_exists "$plugin_filter"; then
         echo "Error: Plugin '$plugin_filter' not found" >&2
@@ -755,7 +584,7 @@ cmd_status() {
 
         lines=$(_collect_plugin_states "$plugin")
         if [[ -z "$lines" ]]; then
-            printf "%b %s\n\n" "$(colour_yellow "$plugin")" "no modules in $GLOBAL_CONFIG"
+            printf "%b %s\n\n" "$(colour_yellow "$plugin")" "no enabled items in $DEPLOY_CONFIG"
             continue
         fi
 
@@ -795,7 +624,7 @@ _audit_project_hooks() {
     [[ -f "$PROJECT_REGISTRY" ]] || return 0
 
     local expected
-    expected=$(jq -r '.project.hooks.include[]?' "$PLUGINS_DIR/git/manifest.json" 2>/dev/null)
+    expected=$(jq -r '.hooks | keys[]' "$PLUGINS_DIR/git/manifest.json" 2>/dev/null)
     [[ -z "$expected" ]] && return 0
 
     printf "%b\n" "$(colour_cyan 'project git-hook audit')"
@@ -830,7 +659,7 @@ _audit_project_hooks() {
             for p in $problems; do
                 printf "      %b %s\n" "$(colour_red "${p%%:*}")" "${p#*:}"
             done
-            printf "      %bfix: dotconfigs project-deploy %s%b\n" "${COLOUR_YELLOW:-}" "$repo" "${COLOUR_RESET:-}"
+            printf "      %bfix: dotconfigs deploy %s%b\n" "${COLOUR_YELLOW:-}" "$repo" "${COLOUR_RESET:-}"
         fi
     done < "$PROJECT_REGISTRY"
     echo ""
@@ -839,7 +668,7 @@ _audit_project_hooks() {
 cmd_list() {
     init_colours
     check_jq || return 1
-    _require_global_config || return 1
+    _require_deploy_config || return 1
 
     echo "Available plugins:"
     echo ""
@@ -848,7 +677,7 @@ cmd_list() {
     while IFS= read -r plugin; do
         lines=$(_collect_plugin_states "$plugin")
         if [[ -z "$lines" ]]; then
-            printf "  - %s (no modules in global.json)\n" "$plugin"
+            printf "  - %s (no enabled items)\n" "$plugin"
             continue
         fi
 
@@ -882,8 +711,8 @@ cmd_validate() {
         esac
     done
 
-    # Allowed module methods and keys (manifest schema whitelist).
-    local valid_methods="symlink copy merge append managed"
+    # Allowed methods and item keys (catalogue schema whitelist).
+    local valid_methods="symlink merge append managed"
     errors=0
     warnings=0
 
@@ -904,33 +733,38 @@ cmd_validate() {
             continue
         fi
 
-        # Each module: validate method, key whitelist, and source existence.
+        # Each item (category/name): validate method, key whitelist, source.
         local module_errors=0
         local rows
         rows=$(jq -r '
-            (.global // {}), (.project // {})
-            | to_entries[]
-            | select(.value | type == "object" and has("source"))
-            | [ .key, .value.source, (.value.method // ""),
-                ((.value | keys) - ["source","target","method","include","exclude"] | join(",")) ]
+            to_entries[] as $c | $c.value | to_entries[] as $i |
+            [ "\($c.key)/\($i.key)",
+              ($i.value.source // ""),
+              ($i.value.method // ""),
+              (($i.value | keys) - ["description","source","method","target","wiring","default"] | join(",")) ]
             | @tsv
         ' "$manifest" 2>/dev/null)
 
-        local mod_key src method extra_keys abs_src
-        while IFS=$'\t' read -r mod_key src method extra_keys; do
-            [[ -z "$mod_key" ]] && continue
+        local item_key src method extra_keys abs_src
+        while IFS=$'\t' read -r item_key src method extra_keys; do
+            [[ -z "$item_key" ]] && continue
             if [[ " $valid_methods " != *" $method "* ]]; then
-                printf "  %b✗ %s/%s: invalid method '%s'%b\n" "${COLOUR_RED:-}" "$plugin" "$mod_key" "$method" "${COLOUR_RESET:-}"
+                printf "  %b✗ %s/%s: invalid method '%s'%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "$method" "${COLOUR_RESET:-}"
                 errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
             fi
             if [[ -n "$extra_keys" ]]; then
-                printf "  %b✗ %s/%s: unknown manifest key(s): %s%b\n" "${COLOUR_RED:-}" "$plugin" "$mod_key" "$extra_keys" "${COLOUR_RESET:-}"
+                printf "  %b✗ %s/%s: unknown key(s): %s%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "$extra_keys" "${COLOUR_RESET:-}"
                 errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
             fi
-            if [[ "$src" != /* ]]; then abs_src="$SCRIPT_DIR/$src"; else abs_src="$src"; fi
-            if [[ ! -e "$abs_src" ]]; then
-                printf "  %b✗ %s/%s: source not found: %s%b\n" "${COLOUR_RED:-}" "$plugin" "$mod_key" "$src" "${COLOUR_RESET:-}"
+            if [[ -z "$src" ]]; then
+                printf "  %b✗ %s/%s: missing source%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "${COLOUR_RESET:-}"
                 errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
+            else
+                if [[ "$src" != /* ]]; then abs_src="$REPO_ROOT/$src"; else abs_src="$src"; fi
+                if [[ ! -e "$abs_src" ]]; then
+                    printf "  %b✗ %s/%s: source not found: %s%b\n" "${COLOUR_RED:-}" "$plugin" "$item_key" "$src" "${COLOUR_RESET:-}"
+                    errors=$(( errors + 1 )); module_errors=$(( module_errors + 1 ))
+                fi
             fi
         done <<< "$rows"
 
@@ -939,29 +773,9 @@ cmd_validate() {
         fi
     done
 
-    # Scan deployed merge-method JSON targets for dangling command references.
-    if [[ -f "$GLOBAL_CONFIG" ]]; then
-        _refcheck_merge_targets "$(parse_modules "$GLOBAL_CONFIG" "")"
-    fi
-
-    # Defensive: flag claude hooks wired in BOTH the global and the current
-    # project's settings.json (additive merge → double-fire). Only fires when a
-    # project .claude/settings.json exists in the CWD.
-    if declare -f refcheck_hook_duplication >/dev/null 2>&1; then
-        refcheck_hook_duplication \
-            "$HOME/.claude/settings.json" \
-            "$PWD/.claude/settings.json" || true
-    fi
-
-    # Flag plugin hooks declared in BOTH global.json and the current project.json
-    # (same hook listed under `.<plugin>.hooks.include` in both). One consolidated
-    # warning per plugin pointing at both files.
-    if declare -f refcheck_hook_manifest_overlap >/dev/null 2>&1 \
-       && [[ -f "$PWD/.dotconfigs/project.json" ]]; then
-        refcheck_hook_manifest_overlap "git" \
-            "$GLOBAL_CONFIG" "$PWD/.dotconfigs/project.json" || true
-        refcheck_hook_manifest_overlap "claude" \
-            "$GLOBAL_CONFIG" "$PWD/.dotconfigs/project.json" || true
+    # Scan deployed merge-method targets for dangling command references.
+    if [[ -f "$DEPLOY_CONFIG" ]]; then
+        _refcheck_merge_targets "$(resolve_plan "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine")"
     fi
 
     echo ""
@@ -978,105 +792,6 @@ cmd_validate() {
     return 0
 }
 
-cmd_project() {
-    # Space-form subcommands: `project init [path]` aliases `project-init [path]`;
-    # `project deploy [path]` is just `project [path]` with a redundant verb.
-    if [[ "${1:-}" == "init" ]]; then
-        shift
-        cmd_project_init "$@"
-        return
-    fi
-    if [[ "${1:-}" == "deploy" ]]; then
-        shift
-    fi
-
-    local project_path=""
-    local dry_run="false"
-    local force="false"
-
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --dry-run)
-                dry_run="true"
-                shift
-                ;;
-            --force)
-                force="true"
-                shift
-                ;;
-            -*)
-                echo "Error: Unknown option '$1'" >&2
-                echo "Usage: dotconfigs project [path] [--dry-run] [--force]" >&2
-                exit 1
-                ;;
-            *)
-                if [[ -z "$project_path" ]]; then
-                    project_path="$1"
-                    shift
-                else
-                    echo "Error: Multiple paths specified" >&2
-                    exit 1
-                fi
-                ;;
-        esac
-    done
-
-    # Default to CWD if no path specified
-    if [[ -z "$project_path" ]]; then
-        project_path="$PWD"
-    fi
-
-    # Resolve to absolute path
-    project_path=$(expand_path "$project_path")
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Invalid path: $project_path" >&2
-        exit 1
-    fi
-
-    # Validate git repo
-    if ! validate_git_repo "$project_path"; then
-        echo "Error: Not a git repository: $project_path" >&2
-        echo "Initialize with: git init" >&2
-        exit 1
-    fi
-
-    # Check for project.json
-    local config_file="$project_path/.dotconfigs/project.json"
-    if [[ ! -f "$config_file" ]]; then
-        echo "Error: No .dotconfigs/project.json found at $project_path" >&2
-        echo "Run: dotconfigs project-init $project_path" >&2
-        exit 1
-    fi
-
-    # Deploy from JSON
-    deploy_from_json "$config_file" "$SCRIPT_DIR" "" "$dry_run" "$force" "$project_path"
-
-    # Auto-exclude .dotconfigs/ in .git/info/exclude (unless dry-run)
-    if [[ "$dry_run" != "true" ]]; then
-        local exclude_file="$project_path/.git/info/exclude"
-        if ! grep -qxF ".dotconfigs/" "$exclude_file" 2>/dev/null; then
-            mkdir -p "$(dirname "$exclude_file")"
-            echo ".dotconfigs/" >> "$exclude_file"
-            echo ""
-            echo "Added .dotconfigs/ to .git/info/exclude"
-        fi
-
-        # Defensive: if this project wires claude hooks in its own settings.json,
-        # warn about any that also fire globally (additive merge → double-fire).
-        if declare -f refcheck_hook_duplication >/dev/null 2>&1; then
-            refcheck_hook_duplication \
-                "$HOME/.claude/settings.json" \
-                "$project_path/.claude/settings.json" || true
-        fi
-
-        # Register this repo so `dotconfigs status` can later audit its git hooks
-        # for drift (a project's hooks live in .git/hooks and are easy to lose to
-        # a re-clone or a `.git` reset). Idempotent — one absolute path per line.
-        _register_project "$project_path"
-    fi
-}
-
 # Append a repo path to the project registry (deduplicated). Canonicalises to an
 # absolute path so the status audit can resolve it from any cwd. Args: path
 _register_project() {
@@ -1090,74 +805,6 @@ _register_project() {
     fi
 }
 
-cmd_project_init() {
-    local project_path=""
-
-    # Parse argument
-    if [[ $# -eq 0 ]]; then
-        # Check if CWD is the dotconfigs repo itself
-        if [[ "$(pwd)" -ef "$SCRIPT_DIR" ]]; then
-            echo "Error: Cannot use dotconfigs repo as project target" >&2
-            echo "Run from a project directory, or specify a path: dotconfigs project-init /path/to/project" >&2
-            exit 1
-        fi
-
-        # Check if CWD is a git repo
-        if ! git -C "$PWD" rev-parse --git-dir >/dev/null 2>&1; then
-            echo "Error: Current directory is not a git repository" >&2
-            echo "Run from a git repo, or specify a path: dotconfigs project-init /path/to/project" >&2
-            exit 1
-        fi
-
-        # Use CWD
-        project_path="$PWD"
-    else
-        project_path="$1"
-        shift
-    fi
-
-    # Resolve to absolute path
-    project_path=$(expand_path "$project_path")
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Invalid path: $project_path" >&2
-        exit 1
-    fi
-
-    # Validate git repo
-    if ! validate_git_repo "$project_path"; then
-        echo "Error: Not a git repository: $project_path" >&2
-        echo "Initialize with: git init" >&2
-        exit 1
-    fi
-
-    if ! command -v jq &>/dev/null; then
-        echo "Error: jq is required but not installed." >&2
-        echo "Install with: brew install jq" >&2
-        exit 1
-    fi
-
-    local config_file="$project_path/.dotconfigs/project.json"
-    local json
-    json=$(assemble_from_manifests "project")
-
-    if ! write_with_overwrite_protection "$config_file" "$json"; then
-        return 0
-    fi
-
-    # Auto-exclude .dotconfigs/ in .git/info/exclude
-    local exclude_file="$project_path/.git/info/exclude"
-    if ! grep -qxF ".dotconfigs/" "$exclude_file" 2>/dev/null; then
-        mkdir -p "$(dirname "$exclude_file")"
-        echo ".dotconfigs/" >> "$exclude_file"
-        echo "Added .dotconfigs/ to .git/info/exclude"
-    fi
-
-    echo ""
-    echo "Next steps:"
-    echo "  1. Edit $config_file"
-    echo "  2. Run: dotconfigs project          (from the project directory)"
-}
-
 main() {
     if [[ $# -eq 0 ]]; then
         show_usage
@@ -1168,23 +815,17 @@ main() {
         setup)
             cmd_setup
             ;;
-        global-init)
-            cmd_global_init "${@:2}"
+        init)
+            cmd_init "${@:2}"
             ;;
-        project-init)
-            cmd_project_init "${@:2}"
-            ;;
-        project-deploy|project)
-            cmd_project "${@:2}"
-            ;;
-        cleanup)
-            cmd_cleanup "${@:2}"
+        deploy)
+            cmd_deploy "${@:2}"
             ;;
         undeploy)
             cmd_undeploy "${@:2}"
             ;;
-        global-deploy|deploy)
-            cmd_deploy "${@:2}"
+        cleanup)
+            cmd_cleanup "${@:2}"
             ;;
         status)
             cmd_status "${@:2}"
