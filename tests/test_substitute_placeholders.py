@@ -78,6 +78,29 @@ def test_substitutes_from_git_config(dotconfigs_root, tmp_path):
     assert "attribution:" not in result.stderr  # no fallback warning
 
 
+def test_substitutes_from_included_gitconfig(dotconfigs_root, tmp_path):
+    """Identity defined only in an [include]d file (like our gitconfig-base) is
+    resolved via --includes, not mistaken for unset and forced to the fallback."""
+    src = tmp_path / "settings.json"
+    src.write_text(
+        json.dumps(
+            {"attribution": {"name": "{{AUTHOR_NAME}}", "email": "{{AUTHOR_EMAIL}}"}}
+        )
+    )
+    base = tmp_path / "gitconfig-base"
+    base.write_text("[user]\n  name = henrycgbaker\n  email = hcb@example.com\n")
+    cfg = tmp_path / "gitconfig"
+    cfg.write_text(f"[include]\n  path = {base}\n")
+
+    result = run_bash(_runner(dotconfigs_root, src), env=_git_env(cfg))
+    rc, _out, content = _parse(result.stdout)
+
+    assert rc == 0
+    data = json.loads(content)
+    assert data["attribution"] == {"name": "henrycgbaker", "email": "hcb@example.com"}
+    assert "attribution:" not in result.stderr  # resolved via include, no fallback
+
+
 def test_falls_back_when_git_config_empty(dotconfigs_root, tmp_path):
     src = tmp_path / "settings.json"
     src.write_text(

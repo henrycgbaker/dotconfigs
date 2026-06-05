@@ -45,8 +45,8 @@ fi
 # ---------------------------------------------------------------------------
 # Author attribution — mirror lib/deploy.sh _substitute_placeholders fallbacks.
 # ---------------------------------------------------------------------------
-author_name="$(git config --global user.name 2>/dev/null || true)"
-author_email="$(git config --global user.email 2>/dev/null || true)"
+author_name="$(git config --global --includes user.name 2>/dev/null || true)"
+author_email="$(git config --global --includes user.email 2>/dev/null || true)"
 author_name="${author_name:-Henry Baker}"
 author_email="${author_email:-henry.c.g.baker@gmail.com}"
 

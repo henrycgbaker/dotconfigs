@@ -441,8 +441,10 @@ _substitute_placeholders() {
         return 0
     fi
     local name email used_fallback=false
-    name=$(git config --global user.name 2>/dev/null)
-    email=$(git config --global user.email 2>/dev/null)
+    # --includes so an identity set in an included file (e.g. our gitconfig-base)
+    # is honoured; plain --global misses includes and would force the fallback.
+    name=$(git config --global --includes user.name 2>/dev/null)
+    email=$(git config --global --includes user.email 2>/dev/null)
     if [[ -z "$name" ]]; then
         name="Henry Baker"
         used_fallback=true
