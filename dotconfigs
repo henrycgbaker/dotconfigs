@@ -953,6 +953,17 @@ cmd_validate() {
             "$PWD/.claude/settings.json" || true
     fi
 
+    # Flag plugin hooks declared in BOTH global.json and the current project.json
+    # (same hook listed under `.<plugin>.hooks.include` in both). One consolidated
+    # warning per plugin pointing at both files.
+    if declare -f refcheck_hook_manifest_overlap >/dev/null 2>&1 \
+       && [[ -f "$PWD/.dotconfigs/project.json" ]]; then
+        refcheck_hook_manifest_overlap "git" \
+            "$GLOBAL_CONFIG" "$PWD/.dotconfigs/project.json" || true
+        refcheck_hook_manifest_overlap "claude" \
+            "$GLOBAL_CONFIG" "$PWD/.dotconfigs/project.json" || true
+    fi
+
     echo ""
     if [[ "$errors" -gt 0 ]]; then
         printf "%b✗ validate: %s error(s), %s warning(s)%b\n" "${COLOUR_RED:-}" "$errors" "$warnings" "${COLOUR_RESET:-}" >&2

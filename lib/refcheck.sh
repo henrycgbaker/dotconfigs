@@ -128,3 +128,25 @@ refcheck_hook_duplication() {
     done <<< "$dup"
     return $rc
 }
+
+# Flag hooks for a given plugin declared in BOTH the global and project
+# dotconfigs configs (.dotconfigs/global.json, .dotconfigs/project.json).
+# Emits a single consolidated warning per plugin listing every duplicated
+# include entry, with a pointer to both config paths.
+# Args: plugin_name, global_config_json, project_config_json
+# Returns: 0 if no overlap, 1 if any.
+refcheck_hook_manifest_overlap() {
+    local plugin="$1" global_config="$2" project_config="$3"
+    [[ -f "$global_config" && -f "$project_config" ]] || return 0
+
+    local global_hooks project_hooks dup
+    global_hooks=$(jq -r --arg p "$plugin" '.[$p].hooks.include[]? // empty' "$global_config" 2>/dev/null | sort -u)
+    project_hooks=$(jq -r --arg p "$plugin" '.[$p].hooks.include[]? // empty' "$project_config" 2>/dev/null | sort -u)
+    [[ -z "$global_hooks" || -z "$project_hooks" ]] && return 0
+
+    dup=$(comm -12 <(printf '%s\n' "$global_hooks") <(printf '%s\n' "$project_hooks") | paste -sd ',' -)
+    [[ -z "$dup" ]] && return 0
+
+    refcheck_warn "$plugin: hook(s) declared in BOTH $global_config and $project_config — $dup"
+    return 1
+}
