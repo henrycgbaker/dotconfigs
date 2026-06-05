@@ -176,6 +176,86 @@ def test_templatedir_coupled_to_hooks(dotconfigs_root, tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
+# undeploy completeness: a machine undeploy fully reverses what deploy did
+# ---------------------------------------------------------------------------
+
+
+def test_undeploy_clears_templatedir(tmp_path: Path):
+    """A machine undeploy unsets init.templateDir — deploy sets it from the hooks
+    selection, but undeploy removes the template hooks, so leaving it set would
+    point new repos at an empty template dir."""
+    gitconfig = tmp_path / "gitconfig"
+    gitconfig.write_text("")
+    deploy_json = tmp_path / "deploy.json"
+    deploy_json.write_text(json.dumps({"git": {"hooks": {"commit-msg": True}}}))
+    env = {
+        "HOME": str(tmp_path / "home"),
+        "GIT_CONFIG_GLOBAL": str(gitconfig),
+        "GIT_CONFIG_SYSTEM": str(gitconfig),
+        "DOTCONFIGS_DEPLOY_CONFIG": str(deploy_json),
+        "DOTCONFIGS_PROJECT_REGISTRY": str(tmp_path / "reg.list"),
+    }
+
+    def templatedir():
+        return run_bash(
+            "git config --global --get init.templateDir || true",
+            env={"GIT_CONFIG_GLOBAL": str(gitconfig)},
+        ).stdout.strip()
+
+    assert run_bash(f'"{ENTRY}" deploy --force', env=env).returncode == 0
+    assert templatedir() == "~/.dotconfigs/git-template"
+
+    assert run_bash(f'"{ENTRY}" undeploy --apply', env=env).returncode == 0
+    assert templatedir() == ""
+
+
+def _undeploy_hooks(root: Path, target: Path, dry: str = "false"):
+    script = f"""
+set -e
+source "{root}/src/lib/symlinks.sh"
+source "{root}/src/lib/validation.sh"
+source "{root}/src/lib/deploy.sh"
+removed=0; skipped=0; unchanged=0
+_undeploy_synthesised_hooks "{target}" "{dry}"
+echo "removed=$removed skipped=$skipped unchanged=$unchanged"
+"""
+    return run_bash(script)
+
+
+def test_undeploy_strips_synthesised_hooks(dotconfigs_root, tmp_path: Path):
+    """undeploy clears the synthesised `hooks` block from settings.json (it is 100%
+    ours, authoritative at deploy) while preserving the user's other settings —
+    otherwise hooks stay wired to symlinks undeploy just removed."""
+    settings = tmp_path / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {
+                "permissions": {"allow": ["Bash(local-grant:*)"]},
+                "hooks": {
+                    "PreToolUse": [{"matcher": "Bash", "hooks": [{"command": "x.sh"}]}]
+                },
+            }
+        )
+    )
+
+    # dry-run previews, leaves the file untouched
+    dry = _undeploy_hooks(dotconfigs_root, settings, "true")
+    assert "Would clear synthesised hooks block" in dry.stdout
+    assert "hooks" in json.loads(settings.read_text())
+
+    # apply: hooks key gone, the user's settings survive
+    res = _undeploy_hooks(dotconfigs_root, settings, "false")
+    assert "removed=1" in res.stdout, res.stderr
+    data = json.loads(settings.read_text())
+    assert "hooks" not in data
+    assert data["permissions"]["allow"] == ["Bash(local-grant:*)"]
+
+    # second undeploy is a no-op (nothing left to strip)
+    again = _undeploy_hooks(dotconfigs_root, settings, "false")
+    assert "unchanged=1" in again.stdout
+
+
+# ---------------------------------------------------------------------------
 # status audit: registered repos with missing/dangling git hooks
 # ---------------------------------------------------------------------------
 

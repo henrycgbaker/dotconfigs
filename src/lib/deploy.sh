@@ -877,6 +877,35 @@ _undeploy_symlink() {
     eval "skipped=\$(( \$skipped + 1 ))"
 }
 
+# Strip the dotconfigs-synthesised `hooks` block from a deployed Claude
+# settings.json on undeploy. That block is generated entirely by us (hooks are
+# authoritative at deploy time), so removing it is safe and reversible, while the
+# rest of the file — the user's own settings — is left untouched. This is why the
+# settings item is handled here instead of falling through to the merge-skip path.
+# Args: abs_target, dry_run
+_undeploy_synthesised_hooks() {
+    local tgt="$1" dry="$2"
+    if [[ ! -f "$tgt" ]] || ! jq -e '(.hooks // {}) | length > 0' "$tgt" >/dev/null 2>&1; then
+        eval "unchanged=\$(( \$unchanged + 1 ))"
+        return
+    fi
+    if [[ "$dry" == "true" ]]; then
+        echo "  Would clear synthesised hooks block: $tgt"
+        eval "removed=\$(( \$removed + 1 ))"
+        return
+    fi
+    local tmp; tmp=$(mktemp -t "dotconfigs.undeploy.XXXXXX")
+    if jq 'del(.hooks)' "$tgt" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$tgt"
+        echo "  ✓ Cleared synthesised hooks block: $tgt"
+        eval "removed=\$(( \$removed + 1 ))"
+    else
+        rm -f "$tmp"
+        echo "  - Skipped (could not edit settings): $tgt"
+        eval "skipped=\$(( \$skipped + 1 ))"
+    fi
+}
+
 # Walk a config and undeploy every module. Mirror of deploy_from_json.
 # Args: plugins_dir, deploy_json, scope, dotconfigs_root, [dry_run], [project_root]
 undeploy_from_json() {
@@ -916,6 +945,13 @@ undeploy_from_json() {
         rtarget="$target"
         if [[ "$scope" == "project" && -n "$project_root" ]]; then
             rtarget="$project_root/$target"
+        fi
+        # The Claude settings.json carries a synthesised `hooks` block; strip just
+        # that on undeploy (keep the user's other settings) rather than skipping it
+        # as an unreversible merge, which would leave hooks wired to removed files.
+        if [[ "$label" == "claude/config/settings" ]]; then
+            _undeploy_synthesised_hooks "$(expand_tilde "$rtarget")" "$dry_run"
+            continue
         fi
         undeploy_module "$source" "$rtarget" "$method" "$dotconfigs_root" "$dry_run"
     done <<< "$plan"

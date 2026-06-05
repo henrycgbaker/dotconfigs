@@ -380,6 +380,9 @@ cmd_undeploy() {
 
     if [[ -z "$path" ]]; then
         undeploy_from_json "$PLUGINS_DIR" "$DEPLOY_CONFIG" "machine" "$REPO_ROOT" "$dry_run"
+        # Tearing down the git hooks orphans init.templateDir (it points at the now
+        # empty template dir), so unconditionally clear our value here.
+        _reconcile_git_templatedir "$dry_run" off
     else
         path=$(expand_path "$path")
         undeploy_from_json "$PLUGINS_DIR" "$path/.dotconfigs/deploy.json" "project" "$REPO_ROOT" "$dry_run" "$path"
@@ -531,14 +534,17 @@ cmd_deploy() {
 # are — so disabling git seeding is just toggling the hooks off, no orphan config.
 _reconcile_git_templatedir() {
     local dry_run="${1:-false}"
+    local desired="${2:-auto}"   # auto: derive from selection. off: force unset (undeploy).
     command -v git >/dev/null 2>&1 || return 0
-    [[ -f "$DEPLOY_CONFIG" ]] || return 0
 
     local ours="~/.dotconfigs/git-template"
     local ours_abs; ours_abs=$(expand_tilde "$ours")
     local hooks_selected="false"
-    if jq -e '(.git.hooks // {}) | to_entries | map(select(.value)) | length > 0' "$DEPLOY_CONFIG" >/dev/null 2>&1; then
-        hooks_selected="true"
+    if [[ "$desired" != "off" ]]; then
+        [[ -f "$DEPLOY_CONFIG" ]] || return 0
+        if jq -e '(.git.hooks // {}) | to_entries | map(select(.value)) | length > 0' "$DEPLOY_CONFIG" >/dev/null 2>&1; then
+            hooks_selected="true"
+        fi
     fi
     # `|| true`: git config --get exits 1 when unset, which would trip `set -e`.
     local current; current=$(git config --global --get init.templateDir 2>/dev/null || true)
