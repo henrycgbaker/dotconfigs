@@ -12,9 +12,9 @@ while [[ -L "$_source" ]]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
-# Repo root: the base against which manifest `source` paths resolve. Equal to
-# SCRIPT_DIR in the flat layout; the parent once the engine lives under src/.
-REPO_ROOT="$SCRIPT_DIR"
+# Repo root: the base against which manifest `source` paths resolve. The engine
+# (entry + lib/) lives under src/, so the repo root is the parent of SCRIPT_DIR.
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 PLUGINS_DIR="$REPO_ROOT/plugins"
 # Machine-wide selection (the toggle board). Lives outside the repo so it is
 # instance-specific. Override for tests (DOTCONFIGS_DEPLOY_CONFIG).
