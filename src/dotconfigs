@@ -22,6 +22,11 @@ DEPLOY_CONFIG="${DOTCONFIGS_DEPLOY_CONFIG:-$HOME/.dotconfigs/deploy.json}"
 # Registry of repos that have had a project deploy run, so `status` can audit
 # their git hooks for drift (missing/dangling) after the fact. Override for tests.
 PROJECT_REGISTRY="${DOTCONFIGS_PROJECT_REGISTRY:-$HOME/.dotconfigs/projects.list}"
+# Instance overrides (author-identity defaults, CLI bin dir). Lives outside the
+# repo alongside deploy.json; sourced if present. See .env.example for the knobs.
+DOTCONFIGS_ENV="${DOTCONFIGS_ENV:-$HOME/.dotconfigs/.env}"
+# shellcheck source=/dev/null
+[[ -f "$DOTCONFIGS_ENV" ]] && source "$DOTCONFIGS_ENV"
 
 # Source shared libraries eagerly (small files)
 source "$SCRIPT_DIR/lib/symlinks.sh"
@@ -206,6 +211,17 @@ _capture_path() {
 # Seed a selection (toggle board). No path: the machine selection at
 # ~/.dotconfigs/deploy.json. With a path: a per-project selection at
 # <repo>/.dotconfigs/deploy.json (requires a git repo).
+# Seed the instance .env from the committed template on first machine init; never
+# clobber an existing one. Holds author-identity / bin-dir overrides (.env.example).
+_seed_env_file() {
+    [[ -f "$DOTCONFIGS_ENV" ]] && return 0
+    local example="$REPO_ROOT/.env.example"
+    [[ -f "$example" ]] || return 0
+    mkdir -p "$(dirname "$DOTCONFIGS_ENV")"
+    cp "$example" "$DOTCONFIGS_ENV"
+    echo "Seeded $DOTCONFIGS_ENV (edit to set author identity / bin dir)"
+}
+
 cmd_init() {
     if ! check_jq; then exit 1; fi
 
@@ -221,6 +237,7 @@ cmd_init() {
     if [[ -z "$path" ]]; then
         local json; json=$(seed_deploy_json "machine")
         if write_with_overwrite_protection "$DEPLOY_CONFIG" "$json" "$force"; then
+            _seed_env_file
             echo ""
             echo "Next: edit $DEPLOY_CONFIG to toggle items, then run 'dotconfigs deploy'."
         fi
@@ -289,9 +306,17 @@ _create_path_symlink() {
     local dry_run="$1"
     local force_mode="$2"
 
-    # Determine symlink target: prefer ~/.local/bin, fall back to /usr/local/bin
+    # Determine the bin dir: an explicit DOTCONFIGS_BIN_DIR wins; else prefer
+    # ~/.local/bin, fall back to /usr/local/bin.
     local target=""
-    if [[ -d "$HOME/.local/bin" ]]; then
+    if [[ -n "${DOTCONFIGS_BIN_DIR:-}" ]]; then
+        if mkdir -p "$DOTCONFIGS_BIN_DIR" 2>/dev/null; then
+            target="$DOTCONFIGS_BIN_DIR/dotconfigs"
+        else
+            echo "Warning: DOTCONFIGS_BIN_DIR ($DOTCONFIGS_BIN_DIR) is not writable" >&2
+            return 0
+        fi
+    elif [[ -d "$HOME/.local/bin" ]]; then
         target="$HOME/.local/bin/dotconfigs"
     elif [[ -d "/usr/local/bin" ]]; then
         target="/usr/local/bin/dotconfigs"

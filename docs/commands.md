@@ -23,7 +23,7 @@ The command surface is **path-presence driven**: no path ⇒ machine scope (`~/.
 ```bash
 dotconfigs setup          # run once after cloning
 ```
-Creates PATH symlinks for `dotconfigs` and the `dots` alias. Run `init` next.
+Creates PATH symlinks for `dotconfigs` and the `dots` alias. Run `init` next. Set `DOTCONFIGS_BIN_DIR` to choose where the symlinks go (default: `~/.local/bin` if present, else `/usr/local/bin`).
 
 ## init `[path]` `[--force]`
 
@@ -31,7 +31,7 @@ Creates PATH symlinks for `dotconfigs` and the `dots` alias. Run `init` next.
 dotconfigs init           # seed the machine selection: ~/.dotconfigs/deploy.json
 dotconfigs init .         # seed a per-project selection: <repo>/.dotconfigs/deploy.json
 ```
-Seeds a **selection** (the toggle board) from the plugin manifests. Every catalogued item with a target in that scope is listed with its `default` on/off value. With a path it requires a git repo and adds `.dotconfigs/` to that repo's `.git/info/exclude`. Edit the file to toggle items, then run `deploy [path]`. `--force` overwrites an existing selection without prompting (the old one is backed up to a timestamped `.bak`).
+Seeds a **selection** (the toggle board) from the plugin manifests. Every catalogued item with a target in that scope is listed with its `default` on/off value. With a path it requires a git repo and adds `.dotconfigs/` to that repo's `.git/info/exclude`. Edit the file to toggle items, then run `deploy [path]`. `--force` overwrites an existing selection without prompting (the old one is backed up to a timestamped `.bak`). A machine `init` (no path) also seeds `~/.dotconfigs/.env` from `.env.example` if absent - per-machine settings (author identity, `DOTCONFIGS_BIN_DIR`); see [Getting started](getting-started.md#per-machine-settings-env).
 
 ## deploy `[path]` `[--dry-run]` `[--force]`
 

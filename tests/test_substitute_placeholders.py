@@ -101,6 +101,53 @@ def test_substitutes_from_included_gitconfig(dotconfigs_root, tmp_path):
     assert "attribution:" not in result.stderr  # resolved via include, no fallback
 
 
+def test_env_identity_used_before_hardcoded_fallback(dotconfigs_root, tmp_path):
+    """With no git identity, DOTCONFIGS_AUTHOR_* (from the instance .env) is used
+    before the hardcoded default — and without the fallback warning."""
+    src = tmp_path / "settings.json"
+    src.write_text(
+        json.dumps(
+            {"attribution": {"name": "{{AUTHOR_NAME}}", "email": "{{AUTHOR_EMAIL}}"}}
+        )
+    )
+    empty = tmp_path / "empty_gitconfig"
+    empty.write_text("")
+    env = {
+        **_git_env(empty),
+        "DOTCONFIGS_AUTHOR_NAME": "Env Person",
+        "DOTCONFIGS_AUTHOR_EMAIL": "env@example.com",
+    }
+
+    result = run_bash(_runner(dotconfigs_root, src), env=env)
+    rc, _out, content = _parse(result.stdout)
+
+    assert rc == 0
+    data = json.loads(content)
+    assert data["attribution"] == {"name": "Env Person", "email": "env@example.com"}
+    assert "attribution:" not in result.stderr  # not the hardcoded fallback
+
+
+def test_git_config_wins_over_env(dotconfigs_root, tmp_path):
+    """git config is authoritative: it takes precedence over the .env defaults."""
+    src = tmp_path / "settings.json"
+    src.write_text(
+        json.dumps(
+            {"attribution": {"name": "{{AUTHOR_NAME}}", "email": "{{AUTHOR_EMAIL}}"}}
+        )
+    )
+    cfg = tmp_path / "gitconfig"
+    cfg.write_text("[user]\n  name = Git Person\n  email = git@example.com\n")
+    env = {
+        **_git_env(cfg),
+        "DOTCONFIGS_AUTHOR_NAME": "Env Person",
+        "DOTCONFIGS_AUTHOR_EMAIL": "env@example.com",
+    }
+
+    result = run_bash(_runner(dotconfigs_root, src), env=env)
+    _rc, _out, content = _parse(result.stdout)
+    assert json.loads(content)["attribution"]["name"] == "Git Person"
+
+
 def test_falls_back_when_git_config_empty(dotconfigs_root, tmp_path):
     src = tmp_path / "settings.json"
     src.write_text(

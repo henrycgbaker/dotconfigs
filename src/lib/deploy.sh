@@ -485,6 +485,10 @@ _substitute_placeholders() {
     # is honoured; plain --global misses includes and would force the fallback.
     name=$(git config --global --includes user.name 2>/dev/null)
     email=$(git config --global --includes user.email 2>/dev/null)
+    # Then the instance .env (DOTCONFIGS_AUTHOR_*, sourced by the entry point),
+    # before the hardcoded last-resort default.
+    [[ -z "$name" ]] && name="${DOTCONFIGS_AUTHOR_NAME:-}"
+    [[ -z "$email" ]] && email="${DOTCONFIGS_AUTHOR_EMAIL:-}"
     if [[ -z "$name" ]]; then
         name="Henry Baker"
         used_fallback=true
