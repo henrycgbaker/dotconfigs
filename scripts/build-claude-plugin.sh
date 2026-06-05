@@ -13,6 +13,7 @@
 #   skills/                     — relative symlink to ../plugins/claude/skills
 #   output-styles/              — relative symlink to ../plugins/claude/output-styles
 #   settings.json               — non-hook portion of plugins/claude/settings.json
+#   README.md                   — generated; explains this is a build artifact
 #
 # Idempotent: the generated claude-plugin/ tree is removed and rebuilt each run.
 
@@ -122,5 +123,52 @@ done
 # ---------------------------------------------------------------------------
 ln -s "../plugins/claude/skills" "$OUT/skills"
 ln -s "../plugins/claude/output-styles" "$OUT/output-styles"
+
+# ---------------------------------------------------------------------------
+# README — explains this is a generated artifact (regenerated each build, so it
+# must be emitted here rather than hand-added, or it would be wiped).
+# ---------------------------------------------------------------------------
+cat > "$OUT/README.md" <<'README'
+# dots — native Claude Code plugin (generated)
+
+> **Generated artifact — do not edit by hand.** This whole directory is rebuilt
+> by `scripts/build-claude-plugin.sh` from `plugins/claude/` (which is the single
+> source of truth). Edit the source there and re-run the build; any manual change
+> here is wiped on the next build.
+
+This is the [`plugins/claude/`](../plugins/claude/) configuration — safety hooks,
+git-workflow skills, and the concise-execution output style — packaged as an
+installable **Claude Code plugin** named `dots`. It is committed so it can be
+installed without cloning dotconfigs or running the symlink deploy.
+
+## Install (from inside Claude Code)
+
+```
+/plugin marketplace add henrycgbaker/dotconfigs
+/plugin install dots
+```
+
+Installed this way the skills are **namespaced** — `/dots:commit`,
+`/dots:squash-merge`, etc. (a full `dotconfigs deploy` installs them un-namespaced).
+
+## Two distribution paths, one source
+
+| Path | What it does |
+|------|--------------|
+| `dotconfigs deploy` | symlinks `plugins/claude/` into `~/.claude/` (the main path; hooks wired into `~/.claude/settings.json`) |
+| this `dots` plugin  | a native Claude Code plugin install — no clone/deploy needed |
+
+## What's in here
+
+- `.claude-plugin/plugin.json` — generated manifest (name/version/description/author).
+- `hooks/hooks.json` — the hook wiring, **synthesised** from each hook's `wiring` in
+  `plugins/claude/manifest.json` (the same source the deploy engine uses), with commands
+  repointed at `${CLAUDE_PLUGIN_ROOT}`.
+- `hooks/*.sh` — relative symlinks back to `plugins/claude/hooks/`.
+- `skills/`, `output-styles/` — relative symlinks to `plugins/claude/`.
+- `settings.json` — the non-hooks portion of `plugins/claude/settings.json`.
+
+To refresh after editing the source: `scripts/build-claude-plugin.sh`.
+README
 
 echo "Built native plugin at: $OUT"
