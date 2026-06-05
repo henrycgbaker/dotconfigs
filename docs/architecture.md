@@ -38,6 +38,8 @@ These are easy to conflate but operate at different stages:
 
 Scope is **implied by the target path**, not declared separately: machine-scope items (`~/...` / absolute targets) live in the machine file, project-scope items (relative targets) in the project file. An item with **both** kinds of target - git hooks (`~/.dotconfigs/git-template/hooks/...` *and* `.git/hooks/...`) and claude skills (`~/.claude/skills/...` *and* `.claude/skills/...`) - appears in both files, and each deploy applies only its scope-matching target.
 
+A `deploy` only acts on targets that match its scope, so **relative targets are inert during machine setup.** A machine `deploy` (no path) resolves *only* the `~`/absolute targets; a relative target such as `.git/hooks/pre-commit` or `.claude/skills/commit` produces no deploy row at all, because it has no meaning without a specific repo to anchor it. Those activate only under `deploy <repo>`, which resolves each relative target against `<repo>`. The one automatic bridge is `init.templateDir`, set during the machine `deploy`: it makes every new `git init`/`clone` auto-seed the **git** hooks into its `.git/hooks/`, so a fresh repo gets them with no explicit project deploy. Pre-existing repos, and any *non-git* project artefacts (per-project claude skills), still need `deploy <repo>`.
+
 ## Data flow
 
 ```
