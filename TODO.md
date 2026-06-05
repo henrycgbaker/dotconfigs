@@ -1,11 +1,2 @@
-- [ ] further research to optimise claude / git
-- [ ] at some point work on rewiring agents workflow back in (low priority)
-- [ ] add more plugins
-- [ ]  when to wizards: give option to delete files (hooks / extensions etc at target dir) - build in prompts for cleanup etc
-- [ ] add explore (i think this is actually super painful, so maybe just skip)
-- [ ] make it not my configs but a generic config manager !!!
-- [ ] add to claude plugin to make its CLI / terminal output of its scripts maximally explicit (no magic)
 - [ ] properly build out + wire up the native Claude plugin / marketplace format as a first-class distribution path (potentially a cleaner long-term solution than the symlink-deploy model for the claude plugin) - deferred for now, revisit
-
-- [ ] add a hook/async logging in gsd that somehow logs my requirements deterministically so when creating the context.md I can verify it did it (often seems to miss loads)
-- [ ]  set up dotconfig hook to auto amend all my discussion to a log file that gets backup into aw and clean and cleaned up at the end by haiku
+- [ ] claude hook to cp my discussion to a log file that gets backup into and cleaned up by haiku
