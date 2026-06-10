@@ -125,7 +125,20 @@ def has_consumer(name: str, module: str, all_facades: list[Path], root: Path) ->
     return False
 
 
+def _check_on(name: str) -> bool:
+    """A check runs unless explicitly disabled in git config; missing key => on."""
+    out = subprocess.run(
+        ["git", "config", "--bool", f"dotconfigs.check-facade-consumers.{name}"],
+        capture_output=True,
+        text=True,
+    )
+    return out.stdout.strip() != "false"
+
+
 def main() -> int:
+    if not _check_on("facade-consumers"):
+        return 0
+
     root = repo_root()
     src = root / "src"
     if not src.is_dir():

@@ -32,6 +32,14 @@ COMMIT_SHA=$3
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
+# A check runs unless explicitly disabled in git config; missing key => on.
+HOOK="prepare-commit-msg"
+_check_on() {
+    local v; v=$(git config --bool "dotconfigs.$HOOK.$1" 2>/dev/null)
+    [[ "$v" != false ]]
+}
+_check_on branch-prefix || exit 0
+
 # ============================================================================
 # SKIP CONDITIONS
 # ============================================================================

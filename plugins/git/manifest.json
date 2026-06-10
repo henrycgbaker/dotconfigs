@@ -5,63 +5,96 @@
       "source": "plugins/git/hooks/check-facade-consumers.py",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/check-facade-consumers.py", ".git/hooks/check-facade-consumers.py"],
-      "default": true
+      "default": true,
+      "checks": {
+        "facade-consumers": {"description": "Fail if a facade __all__ entry has no external consumer", "default": true}
+      }
     },
     "commit-msg": {
       "description": "Block AI attribution patterns in commit messages",
       "source": "plugins/git/hooks/commit-msg",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/commit-msg", ".git/hooks/commit-msg"],
-      "default": true
+      "default": true,
+      "checks": {
+        "block-ai-attribution": {"description": "Reject commit messages containing AI attribution (Co-Authored-By: Claude, etc.)", "default": true}
+      }
     },
     "pre-commit": {
       "description": "Identity check, secrets scan, block main commits, Ruff format+lint on staged files",
       "source": "plugins/git/hooks/pre-commit",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/pre-commit", ".git/hooks/pre-commit"],
-      "default": true
+      "default": true,
+      "checks": {
+        "identity": {"description": "Require the expected git user.name / user.email", "default": true},
+        "planning-block": {"description": "Block staging of .planning/ files", "default": true},
+        "block-main": {"description": "Block direct commits to main/master", "default": true},
+        "secrets": {"description": "Scan staged changes for secrets (gitleaks or regex fallback)", "default": true},
+        "ruff": {"description": "Ruff format + lint --fix on staged Python files", "default": true},
+        "resurrection-check": {"description": "Warn when a merge/rebase resolution overlaps main's changes (advisory)", "default": true}
+      }
     },
     "pre-push": {
       "description": "Force-push protection and fast lint/format check",
       "source": "plugins/git/hooks/pre-push",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/pre-push", ".git/hooks/pre-push"],
-      "default": true
+      "default": true,
+      "checks": {
+        "force-push-guard": {"description": "Block force-push to main/master", "default": true},
+        "ruff": {"description": "Ruff lint + format --check before push", "default": true}
+      }
     },
     "pre-rebase": {
       "description": "Block rebasing main/master and warn about pushed commits",
       "source": "plugins/git/hooks/pre-rebase",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/pre-rebase", ".git/hooks/pre-rebase"],
-      "default": true
+      "default": true,
+      "checks": {
+        "block-main-rebase": {"description": "Block rebasing the main/master branch", "default": true}
+      }
     },
     "prepare-commit-msg": {
       "description": "Extract conventional commit prefix from branch name",
       "source": "plugins/git/hooks/prepare-commit-msg",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/prepare-commit-msg", ".git/hooks/prepare-commit-msg"],
-      "default": true
+      "default": true,
+      "checks": {
+        "branch-prefix": {"description": "Prepend a conventional-commit prefix derived from the branch name", "default": true}
+      }
     },
     "post-checkout": {
       "description": "Display branch information on checkout",
       "source": "plugins/git/hooks/post-checkout",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/post-checkout", ".git/hooks/post-checkout"],
-      "default": true
+      "default": true,
+      "checks": {
+        "branch-info": {"description": "Print branch information after checkout", "default": true}
+      }
     },
     "post-merge": {
       "description": "Dependency change detection and migration reminders",
       "source": "plugins/git/hooks/post-merge",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/post-merge", ".git/hooks/post-merge"],
-      "default": true
+      "default": true,
+      "checks": {
+        "dep-change-detection": {"description": "Detect dependency/migration changes after a merge and remind", "default": true}
+      }
     },
     "post-rewrite": {
       "description": "Dependency detection for rebase workflows",
       "source": "plugins/git/hooks/post-rewrite",
       "method": "symlink",
       "target": ["~/.dotconfigs/git-template/hooks/post-rewrite", ".git/hooks/post-rewrite"],
-      "default": true
+      "default": true,
+      "checks": {
+        "dep-change-detection": {"description": "Detect dependency changes after a rewrite (rebase/amend) and remind", "default": true}
+      }
     }
   },
   "config": {
