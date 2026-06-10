@@ -14,11 +14,37 @@ def test_setup_creates_path_symlinks(tmp_path, run_dotconfigs, dotconfigs_root):
     result = run_dotconfigs(["setup"], env={"HOME": str(home)})
     assert result.returncode == 0, result.stderr
 
-    entry = (dotconfigs_root / "src" / "dotconfigs").resolve()
+    entry = (dotconfigs_root / "bin" / "dotconfigs").resolve()
     for name in ("dotconfigs", "dots"):
         link = home / ".local" / "bin" / name
         assert link.is_symlink(), f"{name} not symlinked onto PATH"
         assert link.resolve() == entry
+
+
+def test_setup_repoints_stale_links_noninteractively(
+    tmp_path, run_dotconfigs, dotconfigs_root
+):
+    """A stale/broken dotconfigs-owned link is self-healed without a prompt.
+
+    Regression: setup used to leave a relocated entry point's dangling links in
+    place (the non-interactive overwrite prompt defaults to "no"), so a re-run
+    after moving the entry point never fixed PATH.
+    """
+    bindir = tmp_path / "home" / ".local" / "bin"
+    bindir.mkdir(parents=True)
+    entry = (dotconfigs_root / "bin" / "dotconfigs").resolve()
+
+    for name in ("dotconfigs", "dots"):
+        link = bindir / name
+        link.symlink_to(tmp_path / "old" / "dotconfigs")  # broken: target absent
+        assert link.is_symlink() and not link.exists()
+
+    result = run_dotconfigs(["setup"], env={"DOTCONFIGS_BIN_DIR": str(bindir)})
+    assert result.returncode == 0, result.stderr
+
+    for name in ("dotconfigs", "dots"):
+        link = bindir / name
+        assert link.resolve() == entry, f"{name} not repointed to the new entry"
 
 
 def test_setup_respects_bin_dir_override(tmp_path, run_dotconfigs, dotconfigs_root):
@@ -32,7 +58,7 @@ def test_setup_respects_bin_dir_override(tmp_path, run_dotconfigs, dotconfigs_ro
     )
     assert result.returncode == 0, result.stderr
 
-    entry = (dotconfigs_root / "src" / "dotconfigs").resolve()
+    entry = (dotconfigs_root / "bin" / "dotconfigs").resolve()
     for name in ("dotconfigs", "dots"):
         link = bindir / name
         assert link.is_symlink(), f"{name} not placed in DOTCONFIGS_BIN_DIR"

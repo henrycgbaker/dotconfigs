@@ -12,8 +12,8 @@ while [[ -L "$_source" ]]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "$_source")" && pwd)"
 unset _source _dir
-# Repo root: the base against which manifest `source` paths resolve. The engine
-# (entry + lib/) lives under src/, so the repo root is the parent of SCRIPT_DIR.
+# Repo root: the base against which manifest `source` paths resolve. The entry
+# point lives in bin/, so the repo root is the parent of SCRIPT_DIR.
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 PLUGINS_DIR="$REPO_ROOT/plugins"
 # Machine-wide selection (the toggle board). Lives outside the repo so it is
@@ -29,13 +29,13 @@ DOTCONFIGS_ENV="${DOTCONFIGS_ENV:-$HOME/.dotconfigs/.env}"
 [[ -f "$DOTCONFIGS_ENV" ]] && source "$DOTCONFIGS_ENV"
 
 # Source shared libraries eagerly (small files)
-source "$SCRIPT_DIR/lib/symlinks.sh"
-source "$SCRIPT_DIR/lib/discovery.sh"
-source "$SCRIPT_DIR/lib/validation.sh"
-source "$SCRIPT_DIR/lib/colours.sh"
-source "$SCRIPT_DIR/lib/deploy.sh"
-source "$SCRIPT_DIR/lib/refcheck.sh"
-source "$SCRIPT_DIR/lib/init.sh"
+source "$REPO_ROOT/lib/symlinks.sh"
+source "$REPO_ROOT/lib/discovery.sh"
+source "$REPO_ROOT/lib/validation.sh"
+source "$REPO_ROOT/lib/colours.sh"
+source "$REPO_ROOT/lib/deploy.sh"
+source "$REPO_ROOT/lib/refcheck.sh"
+source "$REPO_ROOT/lib/init.sh"
 
 show_usage() {
     cat <<EOF
@@ -364,12 +364,17 @@ _create_path_symlink() {
             if [[ "$current" == "$SCRIPT_DIR/dotconfigs" ]]; then
                 echo "$name already on PATH (symlink correct)"
                 continue
-            else
-                # Symlink exists but points elsewhere
-                if [[ "$force_mode" != "true" ]]; then
-                    echo "Warning: $name symlink exists but points to: $current" >&2
-                    wizard_yesno "Overwrite with dotconfigs symlink?" "n" || continue
-                fi
+            elif [[ ! -e "$sym" ]]; then
+                # Self-heal a broken link (e.g. the entry point was relocated):
+                # a dangling link is never a foreign file worth protecting.
+                echo "$name was broken (→ $current); repointing"
+            elif [[ "$(basename "$current")" == "dotconfigs" || "$(basename "$current")" == "dots" ]]; then
+                # A live but stale dotconfigs-owned link from a prior install.
+                echo "$name was stale (→ $current); repointing"
+            elif [[ "$force_mode" != "true" ]]; then
+                # Points at a genuinely foreign target — ask before clobbering.
+                echo "Warning: $name symlink exists but points to: $current" >&2
+                wizard_yesno "Overwrite with dotconfigs symlink?" "n" || continue
             fi
         elif [[ -e "$sym" ]]; then
             echo "Warning: File exists at $sym (not a symlink)" >&2

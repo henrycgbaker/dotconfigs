@@ -5,7 +5,7 @@ configs via JSON catalogues and (mostly) symlinks.
 
 ## Architecture
 
-- Engine: `src/dotconfigs` (entry point) + `src/lib/*.sh` (sourced libs, no shebangs)
+- Engine: `bin/dotconfigs` (entry point) + `lib/*.sh` (sourced libs, no shebangs)
 - Plugins (the data registry): `plugins/{claude,git,shell}/manifest.json` + their sources
 - Scripts: `scripts/` (`generate-roster.sh`, `build-claude-plugin.sh`)
 
@@ -29,7 +29,7 @@ Deploy applies enabled items and tears down disabled ones in the same pass. The 
 - **Bash 3.2 compat** (macOS) -- no `local -n`, `declare -n`, associative arrays, `${var,,}`
 - **jq required** for JSON parsing
 - No cross-plugin imports -- plugins self-contained
-- No shebangs in `src/lib/` files (sourced only)
+- No shebangs in `lib/` files (sourced only)
 
 ## Commands
 

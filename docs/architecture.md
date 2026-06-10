@@ -100,7 +100,7 @@ Deploy only touches files it owns (symlinks resolving back into the dotconfigs r
 
 The repo splits the engine from the registry:
 
-- **`src/`** - the engine: `src/dotconfigs` (the entry point; it follows its PATH symlink to find the repo root, the parent of `src/`) and `src/lib/*.sh` (sourced libraries, no shebangs).
+- **`bin/`** + **`lib/`** - the engine: `bin/dotconfigs` (the entry point; it follows its PATH symlink to find the repo root, the parent of `bin/`) and `lib/*.sh` (sourced libraries, no shebangs).
 - **`plugins/{claude,git,shell}/`** - the data: a `manifest.json` per plugin plus the source files it catalogues.
 - **`scripts/`** (`generate-roster.sh`, `build-claude-plugin.sh`), **`docs/`**, **`tests/`**.
 

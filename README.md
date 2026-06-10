@@ -9,7 +9,7 @@ It's a small, plugin-based config manager: plugin **manifests** are the catalogu
 ```bash
 git clone git@github.com:henrycgbaker/dotconfigs.git ~/Repositories/dotconfigs
 cd ~/Repositories/dotconfigs
-./src/dotconfigs setup      # put dotconfigs + dots on PATH
+make install                # put dotconfigs + dots on PATH (./bin/dotconfigs setup)
 dotconfigs init             # seed ~/.dotconfigs/deploy.json from the catalogue defaults
 dotconfigs deploy           # deploy the selection (preview first with --dry-run)
 ```
