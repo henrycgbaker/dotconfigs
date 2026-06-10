@@ -1,4 +1,4 @@
-"""End-to-end unit tests for every deploy method in src/lib/deploy.sh.
+"""End-to-end unit tests for every deploy method in lib/deploy.sh.
 
 One file that drives `deploy_module` (and `undeploy_module`) directly for each
 of the four methods, asserting the happy path, idempotency, and the property
@@ -26,9 +26,9 @@ BEGIN = "# >>> dotconfigs:"
 END = "# <<< dotconfigs:"
 
 _LIBS = """
-source "{root}/src/lib/symlinks.sh"
-source "{root}/src/lib/validation.sh"
-source "{root}/src/lib/deploy.sh"
+source "{root}/lib/symlinks.sh"
+source "{root}/lib/validation.sh"
+source "{root}/lib/deploy.sh"
 """
 
 
@@ -110,7 +110,7 @@ def test_symlink_preserves_foreign_symlink_at_target(dotconfigs_root, tmp_path):
     dest.symlink_to(foreign)
 
     res = run_bash(
-        f'source "{dotconfigs_root}/src/lib/symlinks.sh"\n'
+        f'source "{dotconfigs_root}/lib/symlinks.sh"\n'
         f'backup_and_link "{src}" "{dest}" "dest.sh" "false" "{root}"\n'
     )
     assert dest.is_symlink()

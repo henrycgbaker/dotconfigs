@@ -22,8 +22,8 @@ def _runner(dotconfigs_root: Path, src: Path) -> str:
     """A bash snippet that runs _substitute_placeholders and prints a parseable
     RC / OUT / content envelope."""
     return f"""
-source "{dotconfigs_root}/src/lib/colours.sh"
-source "{dotconfigs_root}/src/lib/deploy.sh"
+source "{dotconfigs_root}/lib/colours.sh"
+source "{dotconfigs_root}/lib/deploy.sh"
 out=$(_substitute_placeholders "{src}")
 echo "RC=$?"
 echo "OUT=$out"

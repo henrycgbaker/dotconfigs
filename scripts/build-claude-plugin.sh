@@ -79,8 +79,8 @@ jq -n \
 # to the installed-plugin path. Plugin hooks run in shell form, so wrap
 # ${CLAUDE_PLUGIN_ROOT} in double quotes per the hooks reference.
 # ---------------------------------------------------------------------------
-# shellcheck source=../src/lib/deploy.sh
-source "$REPO_ROOT/src/lib/deploy.sh"
+# shellcheck source=../lib/deploy.sh
+source "$REPO_ROOT/lib/deploy.sh"
 # Ship the default-on hook set: a selection mirroring each hook's `default`.
 sel_tmp="$(mktemp "${TMPDIR:-/tmp}/dots-plugin-sel.XXXXXX")"
 jq -n --slurpfile m "$SRC/manifest.json" \

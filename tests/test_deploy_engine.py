@@ -1,4 +1,4 @@
-"""Unit tests for the catalogue → selection → plan engine in src/lib.
+"""Unit tests for the catalogue → selection → plan engine in lib.
 
 Covers _merged_manifest, seed_deploy_json (init.sh), resolve_plan, and
 synthesise_claude_hooks — the join between the catalogue (manifest.json) and the
@@ -21,8 +21,8 @@ TAB = "\t"
 
 def _engine(root: Path, body: str):
     script = f"""
-source "{root}/src/lib/deploy.sh"
-source "{root}/src/lib/init.sh"
+source "{root}/lib/deploy.sh"
+source "{root}/lib/init.sh"
 PLUGINS_DIR="{root}/plugins"
 {body}
 """

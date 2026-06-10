@@ -28,7 +28,7 @@ from tests.conftest import run_bash
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ENTRY = REPO_ROOT / "src" / "dotconfigs"
+ENTRY = REPO_ROOT / "bin" / "dotconfigs"
 
 
 # ---------------------------------------------------------------------------
@@ -83,9 +83,9 @@ def test_templatedir_seeds_new_repo(tmp_path: Path):
 def _merge(root: Path, source: Path, target: Path):
     script = f"""
 set -e
-source "{root}/src/lib/symlinks.sh"
-source "{root}/src/lib/validation.sh"
-source "{root}/src/lib/deploy.sh"
+source "{root}/lib/symlinks.sh"
+source "{root}/lib/validation.sh"
+source "{root}/lib/deploy.sh"
 _rc=0
 merge_json_settings "{source}" "{target}" || _rc=$?
 echo "RC=$_rc"
@@ -212,9 +212,9 @@ def test_undeploy_clears_templatedir(tmp_path: Path):
 def _undeploy_hooks(root: Path, target: Path, dry: str = "false"):
     script = f"""
 set -e
-source "{root}/src/lib/symlinks.sh"
-source "{root}/src/lib/validation.sh"
-source "{root}/src/lib/deploy.sh"
+source "{root}/lib/symlinks.sh"
+source "{root}/lib/validation.sh"
+source "{root}/lib/deploy.sh"
 removed=0; skipped=0; unchanged=0
 _undeploy_synthesised_hooks "{target}" "{dry}"
 echo "removed=$removed skipped=$skipped unchanged=$unchanged"
@@ -437,8 +437,8 @@ def test_commit_msg_hook_blocks_attribution(tmp_path: Path):
 
 def _dup_check(machine: Path, project: Path, label: str = "/some/repo"):
     script = f"""
-source "{REPO_ROOT}/src/lib/colours.sh"
-source "{REPO_ROOT}/src/lib/refcheck.sh"
+source "{REPO_ROOT}/lib/colours.sh"
+source "{REPO_ROOT}/lib/refcheck.sh"
 warnings=0
 refcheck_claude_duplication "{machine}" "{project}" "{label}"
 echo "WARN=$warnings"

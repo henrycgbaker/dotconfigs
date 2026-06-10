@@ -14,7 +14,7 @@ Install dotconfigs, deploy your machine config, then wire up a project - end to 
 ```bash
 git clone git@github.com:henrycgbaker/dotconfigs.git ~/Repositories/dotconfigs
 cd ~/Repositories/dotconfigs
-./src/dotconfigs setup
+make install   # equivalently: ./bin/dotconfigs setup
 ```
 
 `setup` adds `dotconfigs` (and the alias `dots`) to your PATH.

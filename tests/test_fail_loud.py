@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 
 
 def _source(root: Path, *libs: str) -> str:
-    return "\n".join(f'source "{root}/src/lib/{lib}"' for lib in libs)
+    return "\n".join(f'source "{root}/lib/{lib}"' for lib in libs)
 
 
 # ---------------------------------------------------------------------------
@@ -188,16 +188,16 @@ echo "errors=$errors"
 
 @pytest.fixture()
 def repo_copy(dotconfigs_root: Path, tmp_path: Path) -> Path:
-    """A minimal runnable copy of the repo (src engine + plugins)."""
+    """A minimal runnable copy of the repo (bin + lib engine + plugins)."""
     dst = tmp_path / "repo"
     dst.mkdir()
-    for item in ("src", "plugins"):
+    for item in ("bin", "lib", "plugins"):
         shutil.copytree(dotconfigs_root / item, dst / item)
     return dst
 
 
 def test_validate_clean_manifests_pass(repo_copy):
-    result = run_bash(f'"{repo_copy}/src/dotconfigs" validate', cwd=repo_copy)
+    result = run_bash(f'"{repo_copy}/bin/dotconfigs" validate', cwd=repo_copy)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "manifest OK" in result.stdout
 
@@ -212,7 +212,7 @@ def test_validate_detects_broken_manifest(repo_copy):
         "bogus": 1,
     }
     manifest.write_text(json.dumps(data))
-    result = run_bash(f'"{repo_copy}/src/dotconfigs" validate', cwd=repo_copy)
+    result = run_bash(f'"{repo_copy}/bin/dotconfigs" validate', cwd=repo_copy)
     assert result.returncode == 1
     assert "invalid method 'frobnicate'" in result.stdout
     assert "unknown key(s): bogus" in result.stdout
