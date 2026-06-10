@@ -24,19 +24,23 @@ def test_setup_creates_path_symlinks(tmp_path, run_dotconfigs, dotconfigs_root):
 def test_setup_repoints_stale_links_noninteractively(
     tmp_path, run_dotconfigs, dotconfigs_root
 ):
-    """A stale/broken dotconfigs-owned link is self-healed without a prompt.
+    """A broken dotconfigs-owned link is self-healed without a prompt.
 
     Regression: setup used to leave a relocated entry point's dangling links in
     place (the non-interactive overwrite prompt defaults to "no"), so a re-run
-    after moving the entry point never fixed PATH.
+    after moving the entry point never fixed PATH. The links here point at the
+    pre-move location *inside the repo* (src/dotconfigs) which no longer exists -
+    the exact shape of the bug.
     """
     bindir = tmp_path / "home" / ".local" / "bin"
     bindir.mkdir(parents=True)
     entry = (dotconfigs_root / "bin" / "dotconfigs").resolve()
+    old_entry = dotconfigs_root / "src" / "dotconfigs"  # under the repo, now gone
+    assert not old_entry.exists()
 
     for name in ("dotconfigs", "dots"):
         link = bindir / name
-        link.symlink_to(tmp_path / "old" / "dotconfigs")  # broken: target absent
+        link.symlink_to(old_entry)  # broken: target absent
         assert link.is_symlink() and not link.exists()
 
     result = run_dotconfigs(["setup"], env={"DOTCONFIGS_BIN_DIR": str(bindir)})
@@ -45,6 +49,29 @@ def test_setup_repoints_stale_links_noninteractively(
     for name in ("dotconfigs", "dots"):
         link = bindir / name
         assert link.resolve() == entry, f"{name} not repointed to the new entry"
+
+
+def test_setup_leaves_foreign_link_untouched(tmp_path, run_dotconfigs):
+    """A live link to a foreign target is protected, even if basenamed dotconfigs.
+
+    Ownership is decided by repo-path (is_dotconfigs_owned), not by the target's
+    filename - so a user's own `dots` pointing elsewhere is never clobbered
+    non-interactively (the prompt defaults to "no").
+    """
+    bindir = tmp_path / "home" / ".local" / "bin"
+    bindir.mkdir(parents=True)
+    foreign = tmp_path / "elsewhere" / "dotconfigs"  # basename matches, but foreign
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text("# not ours\n")
+
+    for name in ("dotconfigs", "dots"):
+        (bindir / name).symlink_to(foreign)
+
+    result = run_dotconfigs(["setup"], env={"DOTCONFIGS_BIN_DIR": str(bindir)})
+    assert result.returncode == 0, result.stderr
+
+    for name in ("dotconfigs", "dots"):
+        assert (bindir / name).resolve() == foreign, f"{name} was wrongly clobbered"
 
 
 def test_setup_respects_bin_dir_override(tmp_path, run_dotconfigs, dotconfigs_root):

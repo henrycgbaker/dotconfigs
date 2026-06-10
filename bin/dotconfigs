@@ -364,11 +364,12 @@ _create_path_symlink() {
             if [[ "$current" == "$SCRIPT_DIR/dotconfigs" ]]; then
                 echo "$name already on PATH (symlink correct)"
                 continue
-            elif [[ ! -e "$sym" ]]; then
-                # Self-heal a broken link (e.g. the entry point was relocated):
-                # a dangling link is never a foreign file worth protecting.
+            elif [[ ! -e "$sym" && "$current" == "$REPO_ROOT"/* ]]; then
+                # Broken link that pointed into this repo (the entry point moved).
+                # readlink -f can't resolve it once the old dir is gone, so match
+                # the raw target against the repo root rather than is_dotconfigs_owned.
                 echo "$name was broken (→ $current); repointing"
-            elif [[ "$(basename "$current")" == "dotconfigs" || "$(basename "$current")" == "dots" ]]; then
+            elif is_dotconfigs_owned "$sym" "$REPO_ROOT"; then
                 # A live but stale dotconfigs-owned link from a prior install.
                 echo "$name was stale (→ $current); repointing"
             elif [[ "$force_mode" != "true" ]]; then
