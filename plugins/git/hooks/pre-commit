@@ -21,7 +21,7 @@ _check_on() {
 # Loud, uniform block: name the check and how to turn it off in deploy.json.
 _block() {
     echo "❌ BLOCKED by $HOOK/$1: $2" >&2
-    echo "   disable this check (dotconfigs): set git.hooks.$HOOK.checks.$1=false in ~/.dotconfigs/deploy.json, then: dotconfigs deploy" >&2
+    echo "   to temporarily disable this check (NOT-recommended, requires explicit user opt-in): set \`git.hooks.$HOOK.checks.$1=false\` in \`~/.dotconfigs/deploy.json\`, then: \`dotconfigs deploy\`" >&2
     exit 1
 }
 
