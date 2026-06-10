@@ -61,7 +61,13 @@ Manages git config, global excludes, and hooks. Categories - `hooks`, `config`, 
 | `post-rewrite` | Dependency detection for rebase workflows |
 | `check-facade-consumers` | Verify every facade `__all__` entry has an external consumer |
 
-Git hooks have no config file - each is self-contained. To skip one in a given repo, set its item `false` in that repo's `.dotconfigs/deploy.json`.
+Each git hook is a self-contained script, but the **checks** inside it are individually toggleable. To skip a whole hook in a given repo, set its item `false` in that repo's `.dotconfigs/deploy.json`. To turn off just one check, nest it under the hook:
+
+```jsonc
+"git": { "hooks": { "pre-commit": { "enabled": true, "checks": { "block-main": false } } } }
+```
+
+A machine `deploy` materialises these toggles into git config (`dotconfigs.<hook>.<check>`), which the hooks read at run time - a missing key means on, so default behaviour is preserved everywhere. Flip one ad-hoc with `git config --global dotconfigs.pre-commit.block-main false`. Each hook's checks are listed in [ROSTER](ROSTER.md).
 
 ### How git hooks reach a repo (scope model)
 

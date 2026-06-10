@@ -22,6 +22,14 @@
 # Deployed to: ~/.dotconfigs/git-hooks/post-checkout
 # ============================================================================
 
+# A check runs unless explicitly disabled in git config; missing key => on.
+HOOK="post-checkout"
+_check_on() {
+    local v; v=$(git config --bool "dotconfigs.$HOOK.$1" 2>/dev/null)
+    [[ "$v" != false ]]
+}
+_check_on branch-info || exit 0
+
 PREV_HEAD=$1
 NEW_HEAD=$2
 BRANCH_CHECKOUT=$3  # 1 if branch checkout, 0 if file checkout

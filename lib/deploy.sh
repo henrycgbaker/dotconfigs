@@ -197,9 +197,86 @@ resolve_plan() {
         | ($e.target | if type=="array" then . else [.] end)[] as $t
         | (if ($t | test("^[~/]")) then "machine" else "project" end) as $ts
         | select($ts == $scope)
-        | (($sel[$p.key][$c.key][$i.key]) // false) as $en
+        # The on-disk selection may nest per-check toggles under a hook as
+        # {enabled, checks}. Collapse to the bare `enabled` bool here so the
+        # @tsv row never carries an object (which would abort the whole walk and
+        # silently truncate the plan). Bare-bool entries pass through unchanged.
+        | ($sel[$p.key][$c.key][$i.key]) as $v
+        | ((if ($v | type) == "object" then $v.enabled else $v end) // false) as $en
         | [$en, $e.source, $t, $e.method, "\($p.key)/\($c.key)/\($i.key)"] | @tsv
     ' 2>/dev/null || true
+}
+
+# Emit one "<hook>\t<check>\t<enabled-bool>" row per check that any catalogued
+# item declares, resolving the on/off value from the selection's nested
+# `checks` (falling back to the check's manifest `default`, else on). Shared by
+# the materialise and unmaterialise passes. Args: plugins_dir, deploy_json
+_hook_check_rows() {
+    local plugins_dir="$1" deploy_json="$2" merged sel
+    merged=$(_merged_manifest "$plugins_dir") || return 0
+    sel="{}"; [[ -f "$deploy_json" ]] && sel=$(cat "$deploy_json")
+    jq -rn --argjson m "$merged" --argjson sel "$sel" '
+        $m | to_entries[] as $p
+        | $p.value | to_entries[] as $c
+        | $c.value | to_entries[] as $i
+        | ($i.value.checks // {}) | to_entries[] as $ck
+        # A hook selection value may be a bare bool (legacy / all-defaults) or
+        # absent; only read nested check overrides when it is an object, else
+        # fall back to the manifest default. Indexing .checks on a bool would
+        # abort the whole jq stream and truncate the materialisation.
+        | ($sel[$p.key][$c.key][$i.key]) as $hv
+        | (if ($hv | type) == "object" then $hv.checks[$ck.key] else null end) as $ov
+        | (if $ov == null then ($ck.value.default // true) else $ov end) as $on
+        | [$i.key, $ck.key, ($on | tostring)] | @tsv
+    ' 2>/dev/null || true
+}
+
+# Materialise per-check toggles into git config so the deployed hook dispatchers
+# can read them at commit time: `git config --global dotconfigs.<hook>.<check>`.
+# Machine scope only — the toggles are global, mirroring the global git-template
+# hooks. A missing key means "on" (the dispatcher's default), so this only needs
+# to write the values; disabled checks are written as `false`. Args: plugins_dir,
+# deploy_json, dry_run
+materialise_hook_checks() {
+    local plugins_dir="$1" deploy_json="$2" dry_run="${3:-false}"
+    local rows hook check val n=0
+    rows=$(_hook_check_rows "$plugins_dir" "$deploy_json")
+    [[ -z "$rows" ]] && return 0
+    while IFS=$'\t' read -r hook check val; do
+        [[ -z "$hook" ]] && continue
+        if [[ "$dry_run" == "true" ]]; then
+            echo "  Would set: dotconfigs.$hook.$check = $val"
+        else
+            git config --global "dotconfigs.$hook.$check" "$val"
+        fi
+        n=$((n + 1))
+    done <<< "$rows"
+    [[ "$dry_run" != "true" && "$n" -gt 0 ]] && echo "  Hook checks materialised: $n"
+    return 0
+}
+
+# Remove every materialised per-check toggle from git config (inverse of
+# materialise_hook_checks), so the dispatchers fall back to their default-on
+# behaviour. Args: plugins_dir, deploy_json, dry_run
+unmaterialise_hook_checks() {
+    local plugins_dir="$1" deploy_json="$2" dry_run="${3:-false}"
+    local rows hook check val seen=" "
+    rows=$(_hook_check_rows "$plugins_dir" "$deploy_json")
+    [[ -z "$rows" ]] && return 0
+    while IFS=$'\t' read -r hook check _; do
+        [[ -z "$hook" ]] && continue
+        if [[ "$dry_run" == "true" ]]; then
+            echo "  Would unset: dotconfigs.$hook.$check"
+        else
+            git config --global --unset "dotconfigs.$hook.$check" 2>/dev/null || true
+            # Drop the now-empty [dotconfigs "<hook>"] section once per hook.
+            if [[ "$seen" != *" $hook "* ]]; then
+                git config --global --remove-section "dotconfigs.$hook" 2>/dev/null || true
+                seen="$seen$hook "
+            fi
+        fi
+    done <<< "$rows"
+    return 0
 }
 
 # Synthesise the Claude settings `hooks` block from the enabled, wired Claude
@@ -999,6 +1076,12 @@ undeploy_from_json() {
         undeploy_module "$source" "$rtarget" "$method" "$dotconfigs_root" "$dry_run"
     done <<< "$plan"
 
+    # Remove materialised per-check toggles (machine scope only), so the
+    # dispatchers fall back to their default-on behaviour.
+    if [[ "$scope" == "machine" ]]; then
+        unmaterialise_hook_checks "$plugins_dir" "$deploy_json" "$dry_run"
+    fi
+
     echo ""
     echo "Undeploy summary:"
     if [[ "$dry_run" == "true" ]]; then
@@ -1094,6 +1177,12 @@ deploy_from_json() {
     # the catalogue entirely (deselected items were already torn down above), so
     # a deploy converges the target to the catalogue rather than leaking orphans.
     _sweep_stale_symlinks "$plan" "$project_root" "$dotconfigs_root" "$dry_run"
+
+    # Materialise per-check hook toggles into git config (machine scope only —
+    # the keys are global, read by the deployed hook dispatchers at commit time).
+    if [[ "$scope" == "machine" ]]; then
+        materialise_hook_checks "$plugins_dir" "$deploy_json" "$dry_run"
+    fi
 
     # Post-deploy: scan deployed JSON settings targets for dangling command
     # references. Warnings only — never blocks a deploy. Skipped on dry-run.

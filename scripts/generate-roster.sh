@@ -42,8 +42,8 @@ emit_hook_table() {
         echo ""
         echo "$intro"
         echo ""
-        echo "| Hook | Description | Event / Matcher |"
-        echo "|------|-------------|-----------------|"
+        echo "| Hook | Description | Event / Matcher | Checks |"
+        echo "|------|-------------|-----------------|--------|"
     } >> "$OUTPUT_FILE"
 
     jq -r '
@@ -53,7 +53,8 @@ emit_hook_table() {
         | ( ($e.wiring // [] | if type == "array" then . else [.] end)
             | map(.event + (if .matcher then " (" + .matcher + ")" else "" end))
             | join(", ") ) as $wiring
-        | "| \($name) | \($desc) | \($wiring) |"
+        | ( ($e.checks // {}) | keys | join(", ") ) as $checks
+        | "| \($name) | \($desc) | \($wiring) | \($checks) |"
     ' "$manifest" >> "$OUTPUT_FILE"
 }
 
@@ -97,6 +98,17 @@ done < <(jq -r '(.skills // {}) | keys[]' "$CLAUDE_MANIFEST")
     echo "Hooks are opinionated and on by default. To disable one, set it \`false\` in your"
     echo "\`deploy.json\` and re-run \`dotconfigs deploy\` — the hook is then neither symlinked"
     echo "nor wired into settings.json."
+    echo ""
+    echo "Git hooks additionally expose the individual **checks** listed above. Toggle one"
+    echo "by nesting it under its hook in \`deploy.json\` and re-deploying:"
+    echo ""
+    echo '```jsonc'
+    echo '"git": { "hooks": { "pre-commit": { "enabled": true, "checks": { "block-main": false } } } }'
+    echo '```'
+    echo ""
+    echo "\`dotconfigs deploy\` materialises these into git config (\`dotconfigs.<hook>.<check>\`),"
+    echo "read by the hooks at run time. To flip one ad-hoc: \`git config --global"
+    echo "dotconfigs.pre-commit.block-main false\`. A missing key means on."
     echo ""
     echo "For per-project additions without editing the shared hook, use \`.local\` scripts:"
     echo ""

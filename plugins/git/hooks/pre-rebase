@@ -4,16 +4,27 @@
 # TYPE: git-hook
 # PLUGIN: git
 # DESCRIPTION: Blocks rebasing main/master and warns about pushed commits
-# CONFIGURABLE: none
+# CONFIGURABLE: per-check via git config dotconfigs.pre-rebase.<check> (block-main-rebase)
 # ================
 
-set -e
-
-# Block rebasing main/master
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
-    echo "❌ ERROR: Cannot rebase main/master branch"
+# No `set -e`: each check owns its exit explicitly (see pre-commit).
+HOOK="pre-rebase"
+_check_on() {
+    local v; v=$(git config --bool "dotconfigs.$HOOK.$1" 2>/dev/null)
+    [[ "$v" != false ]]
+}
+_block() {
+    echo "❌ BLOCKED by $HOOK/$1: $2" >&2
+    echo "   to temporarily disable this check (NOT-recommended, requires explicit user opt-in): set \`git.hooks.$HOOK.checks.$1=false\` in \`~/.dotconfigs/deploy.json\`, then: \`dotconfigs deploy\`" >&2
     exit 1
+}
+
+# --- block-main-rebase: never rebase the main/master branch ---
+if _check_on block-main-rebase; then
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$BRANCH" == "main" ]] || [[ "$BRANCH" == "master" ]]; then
+        _block block-main-rebase "cannot rebase the $BRANCH branch"
+    fi
 fi
 
 exit 0

@@ -762,7 +762,7 @@ cmd_validate() {
             [ "\($c.key)/\($i.key)",
               ($i.value.source // ""),
               ($i.value.method // ""),
-              (($i.value | keys) - ["description","source","method","target","wiring","default"] | join(",")) ]
+              (($i.value | keys) - ["description","source","method","target","wiring","default","checks"] | join(",")) ]
             | @tsv
         ' "$manifest" 2>/dev/null)
 

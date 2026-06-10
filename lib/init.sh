@@ -21,7 +21,14 @@ seed_deploy_json() {
                           | map(if test("^[~/]") then "machine" else "project" end)
                           | index($scope)) as $has
                        | select($has != null)
-                       | { key: $n, value: ($e.default // false) } )
+                       | { key: $n, value: (
+                           if ($e.checks != null)
+                           then { enabled: ($e.default // false),
+                                  checks: ($e.checks | to_entries
+                                           | map({ key: .key, value: (.value.default // false) })
+                                           | from_entries) }
+                           else ($e.default // false)
+                           end) } )
                 | from_entries ) })
             | map(select(.value | length > 0))
             | from_entries ) })

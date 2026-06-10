@@ -41,8 +41,9 @@ A manifest is nested `category → item`. Categories are organisational only (no
 | `default` | yes | Boolean - whether the item ships on (the value `init` seeds into `deploy.json`) |
 | `description` | optional | Roster description. Omitted for skills, whose SSOT is their `SKILL.md` frontmatter |
 | `wiring` | optional | Claude **event** hooks only - how the hook is wired into `settings.json` (see below). Absent ⇒ not an event hook |
+| `checks` | optional | Git hooks only - the individually-toggleable checks the hook runs (see below). Absent ⇒ a single-purpose hook with nothing to sub-toggle |
 
-`validate` enforces exactly this key whitelist (`description`, `source`, `method`, `target`, `wiring`, `default`); any other key is an error.
+`validate` enforces exactly this key whitelist (`description`, `source`, `method`, `target`, `wiring`, `default`, `checks`); any other key is an error.
 
 ## Scope is implied by the target path
 
@@ -70,6 +71,33 @@ A Claude hook **script** sitting in `~/.claude/hooks/` does nothing until a `hoo
 ```
 
 At deploy time the `wiring` of every **enabled** Claude hook is collected, grouped by event and matcher, and **synthesised** into the merged `~/.claude/settings.json` - there is no static, hand-maintained hooks block in `plugins/claude/settings.json`. A hook is wired *iff* it is selected, so deselecting one in `deploy.json` removes both its symlink and its `settings.json` entry (no dangling reference). Items without `wiring` are not event hooks - the shared helper `_hook-common`, the `settings` fragment, and all git hooks have none.
+
+## The `checks` field (git hook sub-toggles)
+
+A git hook like `pre-commit` runs several independent checks (identity, secrets scan, block-main, ruff, …). `checks` names each one so it can be toggled individually, rather than only enabling/disabling the whole hook. It's a map of `<check> → { description, default }`:
+
+```jsonc
+"pre-commit": {
+  "source": "plugins/git/hooks/pre-commit",
+  "method": "symlink",
+  "target": ["~/.dotconfigs/git-template/hooks/pre-commit", ".git/hooks/pre-commit"],
+  "default": true,
+  "checks": {
+    "block-main": { "description": "Block direct commits to main/master", "default": true },
+    "secrets":    { "description": "Scan staged changes for secrets",      "default": true }
+  }
+}
+```
+
+In `deploy.json` the toggles nest **under their hook**, alongside the hook's own on/off:
+
+```jsonc
+"git": { "hooks": {
+  "pre-commit": { "enabled": true, "checks": { "block-main": false, "secrets": true } }
+} }
+```
+
+`init` seeds this nested shape from the catalogue; a bare-bool hook value (`"pre-commit": true`) is still accepted and means "enabled, all checks at their defaults" (the plan reads only the `enabled` bool). At **machine** deploy time every check is materialised into git config as `dotconfigs.<hook>.<check>` (e.g. `git config --global dotconfigs.pre-commit.block-main false`); the hook dispatchers read those keys at run time, treating a **missing** key as on so a freshly-cloned repo still enforces everything. `undeploy` removes the materialised keys. To flip a check ad-hoc without editing `deploy.json`, set the git config key directly.
 
 ## Deploy methods
 

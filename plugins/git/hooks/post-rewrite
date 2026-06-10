@@ -19,6 +19,14 @@
 # Deployed to: .git/hooks/post-rewrite (via deploy) and the git template dir.
 # ============================================================================
 
+# A check runs unless explicitly disabled in git config; missing key => on.
+HOOK="post-rewrite"
+_check_on() {
+    local v; v=$(git config --bool "dotconfigs.$HOOK.$1" 2>/dev/null)
+    [[ "$v" != false ]]
+}
+_check_on dep-change-detection || exit 0
+
 REWRITE_TYPE=$1  # amend or rebase
 
 # Only check on rebase (not amend — amend is single commit change)

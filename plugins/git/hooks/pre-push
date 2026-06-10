@@ -4,27 +4,37 @@
 # TYPE: git-hook
 # PLUGIN: git
 # DESCRIPTION: Force-push protection and fast lint/format check (tests + types run in CI)
-# CONFIGURABLE: none
+# CONFIGURABLE: per-check via git config dotconfigs.pre-push.<check> (force-push-guard, ruff)
 # ================
 
-set -e
+# No `set -e`: each check owns its exit explicitly (see pre-commit).
+HOOK="pre-push"
+_check_on() {
+    local v; v=$(git config --bool "dotconfigs.$HOOK.$1" 2>/dev/null)
+    [[ "$v" != false ]]
+}
+_block() {
+    echo "❌ BLOCKED by $HOOK/$1: $2" >&2
+    echo "   to temporarily disable this check (NOT-recommended, requires explicit user opt-in): set \`git.hooks.$HOOK.checks.$1=false\` in \`~/.dotconfigs/deploy.json\`, then: \`dotconfigs deploy\`" >&2
+    exit 1
+}
 
-# Read ref info and block force push to protected branches
-while read local_ref local_oid remote_ref remote_oid; do
-    if [[ "$remote_ref" =~ refs/heads/(main|master) ]]; then
-        if [[ "$remote_oid" != "0000000000000000000000000000000000000000" ]] && \
-           [[ "$local_oid" != "0000000000000000000000000000000000000000" ]] && \
-           ! git merge-base --is-ancestor "$remote_oid" "$local_oid" 2>/dev/null; then
-            echo "❌ ERROR: Force push to main/master is blocked"
-            exit 1
+# --- force-push-guard: block force-push to protected branches ---
+if _check_on force-push-guard; then
+    while read -r local_ref local_oid remote_ref remote_oid; do
+        if [[ "$remote_ref" =~ refs/heads/(main|master) ]]; then
+            if [[ "$remote_oid" != "0000000000000000000000000000000000000000" ]] && \
+               [[ "$local_oid" != "0000000000000000000000000000000000000000" ]] && \
+               ! git merge-base --is-ancestor "$remote_oid" "$local_oid" 2>/dev/null; then
+                _block force-push-guard "force-push to main/master is blocked"
+            fi
         fi
-    fi
-done
+    done
+fi
 
-# Fast lint + format check (~2s) — tests and types run in CI
-echo "🔒 Validating push..."
-
-if command -v ruff &> /dev/null; then
+# --- ruff: fast lint + format check (tests and types run in CI) ---
+if _check_on ruff && command -v ruff &> /dev/null; then
+    echo "🔒 Validating push..."
     # Auto-detect lint paths (prefer src/ layout, fall back to .)
     if [ -d "src" ]; then
         LINT_PATHS="src/"
@@ -32,14 +42,12 @@ if command -v ruff &> /dev/null; then
     else
         LINT_PATHS="."
     fi
-
     echo "  → Checking lint..."
-    ruff check $LINT_PATHS || { echo "❌ Lint failed"; exit 1; }
+    ruff check $LINT_PATHS || _block ruff "lint failed"
     echo "  → Checking format..."
-    ruff format --check $LINT_PATHS || { echo "❌ Format check failed"; exit 1; }
+    ruff format --check $LINT_PATHS || _block ruff "format check failed"
+    echo "✅ All checks passed"
 fi
-
-echo "✅ All checks passed"
 
 # Project-specific hook
 [ -x .git/hooks/pre-push.local ] && .git/hooks/pre-push.local
