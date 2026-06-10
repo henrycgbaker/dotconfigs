@@ -109,6 +109,29 @@ def test_materialise_and_unmaterialise(dotconfigs_root, tmp_path):
     assert "AFTER=[]" in r.stdout                       # unmaterialise cleared everything
 
 
+def test_materialise_legacy_bare_bool_hook(dotconfigs_root, tmp_path):
+    """A bare-bool hook value (legacy / all-defaults) must materialise every check
+    at its default, not truncate. Regression: indexing .checks on a bool aborted
+    the jq stream and dropped every check at and after that hook.
+    """
+    env, _cfg = _git_env(tmp_path)
+    sel = tmp_path / "deploy.json"
+    sel.write_text(json.dumps({"git": {"hooks": {"pre-commit": True}}}))
+    script = f"""
+      source "{dotconfigs_root}/lib/colours.sh"
+      source "{dotconfigs_root}/lib/discovery.sh"
+      source "{dotconfigs_root}/lib/symlinks.sh"
+      source "{dotconfigs_root}/lib/validation.sh"
+      source "{dotconfigs_root}/lib/deploy.sh"
+      materialise_hook_checks "{dotconfigs_root}/plugins" "{sel}" false >/dev/null
+      echo "PC=$(git config --global --get-regexp '^dotconfigs\\.pre-commit\\.' | wc -l | tr -d ' ')"
+      echo "BM=$(git config --global --bool dotconfigs.pre-commit.block-main)"
+    """
+    r = run_bash(script, env=env)
+    assert "PC=6" in r.stdout, r.stdout + r.stderr   # all six pre-commit checks
+    assert "BM=true" in r.stdout                     # default-on
+
+
 def _born_repo(repo, cfg, branch="feature", *, identity=True):
     """Bash to create a repo with a born branch and one commit."""
     ident = ""

@@ -220,7 +220,12 @@ _hook_check_rows() {
         | $p.value | to_entries[] as $c
         | $c.value | to_entries[] as $i
         | ($i.value.checks // {}) | to_entries[] as $ck
-        | ($sel[$p.key][$c.key][$i.key].checks[$ck.key]) as $ov
+        # A hook selection value may be a bare bool (legacy / all-defaults) or
+        # absent; only read nested check overrides when it is an object, else
+        # fall back to the manifest default. Indexing .checks on a bool would
+        # abort the whole jq stream and truncate the materialisation.
+        | ($sel[$p.key][$c.key][$i.key]) as $hv
+        | (if ($hv | type) == "object" then $hv.checks[$ck.key] else null end) as $ov
         | (if $ov == null then ($ck.value.default // true) else $ov end) as $on
         | [$i.key, $ck.key, ($on | tostring)] | @tsv
     ' 2>/dev/null || true
