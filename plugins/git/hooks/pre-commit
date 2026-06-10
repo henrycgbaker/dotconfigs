@@ -10,9 +10,6 @@
 # No `set -e`: each check owns its exit explicitly so a benign non-zero (e.g. an
 # unset git identity) can never abort the hook silently before its error prints.
 HOOK="pre-commit"
-# Native-git one-off bypass for this hook's operation (skips ALL hooks, not just
-# one check). Shown in block messages alongside the per-check dotconfigs toggle.
-BYPASS="git commit --no-verify"
 
 # A check runs unless it is explicitly disabled in git config. A MISSING key
 # means on, so a freshly-cloned repo whose config was never materialised still
@@ -21,11 +18,9 @@ _check_on() {
     local v; v=$(git config --bool "dotconfigs.$HOOK.$1" 2>/dev/null)
     [[ "$v" != false ]]
 }
-# Loud, uniform block: name the check and BOTH ways past it - the native-git
-# one-off bypass (skips all hooks) and the dotconfigs per-check toggle.
+# Loud, uniform block: name the check and how to turn it off in deploy.json.
 _block() {
     echo "❌ BLOCKED by $HOOK/$1: $2" >&2
-    [[ -n "$BYPASS" ]] && echo "   skip all hooks once (native git): $BYPASS" >&2
     echo "   disable this check (dotconfigs): set git.hooks.$HOOK.checks.$1=false in ~/.dotconfigs/deploy.json, then: dotconfigs deploy" >&2
     exit 1
 }

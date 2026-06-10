@@ -9,14 +9,12 @@
 
 # No `set -e`: each check owns its exit explicitly (see pre-commit).
 HOOK="commit-msg"
-BYPASS="git commit --no-verify"   # native-git one-off skip of all hooks
 _check_on() {
     local v; v=$(git config --bool "dotconfigs.$HOOK.$1" 2>/dev/null)
     [[ "$v" != false ]]
 }
 _block() {
     echo "❌ BLOCKED by $HOOK/$1: $2" >&2
-    [[ -n "$BYPASS" ]] && echo "   skip all hooks once (native git): $BYPASS" >&2
     echo "   disable this check (dotconfigs): set git.hooks.$HOOK.checks.$1=false in ~/.dotconfigs/deploy.json, then: dotconfigs deploy" >&2
     exit 1
 }
