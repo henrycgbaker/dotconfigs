@@ -17,7 +17,7 @@ _check_on() {
 _block() {
     echo "❌ BLOCKED by $HOOK/$1: $2" >&2
     [[ -n "$BYPASS" ]] && echo "   skip all hooks once (native git): $BYPASS" >&2
-    echo "   disable just this check (dotconfigs): git config --global dotconfigs.$HOOK.$1 false" >&2
+    echo "   disable this check (dotconfigs): set git.hooks.$HOOK.checks.$1=false in ~/.dotconfigs/deploy.json, then: dotconfigs deploy" >&2
     exit 1
 }
 
