@@ -263,7 +263,7 @@ unmaterialise_hook_checks() {
     local rows hook check val seen=" "
     rows=$(_hook_check_rows "$plugins_dir" "$deploy_json")
     [[ -z "$rows" ]] && return 0
-    while IFS=$'\t' read -r hook check val; do
+    while IFS=$'\t' read -r hook check _; do
         [[ -z "$hook" ]] && continue
         if [[ "$dry_run" == "true" ]]; then
             echo "  Would unset: dotconfigs.$hook.$check"
