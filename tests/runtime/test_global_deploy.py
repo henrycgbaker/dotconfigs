@@ -85,3 +85,25 @@ def test_deselecting_all_hooks_clears_settings_block(tmp_path, run_dotconfigs):
     ]
     assert wired == [], "deselecting all hooks must clear the settings hooks block"
     assert "permissions" in data  # non-hook keys preserved
+
+
+def test_summary_digests_what_changed(tmp_path, run_dotconfigs):
+    """The deploy summary must itemise what actually changed, not just count it: a
+    first deploy lists every artefact under "Changed this deploy:" with a `+`, and
+    an idempotent re-deploy (nothing changed) omits the digest block entirely."""
+    home = tmp_path / "home"
+    home.mkdir()
+    env = _env(home)
+    assert run_dotconfigs(["init", "--force"], env=env).returncode == 0
+
+    first = run_dotconfigs(["deploy", "--force"], env=env)
+    assert first.returncode == 0, first.stderr
+    assert "Changed this deploy:" in first.stdout, first.stdout
+    # Fresh deploy: created artefacts are itemised with a `+` and their target.
+    assert "    + " in first.stdout, first.stdout
+
+    second = run_dotconfigs(["deploy", "--force"], env=env)
+    assert second.returncode == 0, second.stderr
+    # Nothing changed the second time, so the digest block is suppressed.
+    assert "Changed this deploy:" not in second.stdout, second.stdout
+    assert "Unchanged:" in second.stdout  # but the per-item lines still print
