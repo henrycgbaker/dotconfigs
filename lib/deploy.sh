@@ -239,19 +239,31 @@ _hook_check_rows() {
 # deploy_json, dry_run
 materialise_hook_checks() {
     local plugins_dir="$1" deploy_json="$2" dry_run="${3:-false}"
-    local rows hook check val n=0
+    local rows hook check val cur n=0 changed=0
     rows=$(_hook_check_rows "$plugins_dir" "$deploy_json")
     [[ -z "$rows" ]] && return 0
     while IFS=$'\t' read -r hook check val; do
         [[ -z "$hook" ]] && continue
-        if [[ "$dry_run" == "true" ]]; then
-            echo "  Would set: dotconfigs.$hook.$check = $val"
-        else
-            git config --global "dotconfigs.$hook.$check" "$val"
+        # Compare against the value the dispatcher reads today so stdout reflects
+        # an actual toggle flip, not just a count. `--bool` normalises the stored
+        # value (1/yes/on -> true) so a no-op write never reads as a change; the
+        # `|| true` swallows the exit-1 for an unset (not-yet-materialised) key.
+        cur=$(git config --global --bool --get "dotconfigs.$hook.$check" 2>/dev/null || true)
+        if [[ -z "$cur" ]]; then
+            echo "  Hook check set:     $hook.$check = $val"
+            changed=$((changed + 1))
+        elif [[ "$cur" != "$val" ]]; then
+            echo "  Hook check changed: $hook.$check $cur -> $val"
+            changed=$((changed + 1))
         fi
+        [[ "$dry_run" != "true" ]] && git config --global "dotconfigs.$hook.$check" "$val"
         n=$((n + 1))
     done <<< "$rows"
-    [[ "$dry_run" != "true" && "$n" -gt 0 ]] && echo "  Hook checks materialised: $n"
+    if [[ "$changed" -gt 0 ]]; then
+        echo "  Hook checks: $changed changed, $((n - changed)) unchanged"
+    elif [[ "$n" -gt 0 ]]; then
+        echo "  Hook checks: $n unchanged"
+    fi
     return 0
 }
 
@@ -1121,6 +1133,7 @@ deploy_from_json() {
     local force="${6:-false}"
     local project_root="${7:-}"
     local interactive_mode plan enabled source target method label rtarget
+    local c0 u0 r0 change_log=""
 
     if ! check_jq; then
         return 1
@@ -1157,6 +1170,10 @@ deploy_from_json() {
     while IFS=$'\t' read -r enabled source target method label; do
         [[ -z "$source" ]] && continue
         rtarget=$(resolve_target "$target" "$project_root")
+        # Snapshot the change counters so we can attribute whichever one this item
+        # bumps back to its target — each deploy/undeploy_module call moves exactly
+        # one. This keeps the digest honest without instrumenting every bump site.
+        c0=$created u0=$updated r0=$removed
         if [[ "$enabled" == "true" ]]; then
             if _is_synthesised_settings "$label"; then
                 # The Claude settings fragment carries a hooks block synthesised
@@ -1171,12 +1188,20 @@ deploy_from_json() {
         else
             undeploy_module "$source" "$rtarget" "$method" "$dotconfigs_root" "$dry_run"
         fi
+        if [[ "$created" -gt "$c0" ]]; then change_log+="    + $rtarget"$'\n'
+        elif [[ "$updated" -gt "$u0" ]]; then change_log+="    ~ $rtarget"$'\n'
+        elif [[ "$removed" -gt "$r0" ]]; then change_log+="    - $rtarget"$'\n'
+        fi
     done <<< "$plan"
 
     # Reconcile: sweep dotconfigs-owned symlinks orphaned by items removed from
     # the catalogue entirely (deselected items were already torn down above), so
     # a deploy converges the target to the catalogue rather than leaking orphans.
+    # Swept orphans aren't plan items, so the digest notes them as a count (the
+    # sweep prints each path live).
+    r0=$removed
     _sweep_stale_symlinks "$plan" "$project_root" "$dotconfigs_root" "$dry_run"
+    [[ "$removed" -gt "$r0" ]] && change_log+="    - $((removed - r0)) stale orphan(s) swept (see above)"$'\n'
 
     # Materialise per-check hook toggles into git config (machine scope only —
     # the keys are global, read by the deployed hook dispatchers at commit time).
@@ -1197,6 +1222,10 @@ deploy_from_json() {
     echo "  Unchanged: $unchanged"
     echo "  Removed:   $removed"
     echo "  Skipped:   $skipped"
+    if [[ -n "$change_log" ]]; then
+        echo "  Changed this deploy:"
+        printf '%s' "$change_log"
+    fi
     if [[ "$warnings" -gt 0 ]]; then
         printf "  %bWarnings:  %s%b\n" "${COLOUR_YELLOW:-}" "$warnings" "${COLOUR_RESET:-}"
     fi

@@ -109,6 +109,47 @@ def test_materialise_and_unmaterialise(dotconfigs_root, tmp_path):
     assert "AFTER=[]" in r.stdout                       # unmaterialise cleared everything
 
 
+def test_materialise_reports_check_flip_in_stdout(dotconfigs_root, tmp_path):
+    """Flipping a per-check bool must show up in deploy stdout, not just change git
+    config silently. Regression: materialise wrote every value unconditionally and
+    only printed a total count, so a true<->false flip produced identical output.
+    """
+    env, _cfg = _git_env(tmp_path)
+    base = tmp_path / "base.json"
+    base.write_text(
+        json.dumps(
+            {"git": {"hooks": {"pre-commit": {"enabled": True,
+                                              "checks": {"block-main": True}}}}}
+        )
+    )
+    flipped = tmp_path / "flipped.json"
+    flipped.write_text(
+        json.dumps(
+            {"git": {"hooks": {"pre-commit": {"enabled": True,
+                                              "checks": {"block-main": False}}}}}
+        )
+    )
+    script = f"""
+      source "{dotconfigs_root}/lib/colours.sh"
+      source "{dotconfigs_root}/lib/discovery.sh"
+      source "{dotconfigs_root}/lib/symlinks.sh"
+      source "{dotconfigs_root}/lib/validation.sh"
+      source "{dotconfigs_root}/lib/deploy.sh"
+      echo "=== first ==="
+      materialise_hook_checks "{dotconfigs_root}/plugins" "{base}" false
+      echo "=== reflip ==="
+      materialise_hook_checks "{dotconfigs_root}/plugins" "{flipped}" false
+    """
+    r = run_bash(script, env=env)
+    first, reflip = r.stdout.split("=== reflip ===", 1)
+    # First materialise: nothing stored yet -> every check reads as newly set.
+    assert "Hook check set:     pre-commit.block-main = true" in first, r.stdout
+    # Re-materialise with the bool flipped: the change is visible, with old->new.
+    assert "Hook check changed: pre-commit.block-main true -> false" in reflip, r.stdout
+    # Checks that did NOT move are not noise — only the flipped one is reported.
+    assert "Hook check changed: pre-commit.secrets" not in reflip, r.stdout
+
+
 def test_materialise_legacy_bare_bool_hook(dotconfigs_root, tmp_path):
     """A bare-bool hook value (legacy / all-defaults) must materialise every check
     at its default, not truncate. Regression: indexing .checks on a bool aborted
