@@ -58,14 +58,22 @@ def test_nested_selection_yields_full_plan(run_dotconfigs, tmp_path):
             {
                 "git": {
                     "hooks": {
-                        "pre-commit": {"enabled": True, "checks": {"block-main": False}},
-                        "commit-msg": {"enabled": True, "checks": {"block-ai-attribution": True}},
+                        "pre-commit": {
+                            "enabled": True,
+                            "checks": {"block-main": False},
+                        },
+                        "commit-msg": {
+                            "enabled": True,
+                            "checks": {"block-ai-attribution": True},
+                        },
                     }
                 }
             }
         )
     )
-    r = run_dotconfigs(["deploy", "--dry-run"], env={"DOTCONFIGS_DEPLOY_CONFIG": str(sel)})
+    r = run_dotconfigs(
+        ["deploy", "--dry-run"], env={"DOTCONFIGS_DEPLOY_CONFIG": str(sel)}
+    )
     assert r.returncode == 0, r.stderr
     # Both nested hooks are present in the plan — nothing was truncated.
     assert "plugins/git/hooks/pre-commit" in r.stdout
@@ -104,9 +112,9 @@ def test_materialise_and_unmaterialise(dotconfigs_root, tmp_path):
     """
     r = run_bash(script, env=env)
     assert "BM=false" in r.stdout, r.stdout + r.stderr  # explicit override
-    assert "SE=true" in r.stdout                        # explicit true
-    assert "ID=true" in r.stdout                        # default fallback (no override)
-    assert "AFTER=[]" in r.stdout                       # unmaterialise cleared everything
+    assert "SE=true" in r.stdout  # explicit true
+    assert "ID=true" in r.stdout  # default fallback (no override)
+    assert "AFTER=[]" in r.stdout  # unmaterialise cleared everything
 
 
 def test_materialise_reports_check_flip_in_stdout(dotconfigs_root, tmp_path):
@@ -118,15 +126,25 @@ def test_materialise_reports_check_flip_in_stdout(dotconfigs_root, tmp_path):
     base = tmp_path / "base.json"
     base.write_text(
         json.dumps(
-            {"git": {"hooks": {"pre-commit": {"enabled": True,
-                                              "checks": {"block-main": True}}}}}
+            {
+                "git": {
+                    "hooks": {
+                        "pre-commit": {"enabled": True, "checks": {"block-main": True}}
+                    }
+                }
+            }
         )
     )
     flipped = tmp_path / "flipped.json"
     flipped.write_text(
         json.dumps(
-            {"git": {"hooks": {"pre-commit": {"enabled": True,
-                                              "checks": {"block-main": False}}}}}
+            {
+                "git": {
+                    "hooks": {
+                        "pre-commit": {"enabled": True, "checks": {"block-main": False}}
+                    }
+                }
+            }
         )
     )
     script = f"""
@@ -169,8 +187,8 @@ def test_materialise_legacy_bare_bool_hook(dotconfigs_root, tmp_path):
       echo "BM=$(git config --global --bool dotconfigs.pre-commit.block-main)"
     """
     r = run_bash(script, env=env)
-    assert "PC=6" in r.stdout, r.stdout + r.stderr   # all six pre-commit checks
-    assert "BM=true" in r.stdout                     # default-on
+    assert "PC=6" in r.stdout, r.stdout + r.stderr  # all six pre-commit checks
+    assert "BM=true" in r.stdout  # default-on
 
 
 def _born_repo(repo, cfg, branch="feature", *, identity=True):
@@ -178,8 +196,8 @@ def _born_repo(repo, cfg, branch="feature", *, identity=True):
     ident = ""
     if identity:
         ident = (
-            'git config user.name henrycgbaker\n'
-            'git config user.email henry.c.g.baker@gmail.com\n'
+            "git config user.name henrycgbaker\n"
+            "git config user.email henry.c.g.baker@gmail.com\n"
         )
     return f"""
       export GIT_CONFIG_GLOBAL="{cfg}" GIT_CONFIG_SYSTEM="{cfg}"
@@ -219,6 +237,8 @@ def test_unset_identity_fails_loud_not_silent(dotconfigs_root, tmp_path):
     repo = tmp_path / "repo"
     hook = f"{dotconfigs_root}/plugins/git/hooks/pre-commit"
     # Born branch but NO persistent user.name/user.email anywhere.
-    r = run_bash(_born_repo(repo, cfg, "feature", identity=False) + f'\n"{hook}"', env=env)
+    r = run_bash(
+        _born_repo(repo, cfg, "feature", identity=False) + f'\n"{hook}"', env=env
+    )
     assert r.returncode == 1
     assert "BLOCKED by pre-commit/identity" in r.stderr
