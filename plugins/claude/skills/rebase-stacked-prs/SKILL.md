@@ -24,9 +24,12 @@ PR number: `$ARGUMENTS` (ask if not supplied).
 
 > Build a new branch from `origin/main`, cherry-pick only the new commits, and audit
 > that `git diff origin/main..new-branch` carries **exactly the new feature's added
-> lines** - nothing more. In a conflict, preserve what the new commit *actually changes*
-> (its delta, reapplied onto main) and discard only the divergence that comes from
-> superseded stacked-below work - never reflexively keep one side.
+> lines, and nothing main added got removed**. In a conflict, preserve what the new
+> commit *actually changes* (its delta, reapplied onto main) and discard only the
+> divergence that comes from superseded stacked-below work - never reflexively keep one
+> side. Checking added lines alone proves you didn't drop the feature; it says nothing
+> about whether the rebase silently reverted a fix main made nearby - that needs the
+> removed-line half of the audit too (step 6b2).
 
 ## Process
 
@@ -109,6 +112,16 @@ git diff --stat origin/main..HEAD
 diff <(git diff origin/main..HEAD | grep '^+' | sort) \
      <(git diff NEW_FIRST^..NEW_LAST | grep '^+' | sort)
 
+# b2) Removed-line equivalence - the other direction, and NOT optional. (a) and (b) only
+#     prove the rebase didn't drop or corrupt the feature's own additions. Neither one can
+#     see a silently-reverted main addition: if a cherry-picked commit's auto-merge dropped
+#     a line main added near the same hunk, that loss shows up only as a '-' line here - it
+#     never appears in (b)'s '+' scan. Run this on every file the feature and main BOTH
+#     touched since the stale base (an "overlap file"); it's the check that catches the
+#     silent-regression failure mode `/preflight-merge` exists for, one step earlier.
+diff <(git diff origin/main..HEAD | grep '^-' | grep -v '^---' | sort) \
+     <(git diff NEW_FIRST^..NEW_LAST | grep '^-' | grep -v '^---' | sort)
+
 # c) Legacy-absence spot checks: confirm main's version of each diverged item survived,
 #    and the PR's superseded version did NOT leak in. Grep for legacy-only strings:
 git grep -n "<legacy-only-string>" -- src tests && echo "LEAK" || echo "clean"
@@ -117,7 +130,12 @@ git grep -n "<legacy-only-string>" -- src tests && echo "LEAK" || echo "clean"
 grep -rn '^<<<<<<<\|^=======\|^>>>>>>>' src tests && echo "MARKERS" || echo "clean"
 ```
 If (b) shows added lines missing on the left, you dropped feature content. If it shows
-extras on the left, you carried legacy in. Either way, fix before proceeding.
+extras on the left, you carried legacy in. If (b2) is non-empty, a main-side fix got
+silently reverted - go find what main changed in that overlap file and confirm it survived
+(a direct `grep` for the specific symbol/line main added is the fastest confirmation).
+Fix before proceeding either way. On a clean cherry-pick with zero overlap files (nothing
+both sides touched), (b2) is trivially empty and mostly confirms there was nothing to lose -
+still worth running since "no overlap" is a claim, not something to assume.
 
 > This added-line audit is the stacked-PR-specific form of `/check-resolution`'s general
 > 3-way diff (branch-intent vs main vs net). For a file-by-file view when a hunk is
