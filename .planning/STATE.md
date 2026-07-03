@@ -43,7 +43,7 @@ Decisions logged in PROJECT.md Key Decisions table.
 - CLAUDE.md as single maintained file (no template assembly)
 - Wizards deferred to v4 — users edit JSON directly
 - VS Code plugin added to v3 scope
-- Shell plugin deferred to v4+
+- Shell plugin deferred to v4+ — superseded: shipped in v3.0 after all, see PROJECT.md's decisions table (07-03)
 - jq dependency required
 - Group argument maps to top-level keys in global.json (11-02)
 - No validation that group exists - jq returns empty for missing keys (11-02)

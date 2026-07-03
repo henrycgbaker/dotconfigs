@@ -1,17 +1,24 @@
 {
   "config": {
     "init": {
-      "description": "Shell tool initialisations (starship, fzf, thefuck, conda); source from .zshrc",
+      "description": "Shell tool initialisations; each guarded, no-ops if the tool isn't installed (see docs/plugins.md for the tool list)",
       "source": "plugins/shell/init.zsh",
       "method": "symlink",
       "target": "~/.dotconfigs/shell/init.zsh",
       "default": true
     },
     "aliases": {
-      "description": "Shell aliases; source from .zshrc",
+      "description": "Shell aliases and PATH exports",
       "source": "plugins/shell/aliases.zsh",
       "method": "symlink",
       "target": "~/.dotconfigs/shell/aliases.zsh",
+      "default": true
+    },
+    "zshrc-wiring": {
+      "description": "Source init.zsh and aliases.zsh from ~/.zshrc (managed block)",
+      "source": "plugins/shell/templates/zshrc-managed-block",
+      "method": "managed",
+      "target": "~/.zshrc",
       "default": true
     }
   }
