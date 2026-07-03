@@ -91,13 +91,19 @@ zsh initialisation. Machine scope only - auto-wired into `~/.zshrc` via a manage
 
 ### Requirements
 
-This plugin wires up, but does not install, these tools - each `eval`/`source` in `init.zsh` is guarded and no-ops if the tool is missing:
+This plugin wires up, but does not install, these tools - each `eval`/`source` in `init.zsh` is guarded and no-ops if the tool is missing. On macOS:
 
 ```bash
 brew install starship zoxide fzf thefuck eza bat zsh-autosuggestions zsh-syntax-highlighting displayplacer
 ```
 
-miniconda is installed via its own installer, not brew.
+On Debian/Ubuntu, `starship`, `zoxide`, and `eza` aren't in the default apt repos (install via their own installer scripts or a PPA); the rest are:
+
+```bash
+sudo apt install fzf thefuck bat zsh-autosuggestions zsh-syntax-highlighting
+```
+
+`zsh-autosuggestions`/`zsh-syntax-highlighting` are found either way - `init.zsh` checks Homebrew's prefix (mac, or Linuxbrew) first, then falls back to apt's `/usr/share`. miniconda is installed via its own installer, not brew/apt.
 
 ## Related
 
