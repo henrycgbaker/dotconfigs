@@ -20,6 +20,13 @@
       "method": "managed",
       "target": "~/.zshrc",
       "default": true
+    },
+    "bashrc-handoff": {
+      "description": "Hand off to zsh from ~/.bashrc when zsh is installed (guarded, no-op without zsh)",
+      "source": "plugins/shell/templates/bashrc-zsh-handoff",
+      "method": "managed",
+      "target": "~/.bashrc",
+      "default": true
     }
   }
 }

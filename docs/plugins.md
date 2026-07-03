@@ -81,13 +81,14 @@ Hooks live in `.git/hooks/`, which git never tracks, so they stay personal and u
 
 ## shell
 
-zsh initialisation. Machine scope only - auto-wired into `~/.zshrc` via a managed block, so there's nothing to source by hand.
+zsh initialisation. Machine scope only - auto-wired into `~/.zshrc` via a managed block, so there's nothing to source by hand. Many machines' actual login shell is bash even when zsh is installed and configured - `bashrc-handoff` execs into zsh from `~/.bashrc` when it's available, so this activates without needing `chsh` (which is often unavailable on domain-managed accounts).
 
 | Item | Source | Target |
 |------|--------|--------|
 | `init` | `plugins/shell/init.zsh` | `~/.dotconfigs/shell/init.zsh` |
 | `aliases` | `plugins/shell/aliases.zsh` | `~/.dotconfigs/shell/aliases.zsh` |
 | `zshrc-wiring` | `plugins/shell/templates/zshrc-managed-block` | `~/.zshrc` (managed block) |
+| `bashrc-handoff` | `plugins/shell/templates/bashrc-zsh-handoff` | `~/.bashrc` (managed block) |
 
 ### Requirements
 
