@@ -2,7 +2,12 @@
 # Source from .zshrc: source ~/.dotconfigs/shell/aliases.zsh
 
 # Tool replacements
-alias cat='bat'
+# Debian/Ubuntu ships bat's binary as `batcat` (name conflict with an older package)
+if command -v bat &>/dev/null; then
+    alias cat='bat'
+elif command -v batcat &>/dev/null; then
+    alias cat='batcat'
+fi
 alias ls="eza --icons --group-directories-first"
 
 # Claude Code
