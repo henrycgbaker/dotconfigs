@@ -73,8 +73,11 @@ check_file_state() {
         return 0
     fi
 
-    # Case 4: Target is a foreign symlink, or a regular file (neither is ours)
-    if [[ -L "$target_path" || -f "$target_path" ]]; then
+    # Case 4: Target is foreign (symlink, file, or directory — anything not
+    # ours). Case 1's inverse and Case 2 already guarantee -e is true by the
+    # time we reach here, but the explicit check stays for readability and as
+    # a safety net if an earlier case's logic ever changes.
+    if [[ -e "$target_path" ]]; then
         echo "drifted-foreign"
         return 0
     fi
@@ -183,6 +186,16 @@ link_file() {
     # Create parent directory if needed
     if [[ ! -d "$dest_dir" ]]; then
         mkdir -p "$dest_dir"
+    fi
+
+    # ln -sfn does not replace an existing non-symlink directory - it treats
+    # dest as a place to create a new entry inside it (named basename(src)),
+    # leaving the stale directory in place with a nested symlink dropped into
+    # it. By the time link_file is called, the caller has already decided to
+    # overwrite dest (force mode, interactive overwrite, or dest didn't exist
+    # at all), so a real directory here is always stale and safe to remove.
+    if [[ -d "$dest" && ! -L "$dest" ]]; then
+        rm -rf "$dest"
     fi
 
     # Create symlink (force overwrite if exists)
