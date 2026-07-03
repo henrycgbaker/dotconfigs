@@ -27,11 +27,13 @@ fi
 unset __conda_setup
 
 # zsh-autosuggestions + zsh-syntax-highlighting (must be sourced last, in this order)
-if command -v brew &>/dev/null; then
-    _brew_prefix="$(brew --prefix)"
-    [ -f "$_brew_prefix/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && \
-        source "$_brew_prefix/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
-    [ -f "$_brew_prefix/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] && \
-        source "$_brew_prefix/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-    unset _brew_prefix
-fi
+# Checked in share dirs, not by OS: Homebrew's prefix (mac, or Linuxbrew) first,
+# then /usr/share (e.g. Debian/Ubuntu apt packages) — whichever actually has the file wins.
+_zsh_plugin_share_dirs=(/usr/share)
+command -v brew &>/dev/null && _zsh_plugin_share_dirs=("$(brew --prefix)/share" $_zsh_plugin_share_dirs)
+for _plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+    for _dir in $_zsh_plugin_share_dirs; do
+        [ -f "$_dir/$_plugin/$_plugin.zsh" ] && source "$_dir/$_plugin/$_plugin.zsh" && break
+    done
+done
+unset _zsh_plugin_share_dirs _dir _plugin
