@@ -81,12 +81,23 @@ Hooks live in `.git/hooks/`, which git never tracks, so they stay personal and u
 
 ## shell
 
-zsh initialisation. Machine scope only - source these from your `.zshrc`.
+zsh initialisation. Machine scope only - auto-wired into `~/.zshrc` via a managed block, so there's nothing to source by hand.
 
 | Item | Source | Target |
 |------|--------|--------|
 | `init` | `plugins/shell/init.zsh` | `~/.dotconfigs/shell/init.zsh` |
 | `aliases` | `plugins/shell/aliases.zsh` | `~/.dotconfigs/shell/aliases.zsh` |
+| `zshrc-wiring` | `plugins/shell/templates/zshrc-managed-block` | `~/.zshrc` (managed block) |
+
+### Requirements
+
+This plugin wires up, but does not install, these tools - each `eval`/`source` in `init.zsh` is guarded and no-ops if the tool is missing:
+
+```bash
+brew install starship zoxide fzf thefuck eza bat zsh-autosuggestions zsh-syntax-highlighting displayplacer
+```
+
+miniconda is installed via its own installer, not brew.
 
 ## Related
 

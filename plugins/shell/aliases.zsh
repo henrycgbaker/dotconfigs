@@ -3,13 +3,14 @@
 
 # Tool replacements
 alias cat='bat'
-alias ls='eza'
+alias ls="eza --icons --group-directories-first"
 
 # Claude Code
 alias claude="$HOME/.claude/local/claude"
 
 # PATH
 export PATH="$HOME/.local/bin:$PATH"
+export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
 
 # Ultrawide monitor resolution shortcuts
 alias ultrawide-default='displayplacer "id:DF3652F4-5F79-506F-4047-1FBE06F5DA58 res:3840x1080 hz:60 color_depth:8"'

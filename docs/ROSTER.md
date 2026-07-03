@@ -87,4 +87,4 @@ For per-project additions without editing the shared hook, use `.local` scripts:
 
 ---
 
-*Generated: 2026-06-10 21:44:01 UTC*
+*Generated: 2026-07-03 12:05:05 UTC*
