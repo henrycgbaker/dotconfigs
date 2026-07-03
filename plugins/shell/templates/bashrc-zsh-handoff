@@ -1,0 +1,16 @@
+# dotconfigs: hand off to zsh — managed by dotconfigs
+# Deployed to ~/.bashrc
+# Many machines' actual login shell is bash even when zsh is installed and
+# carries the real shell config; exec into zsh here if it's available.
+# Explicit interactive check rather than relying solely on .bashrc's own
+# top-of-file guard, which some setups strip or don't have.
+case $- in
+    *i*)
+        if [ -z "$ZSH_VERSION" ] && command -v zsh &>/dev/null; then
+            # exec alone leaves $SHELL as bash, so tmux/screen's default-shell
+            # and anything spawning "$SHELL -c" still land in bash underneath.
+            export SHELL="$(command -v zsh)"
+            exec zsh
+        fi
+        ;;
+esac
