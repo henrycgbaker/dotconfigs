@@ -29,3 +29,15 @@ venv/
 
 # Machine-specific assembled configs
 .dotconfigs/
+
+# Local Claude Code settings (nothing here currently, but this repo's own git
+# plugin already excludes .claude/ for every OTHER repo it deploys to via
+# plugins/git/templates/project-excludes - match that here too)
+.claude/
+
+# Personal planning/scratch notes - not meant for a public repo's history.
+# This mirrors what plugins/git/templates/project-excludes already prescribes
+# for every OTHER repo dotconfigs deploys to; this repo hadn't followed its
+# own convention.
+TODO.md
+.planning/

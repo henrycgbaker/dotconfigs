@@ -1,2 +1,0 @@
-- [ ] properly build out + wire up the native Claude plugin / marketplace format as a first-class distribution path (potentially a cleaner long-term solution than the symlink-deploy model for the claude plugin) - deferred for now, revisit
-- [ ] claude hook to cp my discussion to a log file that gets backup into and cleaned up by haiku
