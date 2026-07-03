@@ -38,10 +38,10 @@ Per-project hooks/skills, from inside a repo: `dotconfigs init . && dotconfigs d
 | Plugin | Deploys |
 |--------|---------|
 | **claude** | Claude Code hooks (per-pattern safety guards + lifecycle hooks), skills (`/commit`, `/squash-merge`, `/preflight-merge`, `/check-resolution`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback`, `/diagnose-missing-work`), `settings.json` (its hooks block synthesised from the selected hooks), the `concise-execution` output style, and the global `CLAUDE.md` |
-| **git** | `~/.gitconfig` (incl. `init.templateDir` so new repos auto-seed hooks), global excludes (`~/.config/git/ignore`), 8 branch-aware hooks (pre-commit, pre-push, commit-msg, …) installed per-repo into `.git/hooks/`, and per-project `.git/info/exclude` + `.gitignore` |
-| **shell** | zsh `init.zsh` + `aliases.zsh`, auto-wired into `~/.zshrc` via a managed block |
+| **git** | `~/.gitconfig` (incl. `init.templateDir` so new repos auto-seed hooks), global excludes (`~/.config/git/ignore`), 9 branch-aware hooks (pre-commit, pre-push, commit-msg, …) installed per-repo into `.git/hooks/`, and per-project `.git/info/exclude` + `.gitignore` |
+| **shell** | zsh `init.zsh` (starship, zoxide, fzf, thefuck, conda, zsh-autosuggestions/syntax-highlighting) + `aliases.zsh` (eza, bat, …), auto-wired into `~/.zshrc`/`~/.bashrc` |
 
-See [Plugins](docs/plugins.md) for the full module tables.
+See [Plugins](docs/plugins.md) for what each plugin deploys, and each plugin's own page (linked there) for concrete detail on every hook/tool.
 
 ## Install the claude plugin via Claude Code
 
