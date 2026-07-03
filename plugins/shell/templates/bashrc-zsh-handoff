@@ -6,7 +6,11 @@
 # top-of-file guard, which some setups strip or don't have.
 case $- in
     *i*)
-        if [ -z "$ZSH_VERSION" ] && command -v zsh &>/dev/null; then
+        # DOTCONFIGS_NO_ZSH_HANDOFF=1 skips the handoff for this shell and any
+        # bash it spawns (e.g. to debug something in bash itself) - it isn't
+        # persisted, so a fresh login is unaffected. $ZSH_VERSION alone can't
+        # do this, since it's never exported to a plain "bash" run from zsh.
+        if [ -z "$DOTCONFIGS_NO_ZSH_HANDOFF" ] && [ -z "$ZSH_VERSION" ] && command -v zsh &>/dev/null; then
             # exec alone leaves $SHELL as bash, so tmux/screen's default-shell
             # and anything spawning "$SHELL -c" still land in bash underneath.
             export SHELL="$(command -v zsh)"

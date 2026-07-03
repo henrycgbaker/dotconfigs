@@ -104,7 +104,7 @@ On Debian/Ubuntu, `starship`, `zoxide`, and `eza` aren't in the default apt repo
 sudo apt install fzf thefuck bat zsh-autosuggestions zsh-syntax-highlighting
 ```
 
-`zsh-autosuggestions`/`zsh-syntax-highlighting` are found either way - `init.zsh` checks Homebrew's prefix (mac, or Linuxbrew) first, then falls back to apt's `/usr/share`. miniconda is installed via its own installer, not brew/apt.
+`zsh-autosuggestions`/`zsh-syntax-highlighting` are found either way - `init.zsh` checks Homebrew's prefix (mac, or Linuxbrew) first, then falls back to apt's `/usr/share`. `fzf`'s key bindings are found either way too (the git-installer/curl layout at `~/.fzf.zsh`, or apt's `/usr/share/doc/fzf/examples/`). conda is installed via its own installer, not brew/apt - `init.zsh` checks `~/miniconda3`, `~/anaconda3`, `~/miniforge3`, and `~/mambaforge`, whichever is actually there.
 
 ## Related
 
