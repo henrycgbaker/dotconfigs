@@ -1,0 +1,13 @@
+# dotconfigs shell wiring (bash) — managed by dotconfigs
+# Deployed to ~/.bashrc, after the zsh-handoff block: reached only when we
+# stayed in bash (no zsh, or the handoff was disabled), since a successful
+# handoff execs away before this runs. Loads the same shell-agnostic init +
+# aliases zsh gets - init.sh parameterises tool setup on the running shell.
+# Interactive-guarded to match the handoff (don't run prompt setup in a
+# non-interactive bash); file-guarded so a torn-down symlink is a silent no-op.
+case $- in
+    *i*)
+        [ -f ~/.dotconfigs/shell/init.sh ] && source ~/.dotconfigs/shell/init.sh
+        [ -f ~/.dotconfigs/shell/aliases.sh ] && source ~/.dotconfigs/shell/aliases.sh
+        ;;
+esac
