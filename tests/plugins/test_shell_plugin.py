@@ -2,17 +2,18 @@
 
 Tests shell configuration files can be sourced without errors.
 Tests are conditional - only run if files exist in manifest.
+The shell files are shell-agnostic (bash + zsh), so they must parse cleanly
+under whichever of the two shells is available.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
-
-from tests.conftest import requires_cmd
 
 
 def get_shell_modules(dotconfigs_root: Path) -> dict[str, Path]:
@@ -40,23 +41,24 @@ def shell_modules(dotconfigs_root: Path) -> dict[str, Path]:
 class TestShellFiles:
     """Tests for shell configuration files."""
 
-    def test_files_source_without_error(self, shell_modules):
-        """Shell files source without syntax errors."""
-        requires_cmd("zsh")
+    @pytest.mark.parametrize("shell", ["zsh", "bash"])
+    def test_files_parse_without_error(self, shell_modules, shell):
+        """Shell files parse without syntax errors in both bash and zsh."""
+        if not shutil.which(shell):
+            pytest.skip(f"{shell} not available")
         if not shell_modules:
             pytest.skip("No shell modules in manifest")
 
         for mod_name, file_path in shell_modules.items():
-            # Use zsh -n for syntax check (doesn't execute, just parses)
+            # -n is a syntax check (parses, doesn't execute).
             result = subprocess.run(
-                ["zsh", "-n", str(file_path)],
+                [shell, "-n", str(file_path)],
                 capture_output=True,
                 text=True,
             )
 
-            # Syntax check should pass
             assert result.returncode == 0, (
-                f"Syntax error in {mod_name}: {result.stderr}"
+                f"Syntax error in {mod_name} under {shell}: {result.stderr}"
             )
 
     def test_files_exist(self, shell_modules):

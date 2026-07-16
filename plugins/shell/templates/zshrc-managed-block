@@ -2,5 +2,5 @@
 # Deployed to ~/.zshrc
 # Sources the plugin's init/aliases; guarded so disabling either in
 # deploy.json doesn't leave a dangling source of a torn-down symlink.
-[ -f ~/.dotconfigs/shell/init.zsh ] && source ~/.dotconfigs/shell/init.zsh
-[ -f ~/.dotconfigs/shell/aliases.zsh ] && source ~/.dotconfigs/shell/aliases.zsh
+[ -f ~/.dotconfigs/shell/init.sh ] && source ~/.dotconfigs/shell/init.sh
+[ -f ~/.dotconfigs/shell/aliases.sh ] && source ~/.dotconfigs/shell/aliases.sh

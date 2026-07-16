@@ -39,7 +39,7 @@ Per-project hooks/skills, from inside a repo: `dotconfigs init . && dotconfigs d
 |--------|---------|
 | **claude** | Claude Code hooks (per-pattern safety guards + lifecycle hooks), skills (`/commit`, `/squash-merge`, `/preflight-merge`, `/check-resolution`, `/rebase-stacked-prs`, `/branch-cleanup`, `/pr-create`, `/fix-pr-feedback`, `/diagnose-missing-work`), `settings.json` (its hooks block synthesised from the selected hooks), the `concise-execution` output style, and the global `CLAUDE.md` |
 | **git** | `~/.gitconfig` (incl. `init.templateDir` so new repos auto-seed hooks), global excludes (`~/.config/git/ignore`), 9 branch-aware hooks (pre-commit, pre-push, commit-msg, …) installed per-repo into `.git/hooks/`, and per-project `.git/info/exclude` + `.gitignore` |
-| **shell** | zsh `init.zsh` (starship, zoxide, fzf, thefuck, conda, zsh-autosuggestions/syntax-highlighting) + `aliases.zsh` (eza, bat, …), auto-wired into `~/.zshrc`/`~/.bashrc` |
+| **shell** | shell-agnostic `init.sh` (starship, zoxide, fzf, thefuck, conda, zsh-autosuggestions/syntax-highlighting) + `aliases.sh` (eza, bat, …), auto-wired into `~/.zshrc`/`~/.bashrc` (bash + zsh, with a bash→zsh handoff when zsh is present) |
 
 See [Plugins](docs/plugins.md) for what each plugin deploys, and each plugin's own page (linked there) for concrete detail on every hook/tool.
 

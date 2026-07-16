@@ -1,28 +1,28 @@
 {
   "config": {
     "init": {
-      "description": "Shell tool initialisations; each guarded, no-ops if the tool isn't installed (see docs/plugins.md for the tool list)",
-      "source": "plugins/shell/init.zsh",
+      "description": "Shell tool initialisations (bash + zsh); each guarded, no-ops if the tool isn't installed (see docs/plugins.md for the tool list)",
+      "source": "plugins/shell/init.sh",
       "method": "symlink",
-      "target": "~/.dotconfigs/shell/init.zsh",
+      "target": "~/.dotconfigs/shell/init.sh",
       "default": true
     },
     "aliases": {
-      "description": "Shell aliases and PATH exports",
-      "source": "plugins/shell/aliases.zsh",
+      "description": "Shell aliases and PATH exports (bash + zsh)",
+      "source": "plugins/shell/aliases.sh",
       "method": "symlink",
-      "target": "~/.dotconfigs/shell/aliases.zsh",
+      "target": "~/.dotconfigs/shell/aliases.sh",
       "default": true
     },
     "zshrc-wiring": {
-      "description": "Source init.zsh and aliases.zsh from ~/.zshrc (managed block)",
+      "description": "Source init.sh and aliases.sh from ~/.zshrc (managed block)",
       "source": "plugins/shell/templates/zshrc-managed-block",
       "method": "managed",
       "target": "~/.zshrc",
       "default": true
     },
     "bashrc-handoff": {
-      "description": "Hand off to zsh from ~/.bashrc when zsh is installed (guarded, no-op without zsh)",
+      "description": "From ~/.bashrc, hand off to zsh when installed; otherwise source init.sh + aliases.sh so bash stays fully configured (single managed block)",
       "source": "plugins/shell/templates/bashrc-zsh-handoff",
       "method": "managed",
       "target": "~/.bashrc",
