@@ -22,8 +22,15 @@
       "default": true
     },
     "bashrc-handoff": {
-      "description": "From ~/.bashrc, hand off to zsh when installed; otherwise source init.sh + aliases.sh so bash stays fully configured (single managed block)",
+      "description": "Hand off to zsh from ~/.bashrc when zsh is installed (guarded, no-op without zsh)",
       "source": "plugins/shell/templates/bashrc-zsh-handoff",
+      "method": "managed",
+      "target": "~/.bashrc",
+      "default": true
+    },
+    "bashrc-wiring": {
+      "description": "Source init.sh and aliases.sh from ~/.bashrc when staying in bash (managed block, ordered after the handoff)",
+      "source": "plugins/shell/templates/bashrc-managed-block",
       "method": "managed",
       "target": "~/.bashrc",
       "default": true

@@ -8,8 +8,8 @@ both shells get the same aliases and tooling. Auto-wired into `~/.zshrc` and `~/
 managed blocks, so there's nothing to source by hand. If a machine's login shell is bash (common
 on domain-joined accounts where `chsh` is blocked), `bashrc-handoff` execs into zsh from
 `~/.bashrc` when zsh is installed; when it isn't (or the handoff is skipped via
-`DOTCONFIGS_NO_ZSH_HANDOFF=1`), that same block instead sources `init.sh` + `aliases.sh` so bash
-is still fully configured.
+`DOTCONFIGS_NO_ZSH_HANDOFF=1`), `bashrc-wiring` (a second managed block, ordered after the
+handoff) sources `init.sh` + `aliases.sh` so bash is still fully configured.
 
 | Item | Source | Target |
 |------|--------|--------|
@@ -17,6 +17,7 @@ is still fully configured.
 | `aliases` | `plugins/shell/aliases.sh` | `~/.dotconfigs/shell/aliases.sh` |
 | `zshrc-wiring` | `plugins/shell/templates/zshrc-managed-block` | `~/.zshrc` (managed block) |
 | `bashrc-handoff` | `plugins/shell/templates/bashrc-zsh-handoff` | `~/.bashrc` (managed block) |
+| `bashrc-wiring` | `plugins/shell/templates/bashrc-managed-block` | `~/.bashrc` (managed block) |
 
 Every tool below is individually guarded (`command -v` / file-existence checks) - a machine
 missing one just skips that line silently, it doesn't break the rest of the shell.
