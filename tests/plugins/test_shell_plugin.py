@@ -9,11 +9,12 @@ under whichever of the two shells is available.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.conftest import requires_cmd
 
 
 def get_shell_modules(dotconfigs_root: Path) -> dict[str, Path]:
@@ -44,8 +45,7 @@ class TestShellFiles:
     @pytest.mark.parametrize("shell", ["zsh", "bash"])
     def test_files_parse_without_error(self, shell_modules, shell):
         """Shell files parse without syntax errors in both bash and zsh."""
-        if not shutil.which(shell):
-            pytest.skip(f"{shell} not available")
+        requires_cmd(shell)
         if not shell_modules:
             pytest.skip("No shell modules in manifest")
 

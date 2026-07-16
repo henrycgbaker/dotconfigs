@@ -30,16 +30,18 @@ fi
 # installed tool.
 export PATH="$HOME/.local/bin:$PATH"
 
-# Starship prompt
-[ -n "$_sh" ] && command -v starship &>/dev/null && eval "$(starship init "$_sh")"
-
-# zoxide (smarter cd)
-[ -n "$_sh" ] && command -v zoxide &>/dev/null && eval "$(zoxide init "$_sh")"
-
-# fzf key bindings and completion.
-# Checked in both layouts: the git-installer/curl layout (~/.fzf.$_sh) and the
-# apt package layout (/usr/share/doc/fzf/examples/*.$_sh).
+# Prompt, smarter cd, and fuzzy-finder bindings all key off the running shell,
+# so they're only meaningful once we know which shell that is.
 if [ -n "$_sh" ]; then
+    # Starship prompt
+    command -v starship &>/dev/null && eval "$(starship init "$_sh")"
+
+    # zoxide (smarter cd)
+    command -v zoxide &>/dev/null && eval "$(zoxide init "$_sh")"
+
+    # fzf key bindings and completion. Checked in both layouts: the
+    # git-installer/curl layout (~/.fzf.$_sh) and the apt package layout
+    # (/usr/share/doc/fzf/examples/*.$_sh).
     if [ -f "$HOME/.fzf.$_sh" ]; then
         source "$HOME/.fzf.$_sh"
     elif [ -f "/usr/share/doc/fzf/examples/key-bindings.$_sh" ]; then

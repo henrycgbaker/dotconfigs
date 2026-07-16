@@ -10,7 +10,7 @@ actually does) lives in its own page:
 |--------|---------|
 | [**claude**](plugins/claude.md) | Claude Code hooks (safety guards + lifecycle hooks), skills (`/commit`, `/squash-merge`, …), `settings.json`, the `concise-execution` output style, and the global `CLAUDE.md` |
 | [**git**](plugins/git.md) | `~/.gitconfig`, global excludes, 9 branch-aware hooks, and per-project `.git/info/exclude` + `.gitignore` |
-| [**shell**](plugins/shell.md) | zsh `init.zsh` + `aliases.zsh` (starship, zoxide, fzf, thefuck, conda, eza, bat, …), auto-wired into `~/.zshrc`/`~/.bashrc` |
+| [**shell**](plugins/shell.md) | shell-agnostic `init.sh` + `aliases.sh` (starship, zoxide, fzf, thefuck, conda, eza, bat, …), auto-wired into `~/.zshrc`/`~/.bashrc` (bash + zsh) |
 
 Generated index of every hook/skill with its Event/Matcher wiring: [ROSTER.md](ROSTER.md).
 
