@@ -69,8 +69,13 @@ _source_already_appended() {
 # `append`: seed-once, never rewrite a committed file.)
 #
 # Markers are keyed by the module's relative source path so multiple managed
-# blocks coexist in one target. Marker lines are `#` comments, inert in every
-# file `managed` targets (git config / exclude / ignore syntax).
+# blocks can coexist in one target. Marker lines are `#` comments, inert in
+# every file `managed` targets (git config / exclude / ignore syntax).
+# NOTE: `_managed_block_render` strips its own block and re-appends it at EOF,
+# so two blocks in the same file are not order-stable across re-deploys - each
+# pass moves its block last, so both perpetually report "changed". Prefer one
+# managed block per target; where a file needs two concerns, fold them into a
+# single block (see plugins/shell/templates/bashrc-zsh-handoff).
 
 # Set caller-scoped `_mb_begin` / `_mb_end` to the marker pair for block_id.
 # Caller must declare both `local` first. (Assign-by-dynamic-scope keeps the

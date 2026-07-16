@@ -1,5 +1,5 @@
-# dotconfigs shell aliases
-# Source from .zshrc: source ~/.dotconfigs/shell/aliases.zsh
+# dotconfigs shell aliases (bash + zsh)
+# Sourced by both ~/.zshrc and ~/.bashrc via ~/.dotconfigs/shell/aliases.sh.
 
 # Tool replacements
 # Debian/Ubuntu ships bat's binary as `batcat` (name conflict with an older package)
@@ -23,6 +23,9 @@ if command -v displayplacer &>/dev/null; then
     alias ultrawide-default='displayplacer "id:DF3652F4-5F79-506F-4047-1FBE06F5DA58 res:3840x1080 hz:60 color_depth:8"'
     alias ultrawide-full='displayplacer "id:DF3652F4-5F79-506F-4047-1FBE06F5DA58 res:5120x1440 hz:60 color_depth:8"'
 fi
+
+# Navigation
+alias home='cd /opt/ds01-infra'
 
 # SSH tunnels
 alias grafana-tunnel='ssh -fNL 3000:localhost:3000 dsl'

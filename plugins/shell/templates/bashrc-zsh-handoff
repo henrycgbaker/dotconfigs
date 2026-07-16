@@ -1,7 +1,9 @@
-# dotconfigs: hand off to zsh — managed by dotconfigs
+# dotconfigs: bash startup — managed by dotconfigs
 # Deployed to ~/.bashrc
 # Many machines' actual login shell is bash even when zsh is installed and
-# carries the real shell config; exec into zsh here if it's available.
+# carries the real shell config; exec into zsh here if it's available. If it
+# isn't (or the handoff is disabled), stay in bash but load the same
+# shell-agnostic init + aliases zsh would - so bash is fully configured too.
 # Explicit interactive check rather than relying solely on .bashrc's own
 # top-of-file guard, which some setups strip or don't have.
 case $- in
@@ -16,5 +18,10 @@ case $- in
             export SHELL="$(command -v zsh)"
             exec zsh
         fi
+        # Reached only when we stay in bash (no zsh, or handoff disabled).
+        # init.sh parameterises tool setup on the running shell. Guarded so a
+        # torn-down symlink is a silent no-op.
+        [ -f ~/.dotconfigs/shell/init.sh ] && source ~/.dotconfigs/shell/init.sh
+        [ -f ~/.dotconfigs/shell/aliases.sh ] && source ~/.dotconfigs/shell/aliases.sh
         ;;
 esac
