@@ -69,13 +69,10 @@ _source_already_appended() {
 # `append`: seed-once, never rewrite a committed file.)
 #
 # Markers are keyed by the module's relative source path so multiple managed
-# blocks can coexist in one target. Marker lines are `#` comments, inert in
-# every file `managed` targets (git config / exclude / ignore syntax).
-# NOTE: `_managed_block_render` strips its own block and re-appends it at EOF,
-# so two blocks in the same file are not order-stable across re-deploys - each
-# pass moves its block last, so both perpetually report "changed". Prefer one
-# managed block per target; where a file needs two concerns, fold them into a
-# single block (see plugins/shell/templates/bashrc-zsh-handoff).
+# blocks can coexist in one target, each updated in place (see
+# `_managed_block_render`, which keeps a well-formed block at its position so
+# siblings don't fight over EOF). Marker lines are `#` comments, inert in every
+# file `managed` targets (git config / exclude / ignore syntax).
 
 # Set caller-scoped `_mb_begin` / `_mb_end` to the marker pair for block_id.
 # Caller must declare both `local` first. (Assign-by-dynamic-scope keeps the
@@ -113,12 +110,53 @@ _strip_managed_block() {
     ' "$1"
 }
 
-# Render the would-be target for a managed deploy to stdout: target with any
-# existing same-keyed block stripped, then a fresh block appended. Guarantees
-# exactly one newline before the end marker even if source lacks a trailing one.
+# True (0) if `target` holds exactly one well-formed block for this key: one
+# begin line and one end line, begin before end. Any other shape (missing end,
+# duplicate or stray markers) is NOT well-formed, so the caller falls back to
+# strip+append and reconverges the file to a single clean block.
+# Args: target, begin, end
+_has_wellformed_block() {
+    awk -v b="$2" -v e="$3" '
+        $0 == b { nb++; bpos = NR }
+        $0 == e { ne++; epos = NR }
+        END { exit (nb == 1 && ne == 1 && bpos < epos) ? 0 : 1 }
+    ' "$1"
+}
+
+# Emit `target` with its existing well-formed block replaced IN PLACE by a fresh
+# block at the same position, so any sibling managed blocks keep their order
+# across re-deploys. Assumes `_has_wellformed_block` already holds.
+# Args: source, target, begin, end
+_replace_managed_block() {
+    local source="$1" target="$2" begin="$3" end="$4"
+    awk -v b="$begin" -v e="$end" -v src="$source" '
+        $0 == b {
+            print b
+            while ((getline line < src) > 0) print line
+            close(src)
+            print e
+            drop = 1
+            next
+        }
+        drop && $0 == e { drop = 0; next }
+        drop            { next }
+                        { print }
+    ' "$target"
+}
+
+# Render the would-be target for a managed deploy to stdout. When the target
+# already holds a well-formed block, its content is replaced in place so the
+# block (and any siblings) keep their position across re-deploys - otherwise a
+# new/absent/hand-broken block is reconverged by stripping marker debris and
+# appending one fresh block at EOF. Guarantees exactly one newline before the
+# end marker even if source lacks a trailing one.
 # Args: source, target, begin, end
 _managed_block_render() {
     local source="$1" target="$2" begin="$3" end="$4"
+    if [[ -f "$target" ]] && _has_wellformed_block "$target" "$begin" "$end"; then
+        _replace_managed_block "$source" "$target" "$begin" "$end"
+        return
+    fi
     [[ -f "$target" ]] && _strip_managed_block "$target" "$begin" "$end"
     printf '%s\n' "$begin"
     cat "$source"

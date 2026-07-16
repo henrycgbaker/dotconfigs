@@ -325,6 +325,49 @@ def test_managed_source_without_trailing_newline(dotconfigs_root, tmp_path):
     assert "no-newline-here" in lines  # its own line, not glued to END
 
 
+def test_managed_two_blocks_coexist_order_stable(dotconfigs_root, tmp_path):
+    """Two managed blocks (distinct keys) in one target must both persist, keep
+    their order, and re-deploy idempotently - not fight over EOF each pass."""
+    src_a = tmp_path / "src_a"
+    src_a.write_text("alpha\n")
+    src_b = tmp_path / "src_b"
+    src_b.write_text("beta\n")
+    target = tmp_path / "exclude"
+
+    _deploy(dotconfigs_root, src_a, target, "managed")
+    _deploy(dotconfigs_root, src_b, target, "managed")
+    after_seed = target.read_text()
+    assert after_seed.count(BEGIN) == 2 and after_seed.count(END) == 2
+    assert after_seed.index("alpha") < after_seed.index("beta")  # deploy order
+
+    # Re-deploy both: each must be a no-op and leave the file byte-identical -
+    # the regression this fix targets (blocks previously swapped position and
+    # always reported "changed").
+    ra = _deploy(dotconfigs_root, src_a, target, "managed")
+    rb = _deploy(dotconfigs_root, src_b, target, "managed")
+    assert "N=1" in ra.stdout, ra.stdout
+    assert "N=1" in rb.stdout, rb.stdout
+    assert target.read_text() == after_seed
+
+
+def test_managed_update_keeps_block_position(dotconfigs_root, tmp_path):
+    """Updating a block replaces it in place, not by moving it to EOF - a user
+    line below the block must stay below it."""
+    source = tmp_path / "src"
+    source.write_text("v1\n")
+    target = tmp_path / "exclude"
+    target.write_text("USER-TOP\n")
+    _deploy(dotconfigs_root, source, target, "managed")
+    target.write_text(target.read_text() + "USER-BOTTOM\n")  # user line after block
+
+    source.write_text("v2\n")
+    _deploy(dotconfigs_root, source, target, "managed")
+
+    text = target.read_text()
+    assert text.index("USER-TOP") < text.index("v2") < text.index("USER-BOTTOM")
+    assert "v1" not in text and text.count(BEGIN) == 1
+
+
 # ---------------------------------------------------------------------------
 # merge (deep-merge JSON, preserve local)
 # ---------------------------------------------------------------------------
