@@ -1,6 +1,6 @@
 ---
 name: pr-create
-description: Open a GitHub PR for the current branch with a derived title and a structured Summary / Test plan / Doc audit body. Use when the user says "open a PR", "draft a PR", or after a feature branch is ready for review but not yet merged.
+description: Open a GitHub PR for the current branch with a derived title, a stack banner for stacked PRs, and a structured Summary / Doc audit body. Use when the user says "open a PR", "draft a PR", or after a feature branch is ready for review but not yet merged.
 allowed-tools: Bash, Read
 argument-hint: [optional title]
 ---
@@ -78,26 +78,30 @@ If any issue numbers are found, include them in the body's Summary as
 
 ### 4. Draft the body
 
-Match the project's existing PR body style (see `gh pr list --limit 3 --json body`):
-three sections, in this order: Summary, Test plan, Doc audit.
+Body sections, in order: Summary, then Doc audit. **No Test plan section** (CI on
+the PR is the gate) and **no Stack prose section** (the banner below replaces it).
+
+For a **stacked PR** (base is a feature branch, not `main`), the first line of the
+body is a **stack banner**: the full PR chain, base->top, short-form and
+space-`>` separated, e.g. `#123 > #124 > #125`. Use the same banner on every PR in
+the stack, and list the whole lineage including already-merged lower PRs. Derive
+the chain by walking base refs (`gh pr list --state all --json number,headRefName,baseRefName`)
+or by copying a sibling PR's existing banner. Omit the banner entirely on a
+main-based PR.
 
 ```bash
 body=$(cat <<'EOF'
+#123 > #124 > #125
+
 ## Summary
 
 <1-3 bullets describing what the change does and why. No phase numbers, no
 milestone IDs, no plan references. Substantive content only.>
 
-## Test plan
-
-- [ ] <local check 1>
-- [ ] <local check 2>
-- [ ] CI passes
-
 ## Doc audit
 
 <One of:>
-- No user-visible surface or contract change → no doc update needed.
+- No user-visible surface or contract change -> no doc update needed.
 - Updated `docs/<file>.md` to reflect <change>.
 - <Doc gap identified and tracked in #N>.
 EOF
@@ -126,9 +130,9 @@ Print the PR URL on success.
   rejects it anyway; this skill must not generate it in the first place.
 - **No phase numbers / plan markers / milestone IDs.** Title and body describe
   what the change does, not its position in any plan.
-- The PR opens against `main` by default. If the branch is stacked on another
-  branch, the user must specify `--base <other-branch>` manually; this skill
-  doesn't try to infer stacked-PR topology.
+- The PR opens against `main` by default. For a stacked PR the user specifies
+  `--base <other-branch>`; the body then leads with a stack banner (step 4). The
+  skill doesn't auto-detect the base, but it adds the banner once told it's stacked.
 - Use `gh pr edit <num> --body "$(cat <<'EOF' ... EOF)"` to revise after open.
 
 ## Related
