@@ -24,8 +24,10 @@ if command -v displayplacer &>/dev/null; then
     alias ultrawide-full='displayplacer "id:DF3652F4-5F79-506F-4047-1FBE06F5DA58 res:5120x1440 hz:60 color_depth:8"'
 fi
 
-# Navigation
-alias home='cd /opt/ds01-infra'
-
 # SSH tunnels
 alias grafana-tunnel='ssh -fNL 3000:localhost:3000 dsl'
+
+# Machine-local customisations - host-specific aliases, tunnels and paths that
+# should NOT be shared across machines. Untracked; lives only on this box.
+# Sourced last so it can override anything above.
+[ -f "$HOME/.dotconfigs.local.sh" ] && . "$HOME/.dotconfigs.local.sh"
