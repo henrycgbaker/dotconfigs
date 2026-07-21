@@ -43,8 +43,15 @@ missing one just skips that line silently, it doesn't break the rest of the shel
 | `claude` → `~/.claude/local/claude` | Shortcut to Claude Code's native-installer binary, if that install layout is present. |
 | `ultrawide-default` / `ultrawide-full` | `displayplacer` presets for this Mac's specific ultrawide monitor (hardcoded display UUID - personal hardware, not portable). |
 | `grafana-tunnel` | `ssh -fNL 3000:localhost:3000 dsl` - opens an SSH port-forward to a personal Grafana instance reachable through the `dsl` host. |
-| `home` | `cd /opt/ds01-infra` - jumps to the ds01 infra checkout (personal path, not portable). |
 | `PATH` | Prepends `~/.local/bin` (user-local tool installs) and, on macOS, VS Code's CLI directory. |
+
+## Machine-local overrides
+
+`aliases.sh` sources `~/.dotconfigs.local.sh` last, if it exists. Put host-specific aliases,
+tunnels, and paths there instead of in the tracked `aliases.sh`: the local file is untracked,
+lives outside the `~/.dotconfigs/` assembly dir (so `dotconfigs deploy` never creates or clobbers
+it), and is never shared across machines. Being sourced last, it can also override any alias
+above. This keeps the tracked plugin portable while each box keeps its own extras.
 
 ## Requirements
 
