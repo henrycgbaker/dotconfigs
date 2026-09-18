@@ -44,7 +44,15 @@
       "Bash(rg*)",
       "Bash(ruff check*)",
       "Bash(ruff format*)",
-      "Bash(pytest*)"
+      "Bash(pytest*)",
+      "Bash(gh run view*)",
+      "Bash(gh run list*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh release list*)",
+      "Bash(gh release view*)",
+      "Bash(gh workflow run*)",
+      "Bash(gh api repos/hertie-data-science-lab/ds01-infra/actions/runs/*)",
+      "Bash(gh api repos/hertie-data-science-lab/ds01-hub/actions/runs/*)"
     ],
     "soft_deny": [
       "$defaults"

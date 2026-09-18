@@ -39,6 +39,7 @@ Claude hooks run during Claude Code operations for code quality and safety.
 | block-sensitive-write | Block Write/Edit on sensitive files (private keys, credentials, .env.production) | PreToolUse (Write|Edit) |  |
 | block-ai-pr-attribution | Block AI attribution in PR titles/bodies and GitHub MCP writes | PreToolUse (Bash), PreToolUse (mcp__github__.*) |  |
 | block-gh-comment | Block unsolicited GitHub comment/review posts via gh CLI and the GitHub MCP server | PreToolUse (Bash), PreToolUse (mcp__github__.*) |  |
+| block-prod-deploy | Block a by-hand production release (ds01-deploy); prod moves through the tag-triggered pipeline | PreToolUse (Bash) |  |
 | facade-check | Facade orphan-export check after Write/Edit | PostToolUse (Write|Edit) |  |
 | inject-context | Prepend git context (branch, dirty count, head) to every prompt | UserPromptSubmit |  |
 | session-start-env | Auto-activate a Python .venv in the project on session start | SessionStart |  |

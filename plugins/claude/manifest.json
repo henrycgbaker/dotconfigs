@@ -85,6 +85,14 @@
       ],
       "default": true
     },
+    "block-prod-deploy": {
+      "description": "Block a by-hand production release (ds01-deploy); prod moves through the tag-triggered pipeline",
+      "source": "plugins/claude/hooks/block-prod-deploy.sh",
+      "method": "symlink",
+      "target": "~/.claude/hooks/block-prod-deploy.sh",
+      "wiring": { "event": "PreToolUse", "matcher": "Bash", "timeout": 10 },
+      "default": true
+    },
     "facade-check": {
       "description": "Facade orphan-export check after Write/Edit",
       "source": "plugins/claude/hooks/facade-check.sh",
