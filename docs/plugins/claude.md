@@ -25,6 +25,7 @@ Manages Claude Code configuration. Catalogued under three categories - `hooks`, 
 | `block-sensitive-write` | Blocks `Write`/`Edit` on `.pem`, `credentials*`, `.env.production`, SSH private keys |
 | `block-ai-pr-attribution` | Blocks AI attribution ("Co-Authored-By: Claude", "🤖 Generated with...") in commit messages, PR titles/bodies, and GitHub MCP calls |
 | `block-gh-comment` | Blocks commenting on GitHub issues/PRs unless explicitly asked |
+| `block-prod-deploy` | Blocks `sudo ds01-deploy` (incl. ssh-wrapped); prod is released by pushing a `vX.Y.Z` tag. `--list`/`--help` allowed; override with `DS01_DEPLOY_OK=1` |
 | `facade-check` | Verifies every facade `__all__` entry has an external consumer (catches dead re-exports) |
 | `inject-context` | Injects project context at session start |
 | `session-start-env` | Sets up session environment at start |
