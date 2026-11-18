@@ -15,8 +15,12 @@ command -v eza &>/dev/null && alias ls="eza --icons --group-directories-first"
 
 # PATH
 export PATH="$HOME/.local/bin:$PATH"
-[ -d "/Applications/Visual Studio Code.app" ] && \
-    export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
+# Symlink `code` rather than prepending the VS Code bin dir: a PATH entry with
+# spaces gets word-split by some tools' shell wrappers (e.g. Claude Code).
+_vscode_bin="/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+[ -x "$_vscode_bin" ] && [ ! -e "$HOME/.local/bin/code" ] && \
+    mkdir -p "$HOME/.local/bin" && ln -s "$_vscode_bin" "$HOME/.local/bin/code"
+unset _vscode_bin
 
 # Ultrawide monitor resolution shortcuts (this Mac's displays only)
 if command -v displayplacer &>/dev/null; then
